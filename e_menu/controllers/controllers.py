@@ -15,6 +15,20 @@ SALE_STATE = {
 
 
 class EMenu(http.Controller):
+
+    @http.route(f"{BASE_URL}/product/category", auth="public", type="json")
+    def product_category(self):
+        """
+        Returns a list of product categories in JSON format.
+
+        The route for this endpoint is `BASE_URL/product/category`, and it is publicly accessible.
+        """
+        categories = request.env['product.category'].sudo().search([])
+        return [{
+            'id': category.id,
+            'name': category.name
+        } for category in categories]
+
     @http.route(f'{BASE_URL}/product/list', auth='public', type="json")
     def product_list(self):
         """
@@ -28,8 +42,9 @@ class EMenu(http.Controller):
             'id': product.id,
             'name': product.name,
             'code': product.default_code,
+            'description': product.description,
             'sale_price': product.list_price,
-            # 'image': product.image_1920,
+            'image': product.image_1920,
             'category': {
                 'id': product.categ_id.id,
                 'name': product.categ_id.name
@@ -70,9 +85,7 @@ class EMenu(http.Controller):
     @http.route(f"{BASE_URL}/order/new", auth="public", type="json", methods=["POST"])
     def new_order(self):
         data = json.loads(request.httprequest.data.decode('utf-8'))
-        print(data)
         partner_id = data['params'].get('customer_id', 0)
-        print(partner_id)
         order_date = data['params'].get('order_date', '')
         order_date = fields.Datetime.now()
         order_line = data['params'].get('order_line', [])
