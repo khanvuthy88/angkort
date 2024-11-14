@@ -18,7 +18,7 @@ Long description of module's purpose
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['web', 'sale_management'],
+    'depends': ['web', 'sale_management', 'html_editor'],
 
     # always loaded
     'data': [
