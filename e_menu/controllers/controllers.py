@@ -179,7 +179,7 @@ class EMenu(http.Controller):
             'name': category.name
         } for category in categories]
 
-    @http.route(f"{BASE_URL}/image/add", auth="user", type="http", methods=["POST"], cores=False)
+    @http.route(f"{BASE_URL}/image/add", auth="user", type="http", methods=["POST"], cors=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
         try:
             image_file = request.httprequest.files['image']
