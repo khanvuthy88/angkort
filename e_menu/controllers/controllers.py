@@ -166,7 +166,8 @@ class EMenu(http.Controller):
 
         return attachment
 
-    @http.route(f"{BASE_URL}/product/category", auth="public", type="json", cors=False)
+
+    @http.route(f"{BASE_URL}/product/category", auth="public", type="json", cors="*")
     def product_category(self):
         """
         Returns a list of product categories in JSON format.
@@ -179,7 +180,7 @@ class EMenu(http.Controller):
             'name': category.name
         } for category in categories]
 
-    @http.route(f"{BASE_URL}/image/add", auth="user", type="http", methods=["POST"], cors=False)
+    @http.route(f"{BASE_URL}/image/add", auth="angkit", type="http", methods=["POST"], csrf=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
         try:
             image_file = request.httprequest.files['image']
@@ -213,11 +214,13 @@ class EMenu(http.Controller):
         self._clean_context()
         attachment = self._attachment_create(name=name, data=data, res_id=res_id, res_model=res_model)
         image_webp_url = self._image_to_webp(attachment=attachment, mimetype="image/webp", data=attachment.datas)
+
         return request.make_json_response({
-            'image': image_webp_url
+            'image': image_webp_url,
+            'image_id': attachment.id
         })
 
-    @http.route(f'{BASE_URL}/product/list', auth='public', type="json", cors=False)
+    @http.route(f'{BASE_URL}/product/list', auth='public', type="json", cors="*")
     def product_list(self):
         """
         Returns a list of products with details such as ID, name, code, sale price,
