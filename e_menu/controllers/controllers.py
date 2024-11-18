@@ -166,7 +166,7 @@ class EMenu(http.Controller):
 
         return attachment
 
-    @http.route(f"{BASE_URL}/product/category", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/product/category", auth="public", type="json", cors=False)
     def product_category(self):
         """
         Returns a list of product categories in JSON format.
@@ -179,7 +179,7 @@ class EMenu(http.Controller):
             'name': category.name
         } for category in categories]
 
-    @http.route(f"{BASE_URL}/image/add", auth="user", type="http", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/image/add", auth="user", type="http", methods=["POST"], cores=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
         try:
             image_file = request.httprequest.files['image']
@@ -217,7 +217,7 @@ class EMenu(http.Controller):
             'image': image_webp_url
         })
 
-    @http.route(f'{BASE_URL}/product/list', auth='public', type="json", cors="*")
+    @http.route(f'{BASE_URL}/product/list', auth='public', type="json", cors=False)
     def product_list(self):
         """
         Returns a list of products with details such as ID, name, code, sale price,
@@ -270,7 +270,7 @@ class EMenu(http.Controller):
             'total': sale.tax_totals
         } for sale in sale_orders]
 
-    @http.route(f"{BASE_URL}/order/new", auth="public", type="json", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/order/new", auth="public", type="json", methods=["POST"], cors=False)
     def new_order(self):
         data = json.loads(request.httprequest.data.decode('utf-8'))
         partner_id = data['params'].get('customer_id', 0)
