@@ -3,11 +3,12 @@ import base64
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
 from odoo import http, tools
+from odoo.tools import config
 from odoo.exceptions import UserError
 from odoo.http import request
 from odoo import fields, _
@@ -166,6 +167,48 @@ class EMenu(http.Controller):
 
         return attachment
 
+    def find_or_create_token(self):
+        try:
+            request.env.user.api_key_ids.unlink()
+            key = request.env['res.users.apikeys'].with_user(request.env.user)._generate('rpc', 'angkort', fields.Datetime.now() + timedelta(days=1))
+            return {
+                'state': True, 'token_key': key
+            }
+        except Exception as e:
+            return {
+                'state': False, 'error': str(e)
+            }
+
+    @http.route(f"{BASE_URL}/login", auth="public", type="json", cors="*")
+    def login(self):
+        """
+        Returns a list of products in JSON format.
+
+        The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.
+        """
+        try:
+            data = request.httprequest.data
+            json_data = json.loads(data)
+            username, password = json_data['username'], json_data['password']
+            db = config['db_name']
+            credential = {'login': username, 'password': password, 'type': 'password'}
+            request.session.authenticate(db, credential)
+            token_key = self.find_or_create_token()
+            if token_key['state'] == False:
+                return {
+                    'error': token_key['error'],
+                    'title': _("Login Failed")
+                }
+        except Exception as e:
+            return {
+                'error': str(e),
+                'title': _("Login Failed")
+            }
+
+        return {
+            'token_key': token_key['token_key'],
+            'title': _("Login Success")
+        }
 
     @http.route(f"{BASE_URL}/product/category", auth="public", type="json", cors="*")
     def product_category(self):
