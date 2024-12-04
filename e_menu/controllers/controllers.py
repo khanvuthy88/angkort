@@ -18,7 +18,6 @@ from odoo.http import request
 from odoo import fields, _
 
 from odoo.tools.mimetypes import guess_mimetype
-from odoo.addons.web.controllers.dataset import DataSet
 
 BASE_URL = '/angkort/api/v1'
 SAVE_IMAGE_URL = "/html_editor/attachment/add_data"
@@ -39,28 +38,6 @@ SUPPORTED_IMAGE_MIMETYPES = {
     'image/webp': '.webp',
 }
 
-
-class CustomCors(DataSet):
-
-    def _call_kw_readonly(self):
-        params = request.get_json_data()['params']
-        print(params)
-        try:
-            model_class = request.registry[params['model']]
-        except KeyError as e:
-            raise NotFound() from e
-        method_name = params['method']
-        for cls in model_class.mro():
-            method = getattr(cls, method_name, None)
-            if method is not None and hasattr(method, '_readonly'):
-                return method._readonly
-        return False
-
-    @http.route(['/api/web/dataset/call_kw'], type='json', auth="user", cors="*")
-    def call_kw(self, model, method, args, kwargs):
-        check_method_name(method)
-        print(model, method, args, kwargs)
-        return call_kw(request.env[model], method, args, kwargs)
 
 class EMenu(http.Controller):
 
@@ -206,35 +183,20 @@ class EMenu(http.Controller):
                 'state': False, 'error': str(e)
             }
 
-    @http.route(f"{BASE_URL}/custom_login", auth="public", type="json", cors="*")
-    def custom_login(self):
-        data = json.loads(request.httprequest.data.decode('utf-8'))
-        data = data['params']
-        login_data = {
-            'login': data['login'],
-            'password': data['password'],
-            'type': 'password'
-        }
-        auth_info = request.session.authenticate(config['db_name'], login_data)
-        if auth_info['uid'] != request.session.uid:
-            # Crapy workaround for unupdatable Odoo Mobile App iOS (Thanks Apple :@) and Android
-            # Correct behavior should be to raise AccessError("Renewing an expired session for user that has multi-factor-authentication is not supported. Please use /web/login instead.")
-            return {'uid': None}
+    @http.route(f"{BASE_URL}/industries", auth="public", type="json", cors="*")
+    def industries(self):
+        """
+        Returns a list of industries in JSON format.
 
-        request.session.db = config['db_name']
-        registry = odoo.modules.registry.Registry(config['db_name'])
-        with registry.cursor() as cr:
-            env = odoo.api.Environment(cr, request.session.uid, request.session.context)
-            if not request.db:
-                # request._save_session would not update the session_token
-                # as it lacks an environment, rotating the session myself
-                http.root.session_store.rotate(request.session, env)
-                request.future_response.set_cookie(
-                    'session_id', request.session.sid,
-                    max_age=http.get_session_max_inactivity(env), httponly=True
-                )
-                # print(request.future_response.get_cookie('session_id'))
-            return env['ir.http'].session_info()
+        The route for this endpoint is `BASE_URL/industries`, and it is publicly accessible.
+        :return:
+        """
+        industries = request.env['res.partner.industry'].sudo().search([])
+        return [{
+            'id': industry.id,
+            'full_name': industry.full_name,
+            'name': industry.name
+        } for industry in industries]
 
     @http.route(f"{BASE_URL}/login", auth="public", type="json", cors="*")
     def login(self):
@@ -318,6 +280,25 @@ class EMenu(http.Controller):
             'image_id': attachment.id
         })
 
+    @http.route(f"{BASE_URL}/product/variant", auth="public", type="json", cors="*")
+    def product_variant(self):
+        """
+        Returns a list of product variants in JSON format.
+
+        The route for this endpoint is `BASE_URL/product/variant`, and it is publicly accessible.
+        :return:
+        """
+
+        product_variants = request.env['product.attribute'].sudo().search([])
+        return [{
+            'id': product.id,
+            'name': product.name,
+            'values': [{
+                'id': value.id,
+                'name': value.name
+            } for value in product.value_ids]
+        } for product in product_variants]
+
     @http.route(f'{BASE_URL}/product/list', auth='public', type="json", cors="*")
     def product_list(self):
         """
@@ -326,7 +307,6 @@ class EMenu(http.Controller):
 
         The route for this endpoint is `BASE_URL/product/list`, and it is publicly accessible.
         """
-
 
         products = request.env['product.template'].sudo().search([])
         return [{
