@@ -183,6 +183,27 @@ class EMenu(http.Controller):
                 'state': False, 'error': str(e)
             }
 
+    @http.route(f"{BASE_URL}/shop/create", auth="public", type="json", cors="*")
+    def create_shop(self):
+        """
+        Returns a list of products in JSON format.
+
+        The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.
+        """
+        try:
+            data = request.get_json_data()
+            create_data = data.get('params', {})
+            shop_data = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
+            return {
+                'status': True,
+                'shop_data': {
+                    'name': shop_data.name,
+                    'id': shop_data.id
+                }
+            }
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=400)
+
     @http.route(f"{BASE_URL}/industries", auth="public", type="json", cors="*")
     def industries(self):
         """
