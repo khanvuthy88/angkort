@@ -9,6 +9,9 @@
                 <field name="category_id" position="after">
                     <field name="wifi_name" />
                     <field name="wifi_password" />
+                    <field name="customer_address" />
+                    <field name="shop_latitude" />
+                    <field name="shop_longitude" />
                 </field>
             </field>
         </record>

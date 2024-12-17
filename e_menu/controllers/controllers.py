@@ -38,6 +38,10 @@ SUPPORTED_IMAGE_MIMETYPES = {
     'image/webp': '.webp',
 }
 
+PARTNER_FIELDS = [
+    'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email', "image_1920"
+]
+
 
 class EMenu(http.Controller):
 
@@ -183,7 +187,52 @@ class EMenu(http.Controller):
                 'state': False, 'error': str(e)
             }
 
-    @http.route(f"{BASE_URL}/shop/create", auth="public", type="json", cors="*")
+
+    @http.route(f"{BASE_URL}/shop/detail", auth="public", type="json", cors="*")
+    def shop_detail(self):
+        """
+        Returns a list of products in JSON format.
+
+        The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.
+        """
+        try:
+            data = request.get_json_data()
+            shop_id = data.get('shop_id', False)
+            if not shop_id:
+                return {
+                    'status': False,
+                    "message": "Missing required fields"
+                }
+
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id)])
+            if not shop:
+                return {
+                    'status': False,
+                    "message": "Shop not found"
+                }
+            return {
+                'status': True,
+                'shop_data': {
+                    'name': shop.name,
+                    'id': shop.id,
+                    'phoneNumber': shop.phone,
+                    "address": shop.customer_address,
+                    'wifi': shop.wifi,
+                    'banks': [
+                        {
+                            'name': bank.name,
+                            'link': bank.link,
+                            'currency': bank.currency,
+                            'logo': bank.logo
+                        } for bank in shop.bank_ids
+                    ]
+                }
+            }
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=400)
+
+
+    @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="json", cors="*")
     def create_shop(self):
         """
         Returns a list of products in JSON format.
@@ -193,6 +242,12 @@ class EMenu(http.Controller):
         try:
             data = request.get_json_data()
             create_data = data.get('params', {})
+            if not all(key in PARTNER_FIELDS for key in create_data.keys()):
+                return {
+                    'status': False,
+                    "message": "Missing required fields"
+                }
+
             shop_data = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
             return {
                 'status': True,
@@ -300,6 +355,48 @@ class EMenu(http.Controller):
             'image': image_webp_url,
             'image_id': attachment.id
         })
+
+    @http.route(f"{BASE_URL}/product/detail", auth="public", type="json", cors="*")
+    def product_detail(self):
+        """
+        Returns a list of products in JSON format.
+
+        The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.
+        """
+        try:
+            data = request.get_json_data()
+            product_id = data.get('product_id', False)
+            if not product_id:
+                return {
+                    'status': False,
+                    "message": "Missing required fields"
+                }
+
+            product = request.env['product.template'].sudo().search([('id', '=', product_id)])
+            if not product:
+                return {
+                    'status': False,
+                    "message": "Product not found"
+                }
+            return {
+                'status': True,
+                'product_data': {
+                    'id': product.id,
+                    'name': product.name or '',
+                    'description': product.description or '',
+                    'image': product.image_1920 or '',
+                },
+                'choices': [{
+                    'id': choice.id,
+                    'name': choice.name,
+                    'price': choice.price_extra
+                } for choice in product.attribute_line_ids]
+            }
+        except Exception as e:
+            return {
+                'status': False,
+                "message": str(e)
+            }
 
     @http.route(f"{BASE_URL}/product/variant", auth="public", type="json", cors="*")
     def product_variant(self):
