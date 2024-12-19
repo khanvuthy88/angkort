@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="angkort_shop_bank_list" model="ir.ui.view">
+            <field name="name">angkort_shop_bank_list</field>
+            <field name="model">angkort.shop.bank</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="sequence" widget="handle"/>
+                    <field name="name" />
+                    <field name="code" />
+                </list>
+            </field>
+        </record>
+        <record id="angkort_shop_bank_action" model="ir.actions.act_window">
+            <field name="name">Banks</field>
+            <field name="res_model">angkort.shop.bank</field>
+            <field name="view_mode">list,form</field>
+        </record>
+    </data>
+</odoo>

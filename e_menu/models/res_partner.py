@@ -11,7 +11,7 @@ class Partner(models.Model):
      ])
      wifi_name = fields.Char(string="Wifi Name")
      wifi_password = fields.Char(string="Wifi Password")
-     bank_ids = fields.One2many('shop.bank', 'shop_id')
+     shop_bank_ids = fields.One2many('angkort.shop.bank', 'shop_id')
      customer_address = fields.Char()
      shop_latitude = fields.Char()
      shop_longitude = fields.Char()

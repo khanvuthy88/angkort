@@ -213,15 +213,15 @@ class EMenu(http.Controller):
             return {
                 'status': True,
                 'shop_data': {
-                    'name': shop.name,
                     'id': shop.id,
+                    'name': shop.name,
                     'phoneNumber': shop.phone,
                     "address": shop.customer_address,
-                    'wifi': shop.wifi,
+                    'wifi': shop.wifi_name,
                     'banks': [
                         {
                             'name': bank.name,
-                            'link': bank.link,
+                            'link': bank.link or '',
                             'currency': bank.currency,
                             'logo': bank.logo
                         } for bank in shop.bank_ids
@@ -386,11 +386,24 @@ class EMenu(http.Controller):
                     'description': product.description or '',
                     'image': product.image_1920 or '',
                 },
+                'options': [{
+                    'id': option.id,
+                    'name': option.display_name,
+                    'data': [{
+                        'id': data.id,
+                        'name': data.name,
+                        'price': data.price_extra
+                    } for data in option.product_template_value_ids]
+                } for option in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'radio')],
                 'choices': [{
                     'id': choice.id,
-                    'name': choice.name,
-                    'price': choice.price_extra
-                } for choice in product.attribute_line_ids]
+                    'name': choice.display_name,
+                    'data': [{
+                        'id': data.id,
+                        'name': data.name,
+                        'price': data.price_extra
+                    } for data in choice.product_template_value_ids]
+                } for choice in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'multi')]
             }
         except Exception as e:
             return {

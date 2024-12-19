@@ -15,7 +15,7 @@ Long description of module's purpose
     # Check https://github.com/odoo/odoo/blob/15.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Uncategorized',
-    'version': '0.1',
+    'version': '0.1.0',
 
     # any module necessary for this one to work correctly
     'depends': ['web', 'sale_management', 'html_editor', "contacts"],
@@ -25,6 +25,7 @@ Long description of module's purpose
         'security/ir.model.access.csv',
         'views/views.xml',
         'views/res_partner_views.xml',
+        'views/angkort_shop_bank_views.xml',
 
         'views/menu_views.xml',
         'views/templates.xml',
