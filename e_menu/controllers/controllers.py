@@ -39,7 +39,7 @@ SUPPORTED_IMAGE_MIMETYPES = {
 }
 
 PARTNER_FIELDS = [
-    'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email', "image_1920"
+    'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email'
 ]
 
 
@@ -178,7 +178,9 @@ class EMenu(http.Controller):
     def find_or_create_token(self):
         try:
             request.env.user.api_key_ids.unlink()
-            key = request.env['res.users.apikeys'].with_user(request.env.user)._generate('rpc', 'angkort', fields.Datetime.now() + timedelta(days=1))
+            key = request.env['res.users.apikeys'].with_user(request.env.user)._generate('rpc', 'angkort',
+                                                                                         fields.Datetime.now() + timedelta(
+                                                                                             days=1))
             return {
                 'state': True, 'token_key': key
             }
@@ -187,6 +189,16 @@ class EMenu(http.Controller):
                 'state': False, 'error': str(e)
             }
 
+    def _string_to_string_list(self, string: str) -> list:
+        """
+        Returns a list of string
+        :param string:
+        :return:
+        """
+        if not string:
+            return []
+        string_list = string.split(',')
+        return string_list
 
     @http.route(f"{BASE_URL}/shop/detail", auth="public", type="json", cors="*")
     def shop_detail(self):
@@ -214,23 +226,22 @@ class EMenu(http.Controller):
                 'status': True,
                 'shop_data': {
                     'id': shop.id,
-                    'name': shop.name,
-                    'phoneNumber': shop.phone,
-                    "address": shop.customer_address,
-                    'wifi': shop.wifi_name,
+                    'name': shop.name or '',
+                    'phoneNumber': f"{self._string_to_string_list(shop.phone)}" or '',
+                    "address": f'[%s]' % shop.customer_address if shop.customer_address else '',
+                    'wifi': f"{self._string_to_string_list(shop.wifi_name)}" or '',
                     'banks': [
                         {
-                            'name': bank.name,
+                            'name': bank.name or '',
                             'link': bank.link or '',
-                            'currency': bank.currency,
+                            'currency': bank.currency or '',
                             'logo': bank.logo
-                        } for bank in shop.bank_ids
+                        } for bank in shop.shop_bank_ids
                     ]
                 }
             }
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=400)
-
 
     @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="json", cors="*")
     def create_shop(self):
@@ -249,6 +260,10 @@ class EMenu(http.Controller):
                 }
 
             shop_data = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
+            if shop_data:
+                request.env.user.partner_id.update({
+                    'parent_id': shop_data.id
+                })
             return {
                 'status': True,
                 'shop_data': {
@@ -384,7 +399,7 @@ class EMenu(http.Controller):
                     'id': product.id,
                     'name': product.name or '',
                     'description': product.description or '',
-                    'image': product.image_1920 or '',
+                    # 'image': product.image_1920 or '',
                 },
                 'options': [{
                     'id': option.id,

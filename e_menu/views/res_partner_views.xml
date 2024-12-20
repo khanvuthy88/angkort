@@ -6,19 +6,32 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="base.view_partner_form" />
             <field name="arch" type="xml">
-                <field name="category_id" position="after">
-                    <field name="wifi_name" invisible="company_type == 'person'"/>
-                    <field name="wifi_password"  invisible="company_type == 'person'"/>
-                    <field name="customer_address"  invisible="company_type == 'person'"/>
-                    <field name="shop_latitude"  invisible="company_type == 'person'"/>
-                    <field name="shop_longitude"  invisible="company_type == 'person'"/>
-                </field>
+                <xpath expr="//form/sheet/group" position="after">
+                    <group invisible="company_type == 'person'" string="Shop Wifi">
+                        <group>
+                            <field name="wifi_name"/>
+                            <field name="shop_latitude"/>
+                            <field name="customer_address"/>
+                        </group>
+                        <group>
+                            <field name="wifi_password"/>
+                            <field name="shop_longitude"/>
+                        </group>
+                    </group>
+
+                </xpath>
                 <xpath expr="//form/sheet/notebook/page[last()]" position="after">
                     <page invisible="company_type == 'person'" string="Banks">
                         <field name="shop_bank_ids" />
                     </page>
                 </xpath>
             </field>
+        </record>
+
+        <record id="angkort_action_shop_list" model="ir.actions.act_window">
+            <field name="name">Shops</field>
+            <field name="res_model">res.partner</field>
+            <field name="view_mode">kanban,list,form</field>
         </record>
     </data>
 </odoo>

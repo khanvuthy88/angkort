@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <odoo>
     <data>
-        <menuitem name="Angkort Store" id="angkort_store_menu_root" />
-        <menuitem name="Store" id="angkort_store_menu" parent="angkort_store_menu_root" action="contacts.action_contacts" />
+        <menuitem name="Angkort Store" id="angkort_store_menu_root">
+            <menuitem name="Store" id="angkort_store_menu" action="angkort_action_shop_list" />
+        </menuitem>
+
     </data>
 </odoo>

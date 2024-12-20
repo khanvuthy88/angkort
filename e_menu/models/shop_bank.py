@@ -10,7 +10,7 @@ class ShopBank(models.Model):
     name = fields.Char(string="Name", required=True)
     sequence = fields.Integer(default=10)
     shop_id = fields.Many2one('res.partner')
-    currency_id = fields.Char(string="Currency", required=True)
+    currency = fields.Char(string="Currency", required=True)
     link = fields.Char()
     logo = fields.Binary()
     code = fields.Char(string="Code", required=True)
