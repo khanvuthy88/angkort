@@ -38,6 +38,51 @@ class HrController(http.Controller):
             grouped_data[display_type].append(resume_data)
         return grouped_data
 
+    @http.route(f'{BASE_URL}/employee/detail', type="json", methods=["POST"], auth="public", csrf=False)
+    def employee_detail(self):
+        data = request.get_json_data()
+        employee_id = data.get('employee_id', False)
+        emp = request.env['hr.employee'].sudo().search([('id', '=', employee_id)])
+        return {
+                'id': emp.id,
+                'name': emp.name,
+                'birthday': emp.birthday and emp.birthday.strftime('%d-%m-%Y') or '',
+                'avatar_128': emp.avatar_128 or '',
+                'avatar_256': emp.avatar_256 or '',
+                'avatar_512': emp.avatar_512 or '',
+                'avatar_1024': emp.avatar_1024 or '',
+                'avatar_1920': emp.avatar_1920 or '',
+                'department_id': {
+                    'id': emp.department_id.id or 0,
+                    'name': emp.department_id.name or ''
+                } if emp.department_id else {},
+                'email': emp.email or '',
+                'phone': emp.phone or '',
+                'gender': emp.gender or '',
+                'place_of_birth': emp.place_of_birth or '',
+                'emergency_contact': {
+                    'contact_name': emp.emergency_contact or '',
+                    'contact_phone': emp.emergency_phone or '',
+                },
+                'country_id': {
+                    'id': emp.country_id.id or 0,
+                    'name': emp.country_id.name or ''
+                } if emp.country_id else {},
+                'identification_id': emp.identification_id or '',
+                'job_id': {
+                    'id': emp.job_id.id or 0,
+                    'name': emp.job_id.name or ''
+                } if emp.job_id else {},
+                'job_title': emp.job_title or '',
+                'marital': emp.marital,
+                'manager_id': {
+                    'id': emp.parent_id.id,
+                    'name': emp.parent_id.name
+                } if emp.parent_id else {},
+                'resume_line_ids': self.resume_by_employee(emp),
+                'skill_ids': self.skill_by_employee(emp),
+            }
+
     @http.route(f"{BASE_URL}/employee", type="json", methods=["GET"], auth="public", csrf=False)
     def employee_list(self):
         employees = request.env['hr.employee'].sudo().search([])
