@@ -1,0 +1,99 @@
+{
+    "id": 6,
+    "name": "Abigail Peterson",
+    "birthday": "",
+    "avatar_128": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgM",
+    "avatar_256": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgM",
+    "avatar_512": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgM",
+    "avatar_1024": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgM",
+    "avatar_1920": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgM",            
+    "department_id": {
+        "id": 7,
+        "name": "Professional Services"
+    },
+    "email": "",
+    "phone": "",
+    "gender": "",
+    "place_of_birth": "",
+    "emergency_contact": {
+        "contact_name": "",
+        "contact_phone": ""
+    },
+    "country_id": {},
+    "identification_id": "",
+    "job_id": {
+        "id": 3,
+        "name": "Consultant"
+    },
+    "job_title": "Consultant",
+    "marital": "married",
+    "manager_id": {
+        "id": 2,
+        "name": "Jeffrey Kelly"
+    },
+    "resume_line_ids": {
+        "Experience": [
+            {
+                "id": 102,
+                "name": "Norton-Silva",
+                "date_start": "21-05-2007",
+                "date_end": "19-09-2009",
+                "description": "<p>Horticulturist, commercial</p>"
+            }
+        ],
+        "Education": [
+            {
+                "id": 100,
+                "name": "St Peter's Parish Primary School",
+                "date_start": "18-05-2008",
+                "date_end": "17-11-2008",
+                "description": ""
+            },
+            {
+                "id": 101,
+                "name": "Dandenong North Primary School",
+                "date_start": "20-07-2005",
+                "date_end": "15-02-2008",
+                "description": ""
+            }
+        ]
+    },
+    "skill_ids": {
+        "Languages": [
+            {
+                "id": 82,
+                "name": "Spanish",
+                "level_progress": 85
+            }
+        ],
+        "Marketing": [
+            {
+                "id": 83,
+                "name": "CMS",
+                "level_progress": 100
+            },
+            {
+                "id": 85,
+                "name": "Communication",
+                "level_progress": 100
+            },
+            {
+                "id": 84,
+                "name": "Public Speaking",
+                "level_progress": 75
+            },
+            {
+                "id": 86,
+                "name": "Digital advertising",
+                "level_progress": 75
+            }
+        ],
+        "Programming Languages": [
+            {
+                "id": 87,
+                "name": "RDMS",
+                "level_progress": 100
+            }
+        ]
+    }
+},

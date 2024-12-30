@@ -399,7 +399,7 @@ class EMenu(http.Controller):
                     'id': product.id,
                     'name': product.name or '',
                     'description': product.description or '',
-                    # 'image': product.image_1920 or '',
+                    'image': product.image_1920 or '',
                 },
                 'options': [{
                     'id': option.id,
