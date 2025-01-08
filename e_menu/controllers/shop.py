@@ -147,17 +147,22 @@ class ShopController(http.Controller):
         }
 
     @http.route(f"{BASE_URL}/cart/checkout", auth="angkit", type="json", cors="*")
-    def cart_checkout(self, cart_obj):
-        if not isinstance(cart_obj, list):
+    def cart_checkout(self):
+        cart_obj = request.get_json_data()
+        if not cart_obj.get('cart'):
+            return {
+                'error': "Invalid cart object"
+            }
+        cart = cart_obj.get('cart')
+        if not isinstance(cart, list):
             return {
                 'error': "Invalid cart object",
             }
         response = {'sufficient_stock': [], 'insufficient_stock': []}
-        for item in cart_obj:
+        for item in cart:
             products_sudo = request.env['product.product'].sudo()
             product = products_sudo.search([
-                ('default_code', '=', item['code']),
-                ('id', '=', item['id'])
+                ('id', '=', item['product_id'])
             ], limit=1)
             if not product:
                 continue
