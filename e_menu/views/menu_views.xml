@@ -3,6 +3,7 @@
     <data>
         <menuitem name="Angkort Store" id="angkort_store_menu_root">
             <menuitem name="Store" id="angkort_store_menu" action="angkort_action_shop_list" />
+            <menuitem name="Product" id="angkort_store_product_menu" action="angkort_action_product_list" />
         </menuitem>
 
     </data>

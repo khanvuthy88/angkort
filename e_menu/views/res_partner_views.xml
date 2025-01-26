@@ -6,6 +6,9 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="base.view_partner_form" />
             <field name="arch" type="xml">
+                <div name="button_box" position="inside">
+                    <button name="generate_telegram_token" type="object" class="oe_stat_button" string="Generate Token"/>
+                </div>
                 <xpath expr="//form/sheet/group" position="after">
                     <group invisible="company_type == 'person'" string="Shop Wifi">
                         <group>
@@ -16,6 +19,8 @@
                         <group>
                             <field name="wifi_password"/>
                             <field name="shop_longitude"/>
+                            <field name="telegram_token"/>
+                            <field name="telegram_chat_id"/>
                         </group>
                     </group>
 

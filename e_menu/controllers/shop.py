@@ -64,8 +64,10 @@ class ShopController(http.Controller):
     @classmethod
     def _get_product_details(cls, product):
         product_data = cls._product_to_dict(product)
-        product_data['options'] = [cls._get_product_options(option) for option in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'radio')]
-        product_data['choices'] = [cls._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'multi')]
+        product_data['options'] = [cls._get_product_options(option) for option in product.attribute_line_ids.filtered(
+            lambda x: x.attribute_id.display_type == 'radio')]
+        product_data['choices'] = [cls._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
+            lambda x: x.attribute_id.display_type == 'multi')]
         return product_data
 
     @classmethod
@@ -158,38 +160,52 @@ class ShopController(http.Controller):
             return {
                 'error': "Invalid cart object",
             }
+
+        product_ids = [item['product_id'] for item in cart if 'product_id' in item]
+        if not product_ids:
+            return {
+                'error': "Cart contains no valid products"
+            }
+        product_sudo = request.env['product.template'].sudo()
+        products = product_sudo.search([('id', 'in', product_ids)])
+        product_mapped = {product.id: product for product in products}
         response = {'sufficient_stock': [], 'insufficient_stock': []}
+        total_amount = 0.00
+
         for item in cart:
-            products_sudo = request.env['product.product'].sudo()
-            product = products_sudo.search([
-                ('id', '=', item['product_id'])
-            ], limit=1)
+            product = product_mapped.get(item['product_id'])
             if not product:
                 continue
-            if product.qty_available < item['quantity']:
+            subtotal = item.get('quantity', 0) * product.list_price
+            total_amount += subtotal
+            if product.qty_available < item.get('quantity', 0):
                 response['insufficient_stock'].append({
                     'product_id': product.id,
                     'code': product.default_code,
                     'name': product.name,
                     'quantity': item['quantity'],
-                    'available': product.qty_available
+                    'available': product.qty_available,
+                    'sub_total': subtotal
                 })
             else:
                 response['sufficient_stock'].append({
                     'product_id': product.id,
                     'code': product.default_code,
                     'name': product.name,
-                    'quantity': item['quantity']
+                    'quantity': item['quantity'],
+                    'sub_total': subtotal
                 })
 
         if response['insufficient_stock']:
             return {
                 'status': 'insufficient_stock',
-                'details': response
+                'details': response,
+                'total_amount': total_amount
             }
         return {
             'status': 'sufficient_stock',
-            'details': response['sufficient_stock']
+            'details': response['sufficient_stock'],
+            'total_amount': total_amount
         }
 
     @http.route(f"{BASE_URL}/shop", auth="public", type="json", cors="*")
@@ -199,9 +215,9 @@ class ShopController(http.Controller):
         return [{
             'id': shop.id,
             'name': shop.name or '',
-            'phoneNumber': f"{self._string_to_string_list(shop.phone)}" or '',
-            "address": f'[%s]' % shop.customer_address if shop.customer_address else '',
-            'wifi': f"{self._string_to_string_list(shop.wifi_name)}" or '',
+            'phoneNumber': self._string_to_string_list(shop.phone) or [],
+            "address": [shop.customer_address] if shop.customer_address else [],
+            'wifi': self._string_to_string_list(shop.wifi_name) or [],
             'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids]
         } for shop in stores]
 
@@ -256,7 +272,43 @@ class ShopController(http.Controller):
 
     @http.route(f"{BASE_URL}/shop/update", auth="angkit", type="json", cors="*")
     def update_shop(self):
-        pass
+        data = request.get_json_data()
+        if not data:
+            return {
+                'status': False,
+                "message": "No data provided for update"
+            }
+        shop_id = data.get('id')
+        if not shop_id:
+            return {
+                'status': False,
+                "message": "Shop ID is required for update"
+            }
+
+        shop_sudo = request.env['res.partner'].sudo().search([('id', '=', shop_id)], limit=1)
+        if not shop_sudo:
+            return {
+                'status': False,
+                "message": "Shop with ID {} not found".format(shop_id)
+            }
+        update_fields = {key: value for key, value in data.items() if key != 'id' and hasattr(shop_sudo, key)}
+        if not update_fields:
+            return {
+                'status': False,
+                "message": "No valid fields to update"
+            }
+
+        try:
+            shop_sudo.write(update_fields)
+            return {
+                'status': True,
+                "message": "Shop with ID {} updated successfully".format(shop_id)
+            }
+        except Exception as e:
+            return {
+                'status': False,
+                "message": f"Error updating shop with ID {shop_id}: {str(e)}"
+            }
 
     @http.route(f"{BASE_URL}/shop/delete", auth="angkit", type="json", cors="*")
     def delete_shop(self):
@@ -278,11 +330,79 @@ class ShopController(http.Controller):
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", auth="public", type="json", cors="*")
     def product(self, shop_id):
         products = request.env['product.product'].sudo().search([('shop_id', '=', shop_id)])
-        return [self._product_to_dict(product) for product in products]
+        data = []
+        for product in products:
+            tmp_data = self._product_to_dict(product)
+            tmp_data['options'] = [self._get_product_options(option) for option in
+                                   product.attribute_line_ids.filtered(
+                                       lambda x: x.attribute_id.display_type == 'radio')]
+            tmp_data['choices'] = [self._get_product_choices(choice) for choice in
+                                   product.attribute_line_ids.filtered(
+                                       lambda x: x.attribute_id.display_type == 'multi')]
+            data.append(tmp_data)
+        return data
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/create", auth="angkit", type="json", cors="*")
     def create_product(self, shop_id):
-        pass
+        data = request.get_json_data()
+        if not data:
+            return {
+                'status': 'error',
+                'message': 'No data provided for product creation',
+            }
+
+        # Fetch the shop record
+        shop_sudo = request.env['res.partner'].sudo().search([
+            ('id', '=', shop_id),
+            ('type', '=', 'store')
+        ], limit=1)
+        if not shop_sudo:
+            return {
+                'status': 'error',
+                'message': f'Shop with ID {shop_id} not found',
+            }
+
+        # Validate required fields for product creation
+        required_fields = ['name', 'price', 'category_id']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return {
+                'status': 'error',
+                'message': f'Missing required fields: {", ".join(missing_fields)}',
+            }
+
+        # Prepare product data
+        product_data = {
+            'name': data.get('name'),
+            'list_price': data.get('price'),
+            'categ_id': data.get('category_id'),
+            'shop_id': shop_id,  # Associate product with the shop
+        }
+
+        # Optional fields
+        optional_fields = ['description', 'barcode', 'qty_available']
+        for field in optional_fields:
+            if field in data:
+                product_data[field] = data[field]
+
+        # Create the product
+        try:
+            product = request.env['product.product'].sudo().create(product_data)
+            return {
+                'status': 'success',
+                'message': 'Product created successfully',
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'price': product.list_price,
+                    'category_id': product.categ_id.id,
+                },
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error creating product: {str(e)}',
+            }
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/update", auth="angkit", type="json", cors="*")
     def update_product(self, shop_id):
