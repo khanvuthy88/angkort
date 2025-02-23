@@ -236,9 +236,9 @@ class ShopController(http.Controller):
             return {
                 'id': shop.id,
                 'name': shop.name or '',
-                'phoneNumber': f"{self._string_to_string_list(shop.phone)}" or '',
-                "address": f'[%s]' % shop.customer_address if shop.customer_address else '',
-                'wifi': f"{self._string_to_string_list(shop.wifi_name)}" or '',
+                'phoneNumber': self._string_to_string_list(shop.phone) or [],
+                "address": [shop.customer_address] if shop.customer_address else [],
+                'wifi': self._string_to_string_list(shop.wifi_name) or [],
                 'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids]
             }
         except Exception as e:
