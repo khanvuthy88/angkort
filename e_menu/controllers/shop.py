@@ -1,3 +1,5 @@
+import base64
+
 from odoo import http
 from odoo.http import request
 from collections import defaultdict
@@ -342,16 +344,141 @@ class ShopController(http.Controller):
             data.append(tmp_data)
         return data
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/create", auth="angkit", type="json", cors="*")
-    def create_product(self, shop_id):
-        data = request.get_json_data()
-        if not data:
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/create", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    def create_product(self, shop_id, **kwargs):
+        image_file = request.httprequest.files['image']
+        data = request.httprequest.form
+        required_fields = ['name', 'price', 'category_id']
+
+        # Validate required fields for product creation
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return request.make_json_response({'error': f'Missing required fields: {", ".join(missing_fields)}'}, status=400)
+
+
+        shop_sudo = request.env['res.partner'].sudo().search([
+            ('id', '=', shop_id),
+            ('type', '=', 'store')
+        ], limit=1)
+        if not shop_sudo:
             return {
-                'status': 'error',
-                'message': 'No data provided for product creation',
+                'status': False,
+                "message": f"Shop with ID {shop_id} not found",
+            }
+        category = request.env['product.category'].sudo().search([('id', '=', data.get('category_id'))], limit=1)
+        if not category:
+            return {
+                'status': False,
+                "message": f"Category with ID {data.get('category_id')} not found",
             }
 
-        # Fetch the shop record
+        # Prepare product data
+        product_data = {
+            'name': data.get('name'),
+            'list_price': data.get('price'),
+            'categ_id': category.id,
+            'shop_id': shop_id,
+        }
+        optional_fields = ['description', 'barcode', 'qty_available']
+        for field in optional_fields:
+            if field in data:
+                product_data[field] = data.get(field)
+
+        try:
+            # Create the product
+            product = request.env['product.product'].with_user(request.env.user).create(product_data)
+            if image_file:
+                image_data = image_file.read()
+                encoded_image = base64.b64encode(image_data)
+                product.write({'image_1920': encoded_image})
+            return request.make_json_response({
+                'status': True,
+                "message": "Product created successfully"
+            }, status=201)
+        except Exception as e:
+            return request.make_json_response({
+                'status': False,
+                "message": f"Error creating product: {str(e)}"
+            }, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/update", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    def update_product(self, shop_id, product_id):
+        image_file = request.httprequest.files['image']
+        shop_sudo = request.env['res.partner'].sudo().search([
+            ('id', '=', shop_id),
+            ('type', '=', 'store')
+        ], limit=1)
+        if not shop_sudo:
+            return request.make_json_response({
+                'status': 'error',
+                'message': f'Shop with ID {shop_id} not found',
+            }, status=404)
+
+        data = request.httprequest.form
+        # Validate required fields for product creation
+        required_fields = ['name', 'price', 'category_id']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return request.make_json_response({
+                'status': 'error',
+                'message': f'Missing required fields: {", ".join(missing_fields)}',
+            }, status=400)
+
+        if 'category_id' in data:
+            category = request.env['product.category'].sudo().search([('id', '=', data.get('category_id'))], limit=1)
+            if not category:
+                return request.make_json_response({
+                    'status': 'error',
+                    'message': f'Category with ID {data.get("category_id")} not found',
+                }, status=404)
+
+        # Prepare product data
+        product_data = {
+            'name': data.get('name'),
+            'list_price': data.get('price'),
+            # 'categ_id': data.get('category_id'),
+            'shop_id': shop_id,  # Associate product with the shop
+        }
+
+        # Optional fields
+        optional_fields = ['description', 'barcode', 'qty_available']
+        for field in optional_fields:
+            if field in data:
+                product_data[field] = data[field]
+        try:
+            product = request.env['product.product'].sudo().search([
+                ('id', '=', product_id), ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not product:
+                return request.make_json_response({
+                    'status': 'error',
+                    'message': f'Product with ID {product_id} not found',
+                }, status=404)
+
+            if image_file:
+                image_data = image_file.read()
+                encoded_image = base64.b64encode(image_data)
+                product_data['image_1920'] = encoded_image
+
+            product.with_user(request.env.user).write(product_data)
+            return request.make_json_response({
+                'status': 'success',
+                'message': 'Product updated successfully',
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'price': product.list_price,
+                    'category_id': product.categ_id.id,
+                },
+            }, status=200)
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error updating product: {str(e)}',
+            }
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete", auth="angkit", type="json", cors="*")
+    def delete_product(self, shop_id, product_id):
         shop_sudo = request.env['res.partner'].sudo().search([
             ('id', '=', shop_id),
             ('type', '=', 'store')
@@ -362,55 +489,23 @@ class ShopController(http.Controller):
                 'message': f'Shop with ID {shop_id} not found',
             }
 
-        # Validate required fields for product creation
-        required_fields = ['name', 'price', 'category_id']
-        missing_fields = [field for field in required_fields if field not in data]
-        if missing_fields:
+        product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
+        if not product:
             return {
                 'status': 'error',
-                'message': f'Missing required fields: {", ".join(missing_fields)}',
+                'message': f'Product with ID {product_id} not found',
             }
-
-        # Prepare product data
-        product_data = {
-            'name': data.get('name'),
-            'list_price': data.get('price'),
-            'categ_id': data.get('category_id'),
-            'shop_id': shop_id,  # Associate product with the shop
-        }
-
-        # Optional fields
-        optional_fields = ['description', 'barcode', 'qty_available']
-        for field in optional_fields:
-            if field in data:
-                product_data[field] = data[field]
-
-        # Create the product
         try:
-            product = request.env['product.product'].sudo().create(product_data)
+            product.unlink()
             return {
                 'status': 'success',
-                'message': 'Product created successfully',
-                'product': {
-                    'id': product.id,
-                    'name': product.name,
-                    'price': product.list_price,
-                    'category_id': product.categ_id.id,
-                },
+                'message': 'Product deleted successfully',
             }
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Error creating product: {str(e)}',
+                'message': f'Error deleting product: {str(e)}',
             }
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/update", auth="angkit", type="json", cors="*")
-    def update_product(self, shop_id):
-        pass
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/delete", auth="angkit", type="json", cors="*")
-    def delete_product(self, shop_id):
-        pass
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", auth="public", type="json", cors="*")
     def product_category(self, shop_id):
@@ -419,15 +514,81 @@ class ShopController(http.Controller):
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/create", auth="angkit", type="json", cors="*")
     def create_product_category(self, shop_id):
-        pass
+        data = request.get_json_data()
+        if 'name' not in data:
+            return {
+                'status': 'error',
+                'message': 'Category name is required',
+            }
+        try:
+            category = request.env['product.category'].with_user(request.env.user).create({
+                'name': data['name'],
+                'shop_id': shop_id,
+            })
+            return {
+                'status': 'success',
+                'message': 'Category created successfully',
+                'category': self._category_to_dict(category),
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error creating category: {str(e)}',
+            }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/update", auth="angkit", type="json", cors="*")
-    def update_product_category(self, shop_id):
-        pass
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/update", auth="angkit", type="json", cors="*")
+    def update_product_category(self, shop_id, cate_id):
+        data = request.get_json_data()
+        required_fields = ['name', 'shop_id']
+        if any(field not in data for field in required_fields):
+            return {
+                'status': 'error',
+                'message': 'Missing required fields',
+            }
+        try:
+            category = request.env['product.category'].with_user(request.env.user).search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
+            if category.create_uid != request.env.user:
+                return {
+                    'status': 'error',
+                    'message': 'You are not authorized to update this category',
+                }
+            category.write(data)
+            return {
+                'status': 'success',
+                'message': 'Category updated successfully',
+                'category': self._category_to_dict(category),
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error updating category: {str(e)}',
+            }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/delete", auth="angkit", type="json", cors="*")
-    def delete_product_category(self, shop_id):
-        pass
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/delete", auth="angkit", type="json", cors="*")
+    def delete_product_category(self, shop_id, cate_id):
+        category = request.env['product.category'].with_user(request.env.user).search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
+        if not category:
+            return {
+                'status': 'error',
+                'message': f'Category with ID {cate_id} not found',
+            }
+        if category.create_uid != request.env.user:
+            return {
+                'status': 'error',
+                'message': 'You are not authorized to delete this category',
+            }
+        try:
+            category.unlink()
+            return {
+                'status': 'success',
+                'message': 'Category deleted successfully',
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error deleting category: {str(e)}',
+            }
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", auth="public", type="json", cors="*")
     def product_variant(self, shop_id):
