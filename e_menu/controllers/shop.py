@@ -361,16 +361,16 @@ class ShopController(http.Controller):
             ('type', '=', 'store')
         ], limit=1)
         if not shop_sudo:
-            return {
+            return request.make_json_response({
                 'status': False,
-                "message": f"Shop with ID {shop_id} not found",
-            }
+                'message': f"Shop with ID {shop_id} is not found"
+            }, status=404)
         category = request.env['product.category'].sudo().search([('id', '=', data.get('category_id'))], limit=1)
         if not category:
-            return {
-                'status': False,
-                "message": f"Category with ID {data.get('category_id')} not found",
-            }
+            return request.make_json_response({
+                "status": False,
+                "message": f"Category with ID {data.get('category_id')} not found"
+            }, status=404)
 
         # Prepare product data
         product_data = {
