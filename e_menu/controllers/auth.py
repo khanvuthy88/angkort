@@ -124,18 +124,26 @@ class Authentication(http.Controller):
             "expires_in": 1800  # 30 minutes in seconds
         }
 
-    @route('/api/logout', type='json', auth='none', methods=['POST'])
+    @route('/api/logout', auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
     def logout(self, **kwargs):
-        """Revoke tokens for logout."""
-        access_token = kwargs.get('access_token')
+        access_token_header = request.httprequest.headers.get('Authorization')
+        if not access_token_header:
+            return request.make_json_response({'message': 'Access token missing'}, status=400)
+
+        if access_token_header.startswith('Bearer '):
+            access_token_header = access_token_header[7:]
+
         token_model = request.env['auth.token'].sudo()
-        token = token_model.search([('access_token', '=', hashlib.sha256(access_token.encode()).hexdigest())], limit=1)
+        token = token_model.search([('access_token', '=', hashlib.sha256(access_token_header.encode()).hexdigest())], limit=1)
 
         if token:
-            token.active = False
-            return {"message": "Successfully logged out"}
+            token.write({
+                'active': False
+            })
+            request.session.logout(keep_db=True)
+            return request.make_json_response({'message': 'Successfully logged out'}, status=200)
 
-        return {"error": "Invalid access token"}
+        return request.make_json_response({'error': 'Invalid access token'}, status=401)
 
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
         """Generate JWT tokens."""

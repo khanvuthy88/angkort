@@ -477,35 +477,35 @@ class ShopController(http.Controller):
                 'message': f'Error updating product: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete", auth="angkit", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
     def delete_product(self, shop_id, product_id):
         shop_sudo = request.env['res.partner'].sudo().search([
             ('id', '=', shop_id),
             ('type', '=', 'store')
         ], limit=1)
         if not shop_sudo:
-            return {
-                'status': 'error',
-                'message': f'Shop with ID {shop_id} not found',
-            }
+            return request.make_json_response({
+                "status": False,
+                "message": f"Shop with ID {shop_id} not found"
+            }, status=404)
 
         product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
         if not product:
-            return {
-                'status': 'error',
-                'message': f'Product with ID {product_id} not found',
-            }
+            return request.make_json_response({
+                "status": False,
+                "message": f"Product with ID {product_id} not found"
+            }, status=404)
         try:
             product.unlink()
-            return {
-                'status': 'success',
-                'message': 'Product deleted successfully',
-            }
+            return request.make_json_response({
+                "status": True,
+                "message": "Product deleted successfully"
+            }, status=200)
         except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Error deleting product: {str(e)}',
-            }
+            return request.make_json_response({
+                'status': False,
+                'message': f"Error deleting product: {str(e)}"
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", auth="public", type="json", cors="*")
     def product_category(self, shop_id):
