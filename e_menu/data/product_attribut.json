@@ -1,0 +1,6 @@
+{
+  "create_variant": ["no_variant", "always"],
+  "display_type": [ "multi", "radio"],
+  "name": "Extras",
+  "visibility": "visible"
+}

@@ -31,6 +31,7 @@ def validate_token(func):
 
             # Fetch the user from the database
             user_id = payload.get('user_id')
+            print(payload)
             user = request.env['res.users'].sudo().browse(user_id)
             if not user.exists():
                 return {"error": "Invalid token"}, 401
@@ -75,7 +76,8 @@ class Authentication(http.Controller):
             return {'error': "Invalid username or password"}
 
         # Generate tokens
-        access_token = self._generate_token(user.id, 'access', minutes=5)
+        access_token = self._generate_token(user.id, 'access', minutes=30)
+        print(access_token)
         refresh_token = self._generate_token(user.id, 'refresh', days=7)
 
         # Store tokens in the database
@@ -97,7 +99,47 @@ class Authentication(http.Controller):
 
     @route('/api/refresh', type='json', auth='none', methods=['POST'])
     def refresh_token(self, **kwargs):
-        """Generate a new access token using a refresh token."""
+        """
+        Generate a new access token using a valid refresh token.
+
+        Endpoint: POST /api/refresh
+        Auth: None (public endpoint)
+        Content-Type: application/json
+
+        Request Body:
+            {
+                "refresh_token": str  # Required: The refresh token to generate new access token
+            }
+
+        Returns:
+            dict: Response containing new access token details
+                {
+                    "access_token": str,    # The newly generated access token
+                    "token_type": str,      # Always "Bearer"
+                    "expires_in": int       # Token expiration time in seconds (1800 = 30 minutes)
+                }
+
+        Error Response:
+            {
+                "error": str  # Error message if refresh token is invalid or expired
+            }
+
+        Status Codes:
+            200: New access token generated successfully
+            400: Invalid request or refresh token
+
+        Example Request:
+            {
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            }
+
+        Example Response:
+            {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "Bearer",
+                "expires_in": 1800
+            }
+        """
         request_data = request.get_json_data()
         refresh_token = request_data.get('refresh_token')
         token_model = request.env['res.user.token'].sudo()
@@ -126,6 +168,41 @@ class Authentication(http.Controller):
 
     @route('/api/logout', auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
     def logout(self, **kwargs):
+        """
+        Logout a user by invalidating their access token.
+
+        Endpoint: POST /api/logout
+        Auth: Required (angkit)
+        Content-Type: application/json
+
+        Headers:
+            Authorization: Bearer <access_token>  # Required: The user's access token
+
+        Returns:
+            dict: Response containing status message
+                {
+                    'message': str  # Success or error message
+                }
+
+        Status Codes:
+            200: Successfully logged out
+            400: Access token missing
+            401: Invalid access token
+
+        Example Response (Success):
+            {
+                "message": "Successfully logged out"
+            }
+
+        Example Response (Error):
+            {
+                "message": "Access token missing"
+            }
+            or
+            {
+                "error": "Invalid access token"
+            }
+        """
         access_token_header = request.httprequest.headers.get('Authorization')
         if not access_token_header:
             return request.make_json_response({'message': 'Access token missing'}, status=400)
@@ -146,7 +223,31 @@ class Authentication(http.Controller):
         return request.make_json_response({'error': 'Invalid access token'}, status=401)
 
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
-        """Generate JWT tokens."""
+        """
+        Generate a JWT token for user authentication.
+
+        Args:
+            user_id (int): The ID of the user to generate the token for
+            token_type (str): The type of token to generate (e.g., 'access', 'refresh')
+            minutes (int, optional): Token expiration time in minutes. Defaults to 0.
+            days (int, optional): Token expiration time in days. Defaults to 0.
+
+        Returns:
+            str: The generated JWT token
+
+        Note:
+            - The token expiration time is calculated as current time + minutes + days
+            - The token is signed using HS256 algorithm
+            - The secret key is retrieved from system parameters
+            - Token payload includes:
+                - user_id: The ID of the user
+                - type: The type of token
+                - exp: Expiration timestamp
+
+        Example:
+            >>> _generate_token(1, 'access', minutes=30)  # Token expires in 30 minutes
+            >>> _generate_token(1, 'refresh', days=7)     # Token expires in 7 days
+        """
         payload = {
             "user_id": user_id,
             "type": token_type,
