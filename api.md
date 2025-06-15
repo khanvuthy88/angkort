@@ -218,6 +218,26 @@ POST /shop/{shop_id}/product/create
 - `description` (str): Product description
 - `barcode` (str): Product barcode
 - `qty_available` (float): Initial quantity
+- `attributes` (json): Product attributes and values
+  ```json
+  {
+    "attributes": [
+      {
+        "attribute_id": 1,
+        "values": [
+          {
+            "value_id": 1,
+            "extra_price": 2.5
+          },
+          {
+            "value_id": 2,
+            "extra_price": 3.0
+          }
+        ]
+      }
+    ]
+  }
+  ```
 
 **Response**:
 
@@ -243,7 +263,35 @@ POST /shop/{shop_id}/product/{product_id}/update
 - `shop_id` (int): ID of the shop
 - `product_id` (int): ID of the product
 
-**Form Data**: Same as create product
+**Form Data**:
+
+- `name` (str): Product name
+- `price` (float): Product price
+- `category_id` (int): Category ID
+- `image` (file): Product image
+- `description` (str): Product description
+- `barcode` (str): Product barcode
+- `qty_available` (float): Initial quantity
+- `attributes` (json): Product attributes and values
+  ```json
+  {
+    "attributes": [
+      {
+        "attribute_id": 1,
+        "values": [
+          {
+            "value_id": 1,
+            "extra_price": 2.5
+          },
+          {
+            "value_id": 2,
+            "extra_price": 3.0
+          }
+        ]
+      }
+    ]
+  }
+  ```
 
 **Response**:
 
@@ -255,7 +303,25 @@ POST /shop/{shop_id}/product/{product_id}/update
     "id": 123,
     "name": "Updated Product",
     "price": 99.99,
-    "category_id": 456
+    "category_id": 456,
+    "attributes": [
+      {
+        "attribute_id": 1,
+        "attribute_name": "Size",
+        "values": [
+          {
+            "value_id": 1,
+            "value_name": "Small",
+            "extra_price": 2.5
+          },
+          {
+            "value_id": 2,
+            "value_name": "Large",
+            "extra_price": 3.0
+          }
+        ]
+      }
+    ]
   }
 }
 ```
