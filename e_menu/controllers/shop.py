@@ -182,7 +182,7 @@ class ShopController(http.Controller):
         # Get pagination parameters with defaults
         page = int(request.httprequest.args.get('page', 1))
         limit = min(int(request.httprequest.args.get('limit', 20)), 100)  # Cap at 100 records
-        
+
         # Calculate offset
         offset = (page - 1) * limit
 
@@ -191,10 +191,10 @@ class ShopController(http.Controller):
 
         # Search with proper indexing and field limiting
         domain = [('partner_id', '=', request.env.user.partner_id.id)]
-        
+
         # Get total count for pagination
         total = request.env['sale.order'].sudo().search_count(domain)
-        
+
         # Calculate total pages
         pages = (total + limit - 1) // limit
         page = min(max(1, page), pages) if pages > 0 else 1
@@ -558,7 +558,7 @@ class ShopController(http.Controller):
         # Get total count for pagination
         stores_sudo = request.env['res.partner'].sudo()
         total = stores_sudo.search_count([('type', '=', 'store')])
-        
+
         # Calculate total pages
         pages = (total + limit - 1) // limit
         page = min(max(1, page), pages) if pages > 0 else 1
@@ -959,7 +959,8 @@ class ShopController(http.Controller):
             data.append(tmp_data)
         return data
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/create", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/create", auth="angkit", type="http", methods=["POST"],
+                csrf=False, cors="*")
     def create_product(self, shop_id, **kwargs):
         """
         Create a new product in a shop.
@@ -1100,7 +1101,8 @@ class ShopController(http.Controller):
         # Validate required fields for product creation
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
-            return request.make_json_response({'error': f'Missing required fields: {", ".join(missing_fields)}'}, status=400)
+            return request.make_json_response({'error': f'Missing required fields: {", ".join(missing_fields)}'},
+                                              status=400)
 
         shop_sudo = request.env['res.partner'].sudo().search([
             ('id', '=', shop_id),
@@ -1133,7 +1135,7 @@ class ShopController(http.Controller):
         try:
             # Create the product
             product = request.env['product.product'].with_user(request.env.user).create(product_data)
-            
+
             # Handle image if provided
             if image_file:
                 image_data = image_file.read()
@@ -1217,7 +1219,8 @@ class ShopController(http.Controller):
                 'message': f'Error creating product: {str(e)}'
             }, status=500)
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/update", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/update", auth="angkit", type="http",
+                methods=["POST"], csrf=False, cors="*")
     def update_product(self, shop_id, product_id):
         """
         Update a product in a shop.
@@ -1417,7 +1420,7 @@ class ShopController(http.Controller):
                     if isinstance(attributes_data, list):
                         # Clear existing attribute lines
                         product.attribute_line_ids.unlink()
-                        
+
                         # Create new attribute lines
                         for attr_data in attributes_data:
                             if 'attribute_id' in attr_data and 'values' in attr_data:
@@ -1492,7 +1495,8 @@ class ShopController(http.Controller):
                 'message': f'Error updating product: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete", auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete", auth="angkit", type="http",
+                methods=["POST"], csrf=False, cors="*")
     def delete_product(self, shop_id, product_id):
         """
         Delete a product from a shop.
@@ -1539,7 +1543,8 @@ class ShopController(http.Controller):
                 "message": f"Shop with ID {shop_id} not found"
             }, status=404)
 
-        product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
+        product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)],
+                                                               limit=1)
         if not product:
             return request.make_json_response({
                 "status": False,
@@ -1630,7 +1635,8 @@ class ShopController(http.Controller):
                 'message': f'Error creating category: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/update", auth="angkit", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/update", auth="angkit", type="json",
+                cors="*")
     def update_product_category(self, shop_id, cate_id):
         """
         Update a product category in a shop.
@@ -1693,7 +1699,8 @@ class ShopController(http.Controller):
                 'message': 'Missing required fields',
             }
         try:
-            category = request.env['product.category'].with_user(request.env.user).search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
+            category = request.env['product.category'].with_user(request.env.user).search(
+                [('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
             if category.create_uid != request.env.user:
                 return {
                     'status': 'error',
@@ -1711,8 +1718,8 @@ class ShopController(http.Controller):
                 'message': f'Error updating category: {str(e)}',
             }
 
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/delete", auth="angkit", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/delete", auth="angkit", type="json",
+                cors="*")
     def delete_product_category(self, shop_id, cate_id):
         """
         Delete a product category from a shop.
@@ -1749,7 +1756,8 @@ class ShopController(http.Controller):
                 "message": "Category with ID 123 not found"
             }
         """
-        category = request.env['product.category'].with_user(request.env.user).search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
+        category = request.env['product.category'].with_user(request.env.user).search(
+            [('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
         if not category:
             return {
                 'status': 'error',
@@ -1771,15 +1779,17 @@ class ShopController(http.Controller):
                 'status': 'error',
                 'message': f'Error deleting category: {str(e)}',
             }
-            
-    def _build_product_variants_data(self, data):
+
+    def _build_product_variants_data(self, data, shop_id):
         return {
             'create_variant': data.get('create_variant'),
             'display_type': data.get('display_type'),
             'name': data.get('name'),
+            'shop_id': shop_id
         }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/", auth="angkit", type="json", cors="*", methods=['GET'])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/", auth="angkit", type="json", cors="*",
+                methods=['GET'])
     def product_variant_list(self, shop_id):
         """
         List all product attributes (variants) for a shop.
@@ -1823,7 +1833,8 @@ class ShopController(http.Controller):
         """
         return self._product_variant_list(shop_id)
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/create", auth="angkit", type="json", cors="*", methods=['POST'])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/create", auth="angkit", type="json", cors="*",
+                methods=['POST'])
     def create_product_variant(self, shop_id):
         """
         Create a new product attribute (variant) for a shop.
@@ -1871,12 +1882,12 @@ class ShopController(http.Controller):
             }
         """
         data = request.get_json_data()
-        
+
         # Define valid values as sets for O(1) lookup
         VALID_CREATE_VARIANTS = {'no_variant', 'always'}
         VALID_DISPLAY_TYPES = {'multi', 'radio'}
         REQUIRED_FIELDS = {'create_variant', 'display_type', 'name'}
-        
+
         try:
             # Check required fields using set operations
             missing_fields = REQUIRED_FIELDS - set(data.keys())
@@ -1885,14 +1896,14 @@ class ShopController(http.Controller):
                     'status': 'error',
                     'message': f'Missing required fields: {", ".join(missing_fields)}',
                 }
-                
+
             # Validate values using set membership
             if data['create_variant'] not in VALID_CREATE_VARIANTS:
                 return {
                     'status': 'error',
                     'message': f'Invalid create_variant value. Must be one of: {", ".join(VALID_CREATE_VARIANTS)}',
                 }
-                
+
             if data['display_type'] not in VALID_DISPLAY_TYPES:
                 return {
                     'status': 'error',
@@ -1900,32 +1911,36 @@ class ShopController(http.Controller):
                 }
 
             # Use exists() for faster existence check
-            if request.env['product.attribute'].sudo().search_count([('name', '=', data['name'])], limit=1):
+            if request.env['product.attribute'].sudo().search_count([
+                ('name', '=', data['name']),
+                ('shop_id', '=', shop_id),
+            ], limit=1):
                 return {
                     'status': 'error',
                     'message': f'Attribute with name {data["name"]} already exists',
                 }
-                
+
             # Create attribute in a single operation
-            variant_create_data = self._build_product_variants_data(data)
+            variant_create_data = self._build_product_variants_data(data, shop_id)
             # Ensure create_variant is 'no_variant' when display_type is 'multi'
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            
+
             return {
                 'status': 'success',
                 'message': 'Attribute created successfully',
                 'attribute': self._attribute_to_dict(attribute),
             }
-            
+
         except Exception as e:
             return {
                 'status': 'error',
                 'message': f'Error creating attribute: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/update/<int:variant_id>", auth="angkit", type="json", cors="*", methods=['POST'])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/update/<int:variant_id>", auth="angkit", type="json",
+                cors="*", methods=['POST'])
     def update_product_variant(self, shop_id, variant_id):
         """
         Update an existing product attribute (variant).
@@ -1999,7 +2014,7 @@ class ShopController(http.Controller):
             # Validate shop exists
             shop = request.env['res.partner'].sudo().search([
                 ('id', '=', shop_id),
-                ('company_type', '=', 'company')
+                ('type', '=', 'store')
             ], limit=1)
             if not shop:
                 return {
@@ -2009,7 +2024,8 @@ class ShopController(http.Controller):
 
             # Find the attribute
             attribute = request.env['product.attribute'].sudo().search([
-                ('id', '=', variant_id)
+                ('id', '=', variant_id),
+                ('shop_id', '=', shop_id)
             ], limit=1)
             if not attribute:
                 return {
@@ -2037,7 +2053,10 @@ class ShopController(http.Controller):
 
             # Check for duplicate name if name is being updated
             if 'name' in data and data['name'] != attribute.name:
-                if request.env['product.attribute'].sudo().search_count([('name', '=', data['name'])], limit=1):
+                if request.env['product.attribute'].sudo().search_count([
+                    ('shop_id', '=', shop_id),
+                    ('name', '=', data['name'])
+                ], limit=1):
                     return {
                         'status': 'error',
                         'message': f'Attribute with name {data["name"]} already exists'
@@ -2062,7 +2081,8 @@ class ShopController(http.Controller):
                 'message': f'Error updating attribute: {str(e)}'
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/delete/<int:variant_id>", auth="angkit", type="json", cors="*", methods=['DELETE'])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/delete/<int:variant_id>", auth="angkit", type="json",
+                cors="*", methods=['DELETE'])
     def delete_product_variant(self, shop_id, variant_id):
         """
         Delete a product attribute (variant).
@@ -2102,7 +2122,7 @@ class ShopController(http.Controller):
         try:
             shop = request.env['res.partner'].sudo().search([
                 ('id', '=', shop_id),
-                ('company_type', '=', 'company')
+                ('type', '=', 'store')
             ], limit=1)
             if not shop:
                 return {
@@ -2113,6 +2133,7 @@ class ShopController(http.Controller):
             # Find the attribute
             attribute = request.env['product.attribute'].sudo().search([
                 ('id', '=', variant_id),
+                ('shop_id', '=', shop_id),
                 ('create_uid', '=', request.env.user.id)
             ], limit=1)
             if not attribute:
@@ -2135,11 +2156,84 @@ class ShopController(http.Controller):
                 'message': f'Error deleting attribute: {str(e)}'
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", auth="angkit", type="json", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>/value", methods=["GET"], auth="angkit", type="json", cors="*")
+    def product_vairiant_value_by_vairant(self, shop_id, variant_id):
+        """
+        Get all values for a specific product attribute (variant) in a shop.
+
+        Endpoint: GET /angkort/api/v1/shop/{shop_id}/product/variant/{variant_id}/value
+        Auth: Required (angkit)
+        Content-Type: application/json
+
+        Parameters:
+            shop_id (int): The ID of the shop
+            variant_id (int): The ID of the attribute to get values for
+
+        Returns:
+            dict: Response containing status and variant values
+                {
+                    'status': str,     # 'success' or 'error'
+                    'message': str,    # Success or error message
+                    'values': [        # List of variant values (if successful)
+                        {
+                            'id': int,
+                            'name': str,
+                            'extra_price': float
+                        },
+                        ...
+                    ]
+                }
+
+        Status Codes:
+            200: Values retrieved successfully
+            404: Shop or attribute not found
+            500: Internal server error
+        """
+        try:
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store')
+            ], limit=1)
+            if not shop:
+                return {
+                    'status': 'error',
+                    'message': 'Shop not found'
+                }
+
+            # Find the attribute
+            attribute = request.env['product.attribute'].sudo().search([
+                ('id', '=', variant_id),
+                ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not attribute:
+                return {
+                    'status': 'error',
+                    'message': 'Attribute not found'
+                }
+
+            value_list = [{
+                'id': value.id,
+                'name': value.name,
+                'extra_price': value.price_extra
+            } for value in attribute.value_ids]
+
+            return {
+                'status': 'success',
+                'message': 'Values retrieved successfully',
+                'values': value_list
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error retrieving values: {str(e)}'
+            }
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", methods=["POST"], auth="angkit", type="json", cors="*")
     def create_product_variant_value(self, shop_id):
         """
         Create values for a product attribute (variant).
-
         Endpoint: POST /angkort/api/v1/shop/{shop_id}/product/variant/value
         Auth: Required (angkit)
         Content-Type: application/json
@@ -2188,7 +2282,7 @@ class ShopController(http.Controller):
             }
         """
         data = request.get_json_data()
-        
+
         # Validate required fields and data types upfront
         required_fields = {'attribute_id': int, 'values': list}
         for field, expected_type in required_fields.items():
@@ -2202,6 +2296,9 @@ class ShopController(http.Controller):
         if not attribute.exists():
             return {'status': 'error', 'message': f'Attribute with ID {data["attribute_id"]} not found'}
 
+        if attribute.shop_id.id != shop_id:
+            return {'status': 'error', 'message': f"Attribute didn't belong to this shop"}
+
         # Prepare all values for bulk creation
         values_to_create = [{
             'default_extra_price': value['extra_price'],
@@ -2214,7 +2311,8 @@ class ShopController(http.Controller):
 
         return {'status': 'success', 'message': 'Attribute values created successfully'}
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", auth="angkit", type="json", cors="*", methods=["PUT"])
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", auth="angkit", type="json",
+                cors="*", methods=["PUT"])
     def update_product_variant_value(self, shop_id, value_id):
         """
         Update a product variant value.
@@ -2282,7 +2380,6 @@ class ShopController(http.Controller):
         except Exception as e:
             return {'status': 'error', 'message': f'Error updating variant value: {str(e)}'}
 
-
     def _attribute_to_dict(self, attribute):
         try:
             return {
@@ -2301,10 +2398,188 @@ class ShopController(http.Controller):
         try:
             attributes = request.env['product.attribute'].sudo().search([
                 ('create_uid', '=', request.env.user.id),
+                ('shop_id', '=', shop_id)
             ])
             return [self._attribute_to_dict(attribute) for attribute in attributes]
         except Exception as e:
             return {
                 'status': 'error',
                 'message': f'Error listing attributes: {str(e)}',
+            }
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="json",
+                cors="*")
+    def calculate_product_price(self, shop_id, product_id):
+        """
+        Calculate the total price of a product including its variants.
+
+        Endpoint: POST /angkort/api/v1/shop/{shop_id}/product/{product_id}/calculate-price
+        Auth: Public
+        Content-Type: application/json
+
+        Parameters:
+            shop_id (int): The ID of the shop containing the product
+            product_id (int): The ID of the product to calculate price for
+
+        Request Body:
+            {
+                "quantity": int,           # Required: Quantity of the product
+                "variants": [              # Optional: List of selected variants
+                    {
+                        "attribute_id": int,    # Required: ID of the attribute
+                        "value_id": int         # Required: ID of the selected value
+                    },
+                    ...
+                ]
+            }
+
+        Returns:
+            dict: Response containing calculated price details
+                {
+                    'status': str,         # 'success' or 'error'
+                    'message': str,        # Success or error message
+                    'price_details': {     # Only present on success
+                        'base_price': float,    # Original product price
+                        'variant_prices': [     # List of variant prices
+                            {
+                                'attribute_name': str,
+                                'value_name': str,
+                                'price': float
+                            }
+                        ],
+                        'total_variant_price': float,  # Sum of all variant prices
+                        'quantity': int,               # Requested quantity
+                        'subtotal': float,            # Base price * quantity
+                        'total': float                # Final total with variants
+                    }
+                }
+
+        Status Codes:
+            200: Price calculated successfully
+            400: Invalid request data
+            404: Product or variant not found
+            500: Internal server error
+
+        Example Request:
+            {
+                "quantity": 2,
+                "variants": [
+                    {
+                        "attribute_id": 1,
+                        "value_id": 2
+                    },
+                    {
+                        "attribute_id": 2,
+                        "value_id": 3
+                    }
+                ]
+            }
+
+        Example Response (Success):
+            {
+                "status": "success",
+                "price_details": {
+                    "base_price": 99.99,
+                    "variant_prices": [
+                        {
+                            "attribute_name": "Size",
+                            "value_name": "Large",
+                            "price": 5.00
+                        },
+                        {
+                            "attribute_name": "Toppings",
+                            "value_name": "Extra Cheese",
+                            "price": 2.50
+                        }
+                    ],
+                    "total_variant_price": 7.50,
+                    "quantity": 2,
+                    "subtotal": 199.98,
+                    "total": 214.98
+                }
+            }
+
+        Example Response (Error):
+            {
+                "status": "error",
+                "message": "Product not found"
+            }
+        """
+        try:
+            data = request.get_json_data()
+
+            # Validate required fields
+            if 'quantity' not in data:
+                return {
+                    'status': 'error',
+                    'message': 'Quantity is required'
+                }
+
+            # Validate quantity is positive
+            quantity = int(data['quantity'])
+            if quantity <= 0:
+                return {
+                    'status': 'error',
+                    'message': 'Quantity must be greater than 0'
+                }
+
+            # Get product
+            product = request.env['product.product'].sudo().search([
+                ('id', '=', product_id),
+                ('shop_id', '=', shop_id)
+            ], limit=1)
+
+            if not product:
+                return {
+                    'status': 'error',
+                    'message': 'Product not found'
+                }
+
+            # Initialize price details
+            base_price = product.list_price
+            variant_prices = []
+            total_variant_price = 0.0
+
+            # Calculate variant prices if provided
+            if 'variants' in data and isinstance(data['variants'], list):
+                for variant in data['variants']:
+                    if not all(k in variant for k in ['attribute_id', 'value_id']):
+                        continue
+
+                    # Get attribute and value
+                    attribute = request.env['product.attribute'].sudo().browse(variant['attribute_id'])
+                    value = request.env['product.attribute.value'].sudo().browse(variant['value_id'])
+
+                    if not attribute.exists() or not value.exists():
+                        continue
+
+                    # Add variant price
+                    variant_price = value.price_extra
+                    variant_prices.append({
+                        'attribute_name': attribute.name,
+                        'value_name': value.name,
+                        'price': variant_price
+                    })
+                    total_variant_price += variant_price
+
+            # Calculate totals
+            subtotal = base_price * quantity
+            total = (base_price + total_variant_price) * quantity
+
+            return {
+                'status': 'success',
+                'price_details': {
+                    'base_price': base_price,
+                    'variant_prices': variant_prices,
+                    'total_variant_price': total_variant_price,
+                    'quantity': quantity,
+                    'subtotal': subtotal,
+                    'total': total
+                }
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error calculating price: {str(e)}'
             }
