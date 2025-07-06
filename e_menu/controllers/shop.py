@@ -6,6 +6,7 @@ from datetime import timedelta
 import requests
 from odoo import http, Command, fields, _
 from odoo.http import request, Response
+from odoo.tools import config
 from collections import defaultdict
 from werkzeug.exceptions import NotFound, BadRequest
 from functools import wraps
@@ -119,6 +120,43 @@ class ShopController(http.Controller):
         string_list = string.split(',')
         return string_list
 
+    def _generate_token(self, user_id, token_type, minutes=0, days=0):
+        """
+        Generate a JWT token for the user.
+        
+        Args:
+            user_id (int): User ID
+            token_type (str): Type of token ('access' or 'refresh')
+            minutes (int): Token expiry in minutes
+            days (int): Token expiry in days
+            
+        Returns:
+            str: Generated JWT token
+        """
+        import jwt
+        from datetime import datetime, timedelta
+        
+        # Calculate expiry time
+        expiry = datetime.utcnow()
+        if days > 0:
+            expiry += timedelta(days=days)
+        if minutes > 0:
+            expiry += timedelta(minutes=minutes)
+        
+        # Create payload
+        payload = {
+            'user_id': user_id,
+            'token_type': token_type,
+            'exp': expiry,
+            'iat': datetime.utcnow()
+        }
+        
+        # Generate token (you should use a secret key from config)
+        secret_key = 'your-secret-key-here'  # Replace with actual secret key
+        token = jwt.encode(payload, secret_key, algorithm='HS256')
+        
+        return token
+
     @classmethod
     def _product_to_dict(cls, product):
         return {
@@ -195,7 +233,7 @@ class ShopController(http.Controller):
         }
 
     # --- ORDER ROUTES ---
-    @http.route(f"{BASE_URL}/my/order", auth="angkit", type="http", methods=["GET"], cors="*")
+    @http.route(f"{BASE_URL}/my/order", csrf=False, auth="angkit", type="http", methods=["GET"], cors="*")
     def my_order(self, **kwargs):
         """
         Retrieve paginated list of orders for the authenticated user.
@@ -235,19 +273,17 @@ class ShopController(http.Controller):
             page = int(request.httprequest.args.get('page', 1))
             limit = min(int(request.httprequest.args.get('limit', 20)), 100)
             offset = (page - 1) * limit
-            fields = ['id', 'name', 'date_order', 'amount_total', 'state']
             domain = [('partner_id', '=', request.env.user.partner_id.id)]
             total = request.env['sale.order'].sudo().search_count(domain)
             pages = (total + limit - 1) // limit
             page = min(max(1, page), pages) if pages > 0 else 1
             sales = request.env['sale.order'].sudo().search(
                 domain,
-                fields=fields,
                 offset=offset,
                 limit=limit,
                 order='date_order desc'
             )
-            sales_data = sales.read(fields)
+            sales_data = sales.read(['id', 'name', 'date_order', 'amount_total', 'state'])
             grouped_orders = defaultdict(list)
             for sale in sales_data:
                 grouped_orders[sale['state']].append({
@@ -270,7 +306,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route(f'{BASE_URL}/my/order/<int:order_id>', auth="angkit", type="http", methods=["GET"], cors="*")
+    @http.route(f'{BASE_URL}/my/order/<int:order_id>', csrf=False, auth="angkit", type="http", methods=["GET"], cors="*")
     def my_order_detail(self, order_id, **kwargs):
         """
         Retrieve detailed information for a specific order.
@@ -319,7 +355,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route(f"{BASE_URL}/cart/checkout", auth="angkit", type="json", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/cart/checkout", csrf=False, auth="angkit", type="json", methods=["POST"], cors="*")
     def cart_checkout(self):
         """
         Validate cart items and check stock availability.
@@ -635,7 +671,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/create", auth="public", type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/shop/create", csrf=False, auth="public", type="http", cors="*", methods=["POST"])
     def create_shop(self, **kw):
         """
         Create a new shop (alternative endpoint).
@@ -931,7 +967,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", csrf=False, auth="public", type="http", cors="*")
     def calculate_product_price(self, shop_id, product_id):
         """
         Calculate the total price of a product including its variants.
@@ -1040,7 +1076,7 @@ class ShopController(http.Controller):
                 'message': f'Error calculating price: {str(e)}'
             }
 
-    @http.route(f"{BASE_URL}/industries", methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/industries", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
     @paginate_results
     def industries(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1104,7 +1140,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/login", auth="public", type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/login", auth="public", csrf=False, type="http", cors="*", methods=["POST"])
     def login(self):
         """
         Authenticate user credentials and generate an API access token.
@@ -1132,8 +1168,171 @@ class ShopController(http.Controller):
                 }
             }
         """
-        # Implementation of login route
-        pass
+        try:
+            # Get JSON data from request
+            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
+                data = request.get_json_data()
+            else:
+                data = dict(request.params)
+            
+            # Validate required fields
+            if not data:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'No data provided',
+                    'error': 'Missing request body'
+                }, status=400)
+            
+            username = data.get('username')
+            password = data.get('password')
+            
+            if not username or not password:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Missing required fields',
+                    'error': 'username and password are required'
+                }, status=400)
+            
+            # Authenticate the user
+            user = request.env['res.users'].sudo().search([('login', '=', username)], limit=1)
+            if not user:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication failed',
+                    'error': 'Invalid username or password'
+                }, status=401)
+            
+            # Verify password using session authentication
+            try:
+                db = config['db_name']
+                credential = {'login': username, 'password': password, 'type': 'password'}
+                uid = request.session.authenticate(db, credential)
+                
+                if not uid:
+                    return request.make_json_response({
+                        'status': False,
+                        'message': 'Authentication failed',
+                        'error': 'Invalid username or password'
+                    }, status=401)
+                
+                # Generate tokens
+                access_token = self._generate_token(user.id, 'access', minutes=30)
+                refresh_token = self._generate_token(user.id, 'refresh', days=7)
+                
+                # Store tokens in the database
+                token_model = request.env['res.user.token'].sudo()
+                token_model.create_token(
+                    user_id=user.id,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    access_expiry=fields.Datetime.now() + timedelta(minutes=30),
+                    refresh_expiry=fields.Datetime.now() + timedelta(days=7)
+                )
+                
+                return request.make_json_response({
+                    'status': True,
+                    'message': 'Login successful',
+                    'data': {
+                        'token_key': access_token,
+                        'user_id': user.id,
+                        'username': user.login
+                    }
+                }, status=200)
+                
+            except Exception as auth_error:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication failed',
+                    'error': str(auth_error)
+                }, status=401)
+                
+        except Exception as e:
+            return request.make_json_response({
+                'status': False,
+                'message': 'Error during login',
+                'error': str(e)
+            }, status=500)
+
+    @http.route(f"{BASE_URL}/logout", csrf=False, auth="angkit", type="http", cors="*", methods=["POST"])
+    def logout(self):
+        """
+        Logout user and invalidate their access token.
+
+        Route: POST /angkort/api/v1/logout
+
+        Headers:
+            Authorization: Bearer <access_token> (required)
+
+        Returns:
+            200: Logout successful.
+            401: If authentication fails or token is invalid.
+            500: On server error.
+
+        Example Response:
+            {
+                "status": true,
+                "message": "Logout successful"
+            }
+        """
+        try:
+            # Get the current user from the authenticated session
+            user = request.env.user
+            
+            if not user or user.id == request.env.ref('base.public_user').id:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication required',
+                    'error': 'No valid user session'
+                }, status=401)
+            
+            # Get the authorization header
+            auth_header = request.httprequest.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Invalid authorization header',
+                    'error': 'Bearer token required'
+                }, status=401)
+            
+            # Extract the token
+            access_token = auth_header[7:]  # Remove 'Bearer ' prefix
+            
+            # Hash the token for database search (same as create_token method)
+            import hashlib
+            hashed_access_token = hashlib.sha256(access_token.encode()).hexdigest()
+            
+            # Find and invalidate the token
+            token_model = request.env['res.user.token'].sudo()
+            token_record = token_model.search([
+                ('user_id', '=', user.id),
+                ('access_token', '=', hashed_access_token),
+                ('active', '=', True)
+            ], limit=1)
+            
+            if token_record:
+                # Deactivate the token
+                token_record.write({
+                    'active': False,
+                    'deactivated_at': fields.Datetime.now()
+                })
+                
+                return request.make_json_response({
+                    'status': True,
+                    'message': 'Logout successful'
+                }, status=200)
+            else:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Token not found',
+                    'error': 'Invalid or expired token'
+                }, status=401)
+                
+        except Exception as e:
+            return request.make_json_response({
+                'status': False,
+                'message': 'Error during logout',
+                'error': str(e)
+            }, status=500)
 
     # --- CATEGORY ROUTES ---
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="public", methods=["GET"], csrf=False)
@@ -1291,7 +1490,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     # --- GLOBAL ROUTES (System-wide functionality) ---
-    @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/category", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
     @paginate_results
     def global_product_category(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1436,7 +1635,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/product/<int:product_id>", methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/<int:product_id>", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
     def global_product_detail(self, product_id):
         """
         Retrieve details for a specific product (global, not shop-specific).
@@ -1491,7 +1690,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/variant", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
     @paginate_results
     def global_product_variant(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1557,7 +1756,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="*")
+    @http.route(f'{BASE_URL}/product', csrf=False, methods=['GET'], auth='public', type="http", cors="*")
     @paginate_results
     def global_product_list(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1627,7 +1826,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http")
+    @http.route(f"{BASE_URL}/sale", csrf=False, methods=['GET'], auth="public", type="http")
     @paginate_results
     def global_sale_order(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1702,7 +1901,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/order", auth="public", type="http", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/order", csrf=False, auth="public", type="http", methods=["POST"], cors="*")
     def global_new_order(self):
         """
         Create a new sale order (global order creation).

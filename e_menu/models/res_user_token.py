@@ -13,6 +13,7 @@ class ResUserToken(models.Model):
     expires_at = fields.Datetime(string="Access Token Expiry")
     refresh_expires_at = fields.Datetime(string="Refresh Token Expiry")
     active = fields.Boolean(string="Active", default=True)
+    deactivated_at = fields.Datetime()
 
     @api.model
     def create_token(self, user_id, access_token, refresh_token, access_expiry, refresh_expiry):

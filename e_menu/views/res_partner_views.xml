@@ -9,6 +9,9 @@
                 <div name="button_box" position="inside">
                     <button name="generate_telegram_token" type="object" class="oe_stat_button" string="Generate Token"/>
                 </div>
+                <field name="vat" position="after">
+                    <field name="type" />
+                </field>
                 <xpath expr="//form/sheet/group" position="after">
                     <group invisible="company_type == 'person'" string="Shop Wifi">
                         <group>

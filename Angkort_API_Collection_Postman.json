@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "angkort-shop-api-collection",
+    "name": "Angkort Shop API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for Angkort Shop API, generated from shop.py."
+  },
+  "item": [
+    {
+      "name": "Order",
+      "item": [
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/my/order",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","my","order"]
+            },
+            "description": "Retrieve paginated list of orders for the authenticated user."
+          }
+        },
+        {
+          "name": "Get My Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/my/order/:order_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","my","order",":order_id"]
+            },
+            "description": "Retrieve detailed information for a specific order."
+          }
+        },
+        {
+          "name": "Cart Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cart\": [\n    {\"product_id\": 1, \"quantity\": 2}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/cart/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","cart","checkout"]
+            },
+            "description": "Validate cart items and check stock availability."
+          }
+        },
+        {
+          "name": "Create Order (Global)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": 1,\n  \"order_lines\": [\n    {\"product_id\": 1, \"quantity\": 2}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/order",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","order"]
+            },
+            "description": "Create a new sale order (global order creation)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "item": [
+        {
+          "name": "List Shops",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop"]
+            },
+            "description": "Retrieve a paginated list of all shops."
+          }
+        },
+        {
+          "name": "Get Shop Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id"]
+            },
+            "description": "Retrieve details for a specific shop."
+          }
+        },
+        {
+          "name": "Create Shop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Shop A\",\n  \"phone\": \"123456789\",\n  \"customer_address\": \"123 Main St\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop"]
+            },
+            "description": "Create a new shop."
+          }
+        },
+        {
+          "name": "Update Shop",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Shop A Updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id"]
+            },
+            "description": "Update an existing shop."
+          }
+        },
+        {
+          "name": "Delete Shop",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id"]
+            },
+            "description": "Delete a shop."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Product",
+      "item": [
+        {
+          "name": "List Products (Shop)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product"]
+            },
+            "description": "Retrieve all products for a given shop."
+          }
+        },
+        {
+          "name": "Get Product Detail (Shop)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product/:product_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product",":product_id"]
+            },
+            "description": "Retrieve details for a specific product in a shop."
+          }
+        },
+        {
+          "name": "Create Product (Shop)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Product A\",\n  \"price\": 10.0,\n  \"category_id\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product"]
+            },
+            "description": "Create a new product for a given shop."
+          }
+        },
+        {
+          "name": "Update Product (Shop)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Product A Updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product/:product_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product",":product_id"]
+            },
+            "description": "Update an existing product in a shop."
+          }
+        },
+        {
+          "name": "Delete Product (Shop)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product/:product_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product",":product_id"]
+            },
+            "description": "Delete a product from a shop."
+          }
+        },
+        {
+          "name": "List Products (Global)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/product",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","product"]
+            },
+            "description": "Retrieve a paginated list of all products (global, not shop-specific)."
+          }
+        },
+        {
+          "name": "Get Product Detail (Global)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/product/:product_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","product",":product_id"]
+            },
+            "description": "Retrieve details for a specific product (global, not shop-specific)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Category",
+      "item": [
+        {
+          "name": "List Categories (Shop)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product/category",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product","category"]
+            },
+            "description": "Retrieve all product categories for a given shop."
+          }
+        },
+        {
+          "name": "Create Category (Shop)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Electronics\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/shop/:shop_id/product/category",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","shop",":shop_id","product","category"]
+            },
+            "description": "Create a new product category for a given shop."
+          }
+        },
+        {
+          "name": "List Categories (Global)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/product/category",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","product","category"]
+            },
+            "description": "Retrieve a paginated list of all product categories (global, not shop-specific)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Other",
+      "item": [
+        {
+          "name": "Industries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/industries",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","industries"]
+            },
+            "description": "Retrieve a paginated list of all available industries."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user\",\n  \"password\": \"pass\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","login"]
+            },
+            "description": "Authenticate user credentials and generate an API access token."
+          }
+        },
+        {
+          "name": "Image Upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "multipart/form-data"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/image/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["angkort","api","v1","image","add"]
+            },
+            "description": "Upload, validate, process, and store an image with automatic WebP conversion."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "https://odoo.angkot.org" }
+  ]
+} 
