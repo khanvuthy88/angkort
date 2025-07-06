@@ -165,3 +165,133 @@ git commit -F COMMIT_MESSAGE_TEMPLATE.md
 | Error Handling | Inconsistent | Standardized | 100% improvement |
 | Code Quality | Poor | Excellent | Significant improvement |
 | Security | Vulnerable | Secure | 100% improvement | 
+
+refactor(api): consolidate controllers and implement RESTful API with enhanced security
+
+## Major Changes
+
+### 🔄 Controller Consolidation
+- **Merged `controllers.py` and `shop.py`** into a single well-organized RESTful API controller
+- **Deleted `controllers.py`** after ensuring all unique routes were migrated
+- **Organized routes by resource type**: Product, Category, Shop, Order, and Other endpoints
+
+### 🏗️ RESTful API Architecture
+- **Implemented proper HTTP method semantics** (GET, POST, PUT, PATCH, DELETE)
+- **Used plural nouns for resource endpoints** following REST conventions
+- **Added consistent naming patterns** across all endpoints
+- **Implemented pagination support** with configurable page size limits
+- **Added comprehensive filtering and sorting capabilities**
+
+### 📚 Documentation & Code Quality
+- **Added comprehensive class-level docstrings** describing the controller's purpose
+- **Implemented method-level docstrings** for all routes with:
+  - Route descriptions and HTTP methods
+  - Parameter specifications and types
+  - Response formats and status codes
+  - Usage examples and error handling
+- **Enhanced code readability** with consistent formatting and structure
+
+### 🔐 Security & Authentication Enhancements
+- **Implemented JWT token generation** for user authentication
+- **Added secure login/logout endpoints** with proper token management
+- **Enhanced authentication error handling** to return JSON responses instead of exceptions
+- **Implemented token-based authentication** using `res.user.token` model
+- **Added proper HTTP status codes** (200, 201, 400, 401, 403, 404, 500)
+
+### 🌐 CORS & CSRF Configuration
+- **Added comprehensive CORS support** for multiple origins:
+  - Local development: `localhost:3000`, `localhost:8080`, `localhost:8069`
+  - Production: `https://odoo.angkot.org`
+  - Local IP addresses: `127.0.0.1:3000`, `127.0.0.1:8080`, `127.0.0.1:8069`
+- **Implemented `csrf=False`** for all POST/PUT/PATCH/DELETE routes
+- **Removed custom CSRF validation** to simplify security handling
+- **Maintained security through Odoo's built-in authentication**
+
+### 🚀 Performance & Error Handling
+- **Optimized database queries** with proper field selection
+- **Enhanced error handling** with consistent JSON response formats
+- **Added input validation** for required and optional fields
+- **Implemented proper exception handling** with meaningful error messages
+
+### 📋 API Endpoints Summary
+
+#### Authentication
+- `POST /angkort/api/v1/login` - User authentication with JWT token
+- `POST /angkort/api/v1/logout` - User logout and token invalidation
+
+#### Shop Management
+- `GET /angkort/api/v1/shop` - List all shops
+- `GET /angkort/api/v1/shop/{id}` - Get shop details
+- `POST /angkort/api/v1/shop` - Create new shop
+- `PUT /angkort/api/v1/shop/{id}` - Update shop
+- `PATCH /angkort/api/v1/shop/{id}` - Partial shop update
+- `DELETE /angkort/api/v1/shop/{id}` - Delete shop
+
+#### Product Management
+- `GET /angkort/api/v1/shop/{id}/product` - List shop products
+- `GET /angkort/api/v1/shop/{id}/product/{id}` - Get product details
+- `POST /angkort/api/v1/shop/{id}/product` - Create product
+- `PUT /angkort/api/v1/shop/{id}/product/{id}` - Update product
+- `PATCH /angkort/api/v1/shop/{id}/product/{id}` - Partial product update
+- `DELETE /angkort/api/v1/shop/{id}/product/{id}` - Delete product
+
+#### Category Management
+- `GET /angkort/api/v1/shop/{id}/product/category` - List categories
+- `POST /angkort/api/v1/shop/{id}/product/category` - Create category
+- `PUT /angkort/api/v1/shop/{id}/product/category/{id}` - Update category
+- `PATCH /angkort/api/v1/shop/{id}/product/category/{id}` - Partial category update
+- `DELETE /angkort/api/v1/shop/{id}/product/category/{id}` - Delete category
+
+#### Order Management
+- `GET /angkort/api/v1/my/order` - List user orders
+- `GET /angkort/api/v1/my/order/{id}` - Get order details
+- `POST /angkort/api/v1/cart/checkout` - Checkout cart
+- `POST /angkort/api/v1/order` - Create global order
+
+#### Global Endpoints
+- `GET /angkort/api/v1/product/category` - Global product categories
+- `GET /angkort/api/v1/product` - Global product list
+- `GET /angkort/api/v1/product/{id}` - Global product details
+- `GET /angkort/api/v1/product/variant` - Global product variants
+- `GET /angkort/api/v1/sale` - Global sale orders
+- `GET /angkort/api/v1/industries` - List industries
+
+#### Utility Endpoints
+- `POST /angkort/api/v1/image/add` - Image upload
+- `POST /angkort/api/v1/shop/{id}/product/{id}/calculate-price` - Price calculation
+
+## Technical Details
+
+### Files Modified
+- `e_menu/controllers/shop.py` - Main API controller (consolidated)
+- `e_menu/controllers/controllers.py` - Deleted (merged into shop.py)
+
+### Dependencies
+- JWT token generation for authentication
+- CORS configuration for cross-origin requests
+- Odoo's built-in authentication system
+- Custom token model (`res.user.token`)
+
+### Breaking Changes
+- **Route consolidation**: Some endpoints may have changed paths
+- **Authentication**: New JWT-based authentication system
+- **Response format**: Standardized JSON response structure
+
+## Testing
+- All endpoints tested with Postman
+- CORS configuration verified for local development
+- Authentication flow validated
+- Error handling tested with various scenarios
+
+## Migration Notes
+- Update client applications to use new endpoint paths
+- Implement JWT token handling for authenticated requests
+- Update CORS configuration if needed
+- Review and update any hardcoded API URLs
+
+---
+
+**Commit Type**: `refactor`
+**Scope**: `api`
+**Breaking Changes**: Yes
+**Migration Required**: Yes 

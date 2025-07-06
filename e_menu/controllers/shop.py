@@ -36,6 +36,8 @@ def validate_auth(func):
             return request.make_json_response({'error': str(e)}, status=500)
     return wrapper
 
+
+
 def validate_input_data(required_fields: List[str] = None, optional_fields: List[str] = None):
     def decorator(func):
         @wraps(func)
@@ -123,26 +125,26 @@ class ShopController(http.Controller):
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
         """
         Generate a JWT token for the user.
-        
+
         Args:
             user_id (int): User ID
             token_type (str): Type of token ('access' or 'refresh')
             minutes (int): Token expiry in minutes
             days (int): Token expiry in days
-            
+
         Returns:
             str: Generated JWT token
         """
         import jwt
         from datetime import datetime, timedelta
-        
+
         # Calculate expiry time
         expiry = datetime.utcnow()
         if days > 0:
             expiry += timedelta(days=days)
         if minutes > 0:
             expiry += timedelta(minutes=minutes)
-        
+
         # Create payload
         payload = {
             'user_id': user_id,
@@ -150,11 +152,11 @@ class ShopController(http.Controller):
             'exp': expiry,
             'iat': datetime.utcnow()
         }
-        
+
         # Generate token (you should use a secret key from config)
         secret_key = 'your-secret-key-here'  # Replace with actual secret key
         token = jwt.encode(payload, secret_key, algorithm='HS256')
-        
+
         return token
 
     @classmethod
@@ -233,7 +235,7 @@ class ShopController(http.Controller):
         }
 
     # --- ORDER ROUTES ---
-    @http.route(f"{BASE_URL}/my/order", csrf=False, auth="angkit", type="http", methods=["GET"], cors="*")
+    @http.route(f"{BASE_URL}/my/order", auth="angkit", type="http", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def my_order(self, **kwargs):
         """
         Retrieve paginated list of orders for the authenticated user.
@@ -306,7 +308,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route(f'{BASE_URL}/my/order/<int:order_id>', csrf=False, auth="angkit", type="http", methods=["GET"], cors="*")
+    @http.route(f'{BASE_URL}/my/order/<int:order_id>', auth="angkit", type="http", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def my_order_detail(self, order_id, **kwargs):
         """
         Retrieve detailed information for a specific order.
@@ -355,7 +357,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route(f"{BASE_URL}/cart/checkout", csrf=False, auth="angkit", type="json", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/cart/checkout", auth="angkit", type="json", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def cart_checkout(self):
         """
         Validate cart items and check stock availability.
@@ -433,7 +435,7 @@ class ShopController(http.Controller):
             return request.make_json_response({'error': str(e)}, status=500)
 
     # --- SHOP ROUTES ---
-    @http.route(f"{BASE_URL}/shop", type="http", auth="public", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop", type="http", auth="public", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def shop_list(self, **kw):
         """
         Retrieve a paginated list of all shops.
@@ -503,7 +505,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def shop_detail(self, shop_id, **kw):
         """
         Retrieve details for a specific shop.
@@ -547,7 +549,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop", type="http", auth="angkit", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/shop", type="http", auth="angkit", csrf=False, methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def shop_create(self, **kw):
         """
         Create a new shop.
@@ -587,7 +589,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", methods=["PUT"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def shop_update(self, shop_id, **kw):
         """
         Update an existing shop.
@@ -617,7 +619,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", methods=["PATCH"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def shop_patch(self, shop_id, **kw):
         """
         Partially update an existing shop.
@@ -647,7 +649,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", methods=["DELETE"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def shop_delete(self, shop_id, **kw):
         """
         Delete a shop.
@@ -671,7 +673,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/create", csrf=False, auth="public", type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/shop/create", auth="public", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", methods=["POST"])
     def create_shop(self, **kw):
         """
         Create a new shop (alternative endpoint).
@@ -725,7 +727,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'status': False, 'message': f'Error creating shop: {str(e)}'}, status=500)
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def product_list(self, shop_id, **kw):
         """
         Retrieve all products for a given shop.
@@ -762,7 +764,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="public", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="public", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def product_detail(self, shop_id, product_id, **kw):
         """
         Retrieve details for a specific product in a shop.
@@ -794,7 +796,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", csrf=False, methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def product_create(self, shop_id, **kw):
         """
         Create a new product for a given shop.
@@ -864,7 +866,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PUT"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def product_update(self, shop_id, product_id, **kw):
         """
         Update an existing product in a shop.
@@ -906,7 +908,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PATCH"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def product_patch(self, shop_id, product_id, **kw):
         """
         Partially update an existing product in a shop.
@@ -942,7 +944,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["DELETE"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["DELETE"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def product_delete(self, shop_id, product_id, **kw):
         """
         Delete a product from a shop.
@@ -967,7 +969,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", csrf=False, auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def calculate_product_price(self, shop_id, product_id):
         """
         Calculate the total price of a product including its variants.
@@ -1076,7 +1078,7 @@ class ShopController(http.Controller):
                 'message': f'Error calculating price: {str(e)}'
             }
 
-    @http.route(f"{BASE_URL}/industries", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/industries", methods=['GET'], auth="public", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     @paginate_results
     def industries(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1140,7 +1142,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/login", auth="public", csrf=False, type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/login", auth="public", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", methods=["POST"])
     def login(self):
         """
         Authenticate user credentials and generate an API access token.
@@ -1174,7 +1176,7 @@ class ShopController(http.Controller):
                 data = request.get_json_data()
             else:
                 data = dict(request.params)
-            
+
             # Validate required fields
             if not data:
                 return request.make_json_response({
@@ -1182,17 +1184,17 @@ class ShopController(http.Controller):
                     'message': 'No data provided',
                     'error': 'Missing request body'
                 }, status=400)
-            
+
             username = data.get('username')
             password = data.get('password')
-            
+
             if not username or not password:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Missing required fields',
                     'error': 'username and password are required'
                 }, status=400)
-            
+
             # Authenticate the user
             user = request.env['res.users'].sudo().search([('login', '=', username)], limit=1)
             if not user:
@@ -1201,24 +1203,24 @@ class ShopController(http.Controller):
                     'message': 'Authentication failed',
                     'error': 'Invalid username or password'
                 }, status=401)
-            
+
             # Verify password using session authentication
             try:
                 db = config['db_name']
                 credential = {'login': username, 'password': password, 'type': 'password'}
                 uid = request.session.authenticate(db, credential)
-                
+
                 if not uid:
                     return request.make_json_response({
                         'status': False,
                         'message': 'Authentication failed',
                         'error': 'Invalid username or password'
                     }, status=401)
-                
+
                 # Generate tokens
                 access_token = self._generate_token(user.id, 'access', minutes=30)
                 refresh_token = self._generate_token(user.id, 'refresh', days=7)
-                
+
                 # Store tokens in the database
                 token_model = request.env['res.user.token'].sudo()
                 token_model.create_token(
@@ -1228,7 +1230,7 @@ class ShopController(http.Controller):
                     access_expiry=fields.Datetime.now() + timedelta(minutes=30),
                     refresh_expiry=fields.Datetime.now() + timedelta(days=7)
                 )
-                
+
                 return request.make_json_response({
                     'status': True,
                     'message': 'Login successful',
@@ -1238,14 +1240,14 @@ class ShopController(http.Controller):
                         'username': user.login
                     }
                 }, status=200)
-                
+
             except Exception as auth_error:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Authentication failed',
                     'error': str(auth_error)
                 }, status=401)
-                
+
         except Exception as e:
             return request.make_json_response({
                 'status': False,
@@ -1253,7 +1255,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/logout", csrf=False, auth="angkit", type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/logout", auth="angkit", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", methods=["POST"])
     def logout(self):
         """
         Logout user and invalidate their access token.
@@ -1277,14 +1279,14 @@ class ShopController(http.Controller):
         try:
             # Get the current user from the authenticated session
             user = request.env.user
-            
+
             if not user or user.id == request.env.ref('base.public_user').id:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Authentication required',
                     'error': 'No valid user session'
                 }, status=401)
-            
+
             # Get the authorization header
             auth_header = request.httprequest.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Bearer '):
@@ -1293,14 +1295,14 @@ class ShopController(http.Controller):
                     'message': 'Invalid authorization header',
                     'error': 'Bearer token required'
                 }, status=401)
-            
+
             # Extract the token
             access_token = auth_header[7:]  # Remove 'Bearer ' prefix
-            
+
             # Hash the token for database search (same as create_token method)
             import hashlib
             hashed_access_token = hashlib.sha256(access_token.encode()).hexdigest()
-            
+
             # Find and invalidate the token
             token_model = request.env['res.user.token'].sudo()
             token_record = token_model.search([
@@ -1308,14 +1310,14 @@ class ShopController(http.Controller):
                 ('access_token', '=', hashed_access_token),
                 ('active', '=', True)
             ], limit=1)
-            
+
             if token_record:
                 # Deactivate the token
                 token_record.write({
                     'active': False,
                     'deactivated_at': fields.Datetime.now()
                 })
-                
+
                 return request.make_json_response({
                     'status': True,
                     'message': 'Logout successful'
@@ -1326,7 +1328,7 @@ class ShopController(http.Controller):
                     'message': 'Token not found',
                     'error': 'Invalid or expired token'
                 }, status=401)
-                
+
         except Exception as e:
             return request.make_json_response({
                 'status': False,
@@ -1335,7 +1337,7 @@ class ShopController(http.Controller):
             }, status=500)
 
     # --- CATEGORY ROUTES ---
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="public", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="public", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_list(self, shop_id, **kw):
         """
         Retrieve all product categories for a given shop.
@@ -1368,7 +1370,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="angkit", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="angkit", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_create(self, shop_id, **kw):
         """
         Create a new product category for a given shop.
@@ -1402,7 +1404,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PUT"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_update(self, shop_id, cate_id, **kw):
         """
         Update an existing product category in a shop.
@@ -1433,7 +1435,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PATCH"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_patch(self, shop_id, cate_id, **kw):
         """
         Partially update an existing product category in a shop.
@@ -1464,7 +1466,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["DELETE"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["DELETE"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_delete(self, shop_id, cate_id, **kw):
         """
         Delete a product category from a shop.
@@ -1490,7 +1492,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     # --- GLOBAL ROUTES (System-wide functionality) ---
-    @http.route(f"{BASE_URL}/product/category", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     @paginate_results
     def global_product_category(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1561,7 +1563,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/image/add", auth="public", type="http", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/image/add", auth="public", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
         """
         Upload, validate, process, and store an image with automatic WebP conversion.
@@ -1598,7 +1600,7 @@ class ShopController(http.Controller):
                     'message': 'No image file provided',
                     'error': 'Missing required file'
                 }, status=400)
-            
+
             image_file = request.httprequest.files['image']
             if not image_file.filename:
                 return request.make_json_response({
@@ -1606,11 +1608,11 @@ class ShopController(http.Controller):
                     'message': 'Invalid image file',
                     'error': 'Empty file'
                 }, status=400)
-            
+
             # Read and encode image
             image_data = base64.b64encode(image_file.read()).decode('utf-8')
             data = base64.b64decode(image_data)
-            
+
             # Create attachment
             attachment = request.env['ir.attachment'].sudo().create({
                 'name': image_file.filename,
@@ -1619,7 +1621,7 @@ class ShopController(http.Controller):
                 'res_id': res_id if res_id else 0,
                 'mimetype': image_file.content_type
             })
-            
+
             return request.make_json_response({
                 'status': True,
                 'message': 'Image uploaded successfully',
@@ -1635,7 +1637,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/product/<int:product_id>", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/<int:product_id>", methods=['GET'], auth="public", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def global_product_detail(self, product_id):
         """
         Retrieve details for a specific product (global, not shop-specific).
@@ -1672,13 +1674,13 @@ class ShopController(http.Controller):
                     'message': 'Product not found',
                     'error': 'Product does not exist'
                 }, status=404)
-            
+
             product_data = self._product_to_dict(product)
             product_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(
                 lambda x: x.attribute_id.display_type == 'radio')]
             product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
                 lambda x: x.attribute_id.display_type == 'multi')]
-            
+
             return request.make_json_response({
                 'status': True,
                 'data': product_data
@@ -1690,7 +1692,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/product/variant", csrf=False, methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     @paginate_results
     def global_product_variant(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1756,7 +1758,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f'{BASE_URL}/product', csrf=False, methods=['GET'], auth='public', type="http", cors="*")
+    @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     @paginate_results
     def global_product_list(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1826,7 +1828,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/sale", csrf=False, methods=['GET'], auth="public", type="http")
+    @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http", cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     @paginate_results
     def global_sale_order(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
         """
@@ -1901,7 +1903,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/order", csrf=False, auth="public", type="http", methods=["POST"], cors="*")
+    @http.route(f"{BASE_URL}/order", auth="public", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def global_new_order(self):
         """
         Create a new sale order (global order creation).
@@ -1938,14 +1940,14 @@ class ShopController(http.Controller):
                     'message': 'No data provided',
                     'error': 'Missing request body'
                 }, status=400)
-            
+
             if 'partner_id' not in data or 'order_lines' not in data:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Missing required fields',
                     'error': 'partner_id and order_lines are required'
                 }, status=400)
-            
+
             # Create order lines
             order_lines = []
             for line in data['order_lines']:
@@ -1957,20 +1959,20 @@ class ShopController(http.Controller):
                     'price_unit': line.get('price_unit', 0.0)
                 })
                 order_lines.append(order_line)
-            
+
             if not order_lines:
                 return request.make_json_response({
                     'status': False,
                     'message': 'No valid order lines',
                     'error': 'At least one valid order line is required'
                 }, status=400)
-            
+
             # Create sale order
             order = request.env['sale.order'].sudo().create({
                 'partner_id': data['partner_id'],
                 'order_line': order_lines
             })
-            
+
             return request.make_json_response({
                 'status': True,
                 'message': 'Order created successfully',
@@ -2000,7 +2002,7 @@ class ShopController(http.Controller):
                 'message': f'Error converting attribute to dictionary: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_value_list(self, shop_id, variant_id, **kw):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
@@ -2018,7 +2020,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_value_create(self, shop_id, **kw):
         try:
             data = request.httprequest.form
@@ -2045,7 +2047,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_value_update(self, shop_id, value_id, **kw):
         try:
             data = request.httprequest.form
@@ -2062,7 +2064,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_value_patch(self, shop_id, value_id, **kw):
         try:
             data = request.httprequest.form
@@ -2079,7 +2081,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_value_delete(self, shop_id, value_id, **kw):
         try:
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
@@ -2093,7 +2095,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     # --- SHOP-SPECIFIC PRODUCT VARIANT ROUTES ---
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["GET"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["GET"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_list(self, shop_id, **kw):
         """
         Retrieve all product variants for a specific shop.
@@ -2117,7 +2119,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_create(self, shop_id, **kw):
         """
         Create a new product variant for a specific shop.
@@ -2162,7 +2164,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_update(self, shop_id, variant_id, **kw):
         """
         Update an existing product variant for a specific shop.
@@ -2206,7 +2208,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_patch(self, shop_id, variant_id, **kw):
         """
         Partially update an existing product variant for a specific shop.
@@ -2248,7 +2250,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def variant_delete(self, shop_id, variant_id, **kw):
         """
         Delete a product variant from a specific shop.
