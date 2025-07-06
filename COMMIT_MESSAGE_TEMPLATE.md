@@ -295,3 +295,35 @@ refactor(api): consolidate controllers and implement RESTful API with enhanced s
 **Scope**: `api`
 **Breaking Changes**: Yes
 **Migration Required**: Yes 
+
+## Recent Commits
+
+### Postman Collection Authorization Update
+```
+feat: update Postman collection with proper Bearer Token authorization
+
+- Add Bearer Token auth to routes with auth='angkit' (authenticated endpoints)
+- Remove auth from public routes (auth='public') including login and public GETs
+- Implement method-specific auth logic (GET vs POST/PUT/DELETE)
+- Remove collection-level auth in favor of per-request auth
+- Update request descriptions to indicate auth requirements
+- Create Python script for automated auth configuration
+
+Routes requiring auth:
+- Order management (my/order, cart/checkout, order creation)
+- Shop CRUD operations (create, update, delete)
+- Product management (create, update, delete, price calculation)
+- Category management (create, update, delete)
+- Image upload and variant management
+- Logout functionality
+
+Public routes (no auth):
+- Login endpoint
+- Public read operations (list shops, products, categories)
+- Global product and variant listings
+- Industry and sale data endpoints
+
+Files changed:
+- Angkort_API_Collection_Refactored.json (updated with proper auth)
+- update_postman_auth.py (new script for auth management)
+``` 

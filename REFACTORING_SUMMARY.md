@@ -208,6 +208,41 @@ return request.make_json_response({
 - Only the login route remains `auth='public'` for authentication purposes.
 - This ensures only authenticated users can create, update, or delete resources via the API.
 
+## 2025-07-06: Postman Collection Authorization Update
+
+### Bearer Token Authorization Implementation
+- ✅ **Method-Specific Auth Logic**: Implemented proper authentication based on HTTP methods and route patterns
+- ✅ **Authenticated Routes**: Added Bearer Token auth to all routes with `auth='angkit'`:
+  - Order management (my/order, cart/checkout, order creation)
+  - Shop CRUD operations (create, update, delete)
+  - Product management (create, update, delete, price calculation)
+  - Category management (create, update, delete)
+  - Image upload and variant management
+  - Logout functionality
+
+- ✅ **Public Routes**: Removed auth from routes with `auth='public'`:
+  - Login endpoint (POST)
+  - Public read operations (list shops, products, categories)
+  - Global product and variant listings
+  - Industry and sale data endpoints
+
+### Technical Implementation
+- **Per-Request Auth**: Removed collection-level auth in favor of individual request authentication
+- **Pattern Matching**: Created intelligent route pattern matching with method specificity
+- **Automated Script**: Developed `update_postman_auth.py` for automated auth configuration
+- **Description Updates**: Enhanced request descriptions to indicate authentication requirements
+
+### Files Updated
+- `Angkort_API_Collection_Refactored.json` - Updated with proper Bearer Token authorization
+- `update_postman_auth.py` - New script for automated auth management
+- `COMMIT_MESSAGE_TEMPLATE.md` - Added commit message template
+
+### Benefits
+- **Security**: Proper authentication enforcement for protected endpoints
+- **Usability**: Public endpoints accessible without authentication
+- **Clarity**: Clear indication of which endpoints require authentication
+- **Maintainability**: Automated script for future auth updates
+
 ## Summary
 
 The refactoring successfully transformed scattered, undocumented controllers into a well-organized, performant, and maintainable RESTful API controller. The improvements provide:
@@ -231,6 +266,9 @@ This refactored controller now serves as a solid foundation for future API devel
 - `e_menu/controllers/shop.py` (main refactoring + authentication)
 - `e_menu/models/ir_http.py` (authentication error handling)
 - `REFACTORING_SUMMARY.md` (this file)
+- `Angkort_API_Collection_Refactored.json` (Postman collection with proper auth)
+- `update_postman_auth.py` (automated auth configuration script)
+- `COMMIT_MESSAGE_TEMPLATE.md` (commit message templates)
 
 **Files Removed:**
 - `e_menu/controllers/controllers.py` (functionality merged)

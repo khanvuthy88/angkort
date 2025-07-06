@@ -5,16 +5,6 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": "Refactored Postman collection for Angkort Shop API with form-data requests and Bearer Token authorization."
   },
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{api_key}}",
-        "type": "string"
-      }
-    ]
-  },
   "item": [
     {
       "name": "Authentication",
@@ -46,8 +36,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "login"
+              ]
             },
             "description": "Authenticate user credentials and generate an API access token. Store the returned token in the api_key environment variable."
           }
@@ -59,10 +56,27 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "logout"
+              ]
             },
-            "description": "Logout user and invalidate the current access token."
+            "description": "Logout user and invalidate the current access token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]
@@ -77,8 +91,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/my/order?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","my","order"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "my",
+                "order"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -90,7 +112,17 @@
                 }
               ]
             },
-            "description": "Retrieve paginated list of orders for the authenticated user."
+            "description": "Retrieve paginated list of orders for the authenticated user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -100,10 +132,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/my/order/{{order_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","my","order","{{order_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "my",
+                "order",
+                "{{order_id}}"
+              ]
             },
-            "description": "Retrieve detailed information for a specific order."
+            "description": "Retrieve detailed information for a specific order.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -143,10 +194,28 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/cart/checkout",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","cart","checkout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "cart",
+                "checkout"
+              ]
             },
-            "description": "Validate cart items and check stock availability."
+            "description": "Validate cart items and check stock availability.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -191,10 +260,27 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/order",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","order"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "order"
+              ]
             },
-            "description": "Create a new sale order (global order creation)."
+            "description": "Create a new sale order (global order creation).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]
@@ -209,8 +295,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -232,8 +325,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}"
+              ]
             },
             "description": "Retrieve details for a specific shop."
           }
@@ -285,10 +386,27 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop"
+              ]
             },
-            "description": "Create a new shop."
+            "description": "Create a new shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -318,10 +436,28 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}"
+              ]
             },
-            "description": "Update an existing shop."
+            "description": "Update an existing shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -331,10 +467,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}"
+              ]
             },
-            "description": "Delete a shop."
+            "description": "Delete a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]
@@ -349,8 +503,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -372,8 +535,18 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/{{product_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","{{product_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "{{product_id}}"
+              ]
             },
             "description": "Retrieve details for a specific product in a shop."
           }
@@ -430,10 +603,29 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product"
+              ]
             },
-            "description": "Create a new product for a given shop."
+            "description": "Create a new product for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -468,10 +660,30 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/{{product_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","{{product_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "{{product_id}}"
+              ]
             },
-            "description": "Update an existing product in a shop."
+            "description": "Update an existing product in a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -481,10 +693,30 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/{{product_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","{{product_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "{{product_id}}"
+              ]
             },
-            "description": "Delete a product from a shop."
+            "description": "Delete a product from a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -519,10 +751,31 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/{{product_id}}/calculate-price",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","{{product_id}}","calculate-price"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "{{product_id}}",
+                "calculate-price"
+              ]
             },
-            "description": "Calculate the total price of a product including its variants."
+            "description": "Calculate the total price of a product including its variants.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -532,8 +785,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/product?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","product"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "product"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -545,7 +805,17 @@
                 }
               ]
             },
-            "description": "Retrieve a paginated list of all products (global, not shop-specific)."
+            "description": "Retrieve a paginated list of all products (global, not shop-specific).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -555,8 +825,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/product/{{product_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","product","{{product_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "product",
+                "{{product_id}}"
+              ]
             },
             "description": "Retrieve details for a specific product (global, not shop-specific)."
           }
@@ -573,8 +851,18 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/category",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","category"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "category"
+              ]
             },
             "description": "Retrieve all product categories for a given shop."
           }
@@ -601,10 +889,30 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/category",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","category"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "category"
+              ]
             },
-            "description": "Create a new product category for a given shop."
+            "description": "Create a new product category for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -629,10 +937,31 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/category/{{category_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","category","{{category_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "category",
+                "{{category_id}}"
+              ]
             },
-            "description": "Update an existing product category for a given shop."
+            "description": "Update an existing product category for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -642,10 +971,31 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/category/{{category_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","category","{{category_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "category",
+                "{{category_id}}"
+              ]
             },
-            "description": "Delete a product category from a shop."
+            "description": "Delete a product category from a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -655,8 +1005,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/product/category?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","product","category"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "product",
+                "category"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -683,10 +1041,30 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/variant",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","variant"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "variant"
+              ]
             },
-            "description": "Retrieve all product variants for a given shop."
+            "description": "Retrieve all product variants for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -716,10 +1094,30 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/variant",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","variant"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "variant"
+              ]
             },
-            "description": "Create a new product variant for a given shop."
+            "description": "Create a new product variant for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -744,10 +1142,31 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/variant/{{variant_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","variant","{{variant_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "variant",
+                "{{variant_id}}"
+              ]
             },
-            "description": "Update an existing product variant for a given shop."
+            "description": "Update an existing product variant for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -757,10 +1176,31 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/variant/{{variant_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","variant","{{variant_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "variant",
+                "{{variant_id}}"
+              ]
             },
-            "description": "Delete a product variant from a shop."
+            "description": "Delete a product variant from a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -770,10 +1210,31 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/{{variant_id}}/value",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","{{variant_id}}","value"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "{{variant_id}}",
+                "value"
+              ]
             },
-            "description": "Retrieve all values for a specific variant in a shop."
+            "description": "Retrieve all values for a specific variant in a shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -803,10 +1264,31 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/shop/{{shop_id}}/product/variant/value",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","shop","{{shop_id}}","product","variant","value"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "shop",
+                "{{shop_id}}",
+                "product",
+                "variant",
+                "value"
+              ]
             },
-            "description": "Create a new variant value for a given shop."
+            "description": "Create a new variant value for a given shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]
@@ -821,8 +1303,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/industries?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","industries"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "industries"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -874,10 +1363,28 @@
             },
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/image/add",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","image","add"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "image",
+                "add"
+              ]
             },
-            "description": "Upload, validate, process, and store an image with automatic WebP conversion."
+            "description": "Upload, validate, process, and store an image with automatic WebP conversion.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -887,8 +1394,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/sale?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","sale"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "sale"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -910,8 +1424,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/angkort/api/v1/product/variant?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["angkort","api","v1","product","variant"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "product",
+                "variant"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -935,4 +1457,4 @@
       "value": "http://localhost:8069"
     }
   ]
-} 
+}
