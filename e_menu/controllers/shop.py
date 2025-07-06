@@ -435,7 +435,7 @@ class ShopController(http.Controller):
             'total_amount': total_amount
         }
 
-    @http.route(f"{BASE_URL}/shop", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop", auth="public", type="http", cors="*")
     def shop(self):
         """
         Retrieve a paginated list of all available shops in the system.
@@ -591,7 +591,7 @@ class ShopController(http.Controller):
             }
         }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>", auth="public", type="http", cors="*")
     def shop_detail(self, shop_id):
         """
         Get detailed information about a specific shop.
@@ -818,7 +818,7 @@ class ShopController(http.Controller):
     def delete_shop(self):
         pass
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", auth="public", type="http", cors="*")
     def product_detail(self, shop_id, product_id):
         """
         Get detailed information about a specific product from a shop.
@@ -887,7 +887,7 @@ class ShopController(http.Controller):
         response = self._get_product_details(product)
         return response
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", auth="public", type="http", cors="*")
     def product(self, shop_id):
         """
         Get all products from a specific shop.
@@ -1562,7 +1562,7 @@ class ShopController(http.Controller):
                 'message': f"Error deleting product: {str(e)}"
             }, status=500)
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", auth="public", type="json", cors="*")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", auth="public", type="http", cors="*")
     def product_category(self, shop_id):
         categories = request.env['product.category'].sudo().searh([('shop_id', '=', shop_id)])
         return [self._category_to_dict(cate) for cate in categories]
@@ -2407,7 +2407,7 @@ class ShopController(http.Controller):
                 'message': f'Error listing attributes: {str(e)}',
             }
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="json",
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="http",
                 cors="*")
     def calculate_product_price(self, shop_id, product_id):
         """

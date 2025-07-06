@@ -106,7 +106,7 @@ class HrController(http.Controller):
             grouped_data[display_type].append(resume_data)
         return grouped_data
 
-    @http.route(f'{BASE_URL}/employee/detail', type="json", methods=["POST"], auth="public", csrf=False)
+    @http.route(f'{BASE_URL}/employee/detail', type="http", methods=["POST"], auth="public", csrf=False)
     def employee_detail(self):
         """Retrieve detailed information about an employee.
 
@@ -260,7 +260,7 @@ class HrController(http.Controller):
             
         return response
 
-    @http.route(f"{BASE_URL}/employee", type="json", methods=["GET"], auth="public", csrf=False)
+    @http.route(f"{BASE_URL}/employee", type="http", methods=["GET"], auth="public", csrf=False)
     def employee(self):
         """Retrieve a paginated list of employees with filtering and search capabilities.
 

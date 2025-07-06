@@ -1,0 +1,1780 @@
+{
+  "info": {
+    "name": "Angkort API",
+    "description": "API collection for Angkort Odoo application\nGenerated on 2025-07-06 10:53:36",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Controllers",
+      "item": [
+        {
+          "name": "shop_detail - Returns a list of products in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/detail",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "detail"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "create_shop - Returns a list of products in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "create"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "industries - Returns a list of industries in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/industries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "industries"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/industries`, and it is publicly accessible.\n:return:\n"
+          },
+          "response": []
+        },
+        {
+          "name": "login - Returns a list of products in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "login"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_category - Returns a list of product categories in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/product/category",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "product",
+                "category"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product/category`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_detail - Returns a list of products in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/product/detail",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "product",
+                "detail"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_variant - Returns a list of product variants in JSON format.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/product/variant",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "product",
+                "variant"
+              ],
+              "variable": []
+            },
+            "description": "The route for this endpoint is `BASE_URL/product/variant`, and it is publicly accessible.\n:return:\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_list - Returns a list of products with details such as ID, name, code, sale price,",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "json",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "json"
+              ],
+              "variable": []
+            },
+            "description": "and category information in JSON format.\nThe route for this endpoint is `BASE_URL/product/list`, and it is publicly accessible.\n"
+          },
+          "response": []
+        },
+        {
+          "name": "sale_order - Returns a list of sales orders with details such as ID, name, state, order date,",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{BASE_URL}/sale/list",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "sale",
+                "list"
+              ],
+              "variable": []
+            },
+            "description": "customer information, salesman information, sales team information, order lines,\nand total in JSON format.\nThe route for this endpoint is `BASE_URL/sale/list`, and it is publicly accessible.\n"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Hr Controller",
+      "item": [
+        {
+          "name": "employee_detail - Retrieve detailed information about an employee.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "json",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "json"
+              ],
+              "variable": []
+            },
+            "description": "This endpoint fetches comprehensive employee information including personal details,\ncontact information, job details, and optionally resume and skills.\nPOST /angkort/api/v1/employee/detail\n{\n\"employee_id\": int,  # Required: ID of the employee\n\"include_resume\": bool,  # Optional: Whether to include resume information\n\"include_skills\": bool   # Optional: Whether to include skills information\n}\ndict: Employee information with the following structure:\n{\n\"id\": int,\n\"name\": str,\n\"birthday\": str,  # Format: DD-MM-YYYY\n\"avatars\": {\n\"128\": str,   # Base64 encoded image\n\"256\": str,\n\"512\": str,\n\"1024\": str,\n\"1920\": str\n},\n\"department\": {\n\"id\": int,\n\"name\": str\n},\n\"contact_info\": {\n\"email\": str,\n\"phone\": str,\n\"emergency\": {\n\"name\": str,\n\"phone\": str\n}\n},\n\"personal_info\": {\n\"gender\": str,\n\"place_of_birth\": str,\n\"marital\": str,\n\"identification_id\": str\n},\n\"location\": {\n\"country\": {\n\"id\": int,\n\"name\": str\n}\n},\n\"job_info\": {\n\"title\": str,\n\"position\": {\n\"id\": int,\n\"name\": str\n},\n\"manager\": {\n\"id\": int,\n\"name\": str\n}\n},\n\"resume\": list,  # Optional: Only included if include_resume is True\n\"skills\": list   # Optional: Only included if include_skills is True\n}\nRaises:\ndict: Error response if employee_id is missing or employee not found\n{\n\"error\": str  # Error message\n}\nPerformance:\n- Uses browse instead of search for direct ID access\n- Prefetches related fields to minimize database queries\n- Conditionally loads resume and skills data\n"
+          },
+          "response": []
+        },
+        {
+          "name": "employee - Retrieve a paginated list of employees with filtering and search capabilities.",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{BASE_URL}/employee",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "employee"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "page (int)",
+                  "value": "{{page (int)}}",
+                  "description": "Page number for pagination (default: 1)"
+                },
+                {
+                  "key": "limit (int)",
+                  "value": "{{limit (int)}}",
+                  "description": "Number of records per page (default: 20, max: 100)"
+                },
+                {
+                  "key": "department_id (int)",
+                  "value": "{{department_id (int)}}",
+                  "description": "Filter by department ID"
+                },
+                {
+                  "key": "job_id (int)",
+                  "value": "{{job_id (int)}}",
+                  "description": "Filter by job position ID"
+                },
+                {
+                  "key": "manager_id (int)",
+                  "value": "{{manager_id (int)}}",
+                  "description": "Filter by manager ID"
+                },
+                {
+                  "key": "search (str)",
+                  "value": "{{search (str)}}",
+                  "description": "Search term for employee name or ID"
+                }
+              ]
+            },
+            "description": "This endpoint provides a flexible way to fetch employee information with support for\npagination, filtering, and search functionality. It's optimized for performance with\nefficient database queries and minimal data transfer.\nGET /angkort/api/v1/employee\ndict: Paginated employee list with the following structure:\n{\n\"total\": int,  # Total number of records\n\"page\": int,   # Current page number\n\"limit\": int,  # Records per page\n\"pages\": int,  # Total number of pages\n\"employees\": [\n{\n\"id\": int,\n\"name\": str,\n\"job_title\": str,\n\"department_id\": {\n\"id\": int,\n\"name\": str\n},\n\"job_id\": {\n\"id\": int,\n\"name\": str\n},\n\"parent_id\": {\n\"id\": int,\n\"name\": str\n},\n\"mobile_phone\": str,\n\"work_email\": str,\n\"image_1920\": str  # Base64 encoded image\n}\n]\n}\nExamples:\n# Get first page of employees\nGET /angkort/api/v1/employee?page=1&limit=20\n# Search employees in department 1\nGET /angkort/api/v1/employee?department_id=1&search=john\n# Get employees under manager 5\nGET /angkort/api/v1/employee?manager_id=5&page=1&limit=50\nPerformance:\n- Uses domain filtering for efficient database queries\n- Implements pagination to limit result set size\n- Prefetches related fields to minimize database queries\n- Uses sudo() for proper access rights\n- Limits maximum records per page to prevent overload\nSecurity:\n- Uses sudo() for proper access rights\n- Validates and sanitizes input parameters\n- Limits maximum records per page to prevent DoS\nNotes:\n- All ID fields default to 0 if not found\n- All string fields default to empty string if not found\n- Search is case-insensitive and matches partial names\n- Image is returned as base64 encoded string\n"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "item": [
+        {
+          "name": "my_order - Retrieve orders for the authenticated user with pagination and performance optimizations.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/my/order",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "my",
+                "order"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "page (int)",
+                  "value": "{{page (int)}}",
+                  "description": "Page number for pagination (default: 1)"
+                },
+                {
+                  "key": "limit (int)",
+                  "value": "{{limit (int)}}",
+                  "description": "Number of records per page (default: 20, max: 100)"
+                }
+              ]
+            },
+            "description": "This endpoint fetches sale orders for the currently authenticated user, grouped by their state.\nIt implements pagination to handle large datasets efficiently and includes performance optimizations\nsuch as field limiting and proper indexing.\nGET /angkort/api/v1/my/order\ndict: A dictionary containing orders and pagination information:\n{\n\"orders\": {\n\"draft\": [\n{\n\"id\": int,\n\"name\": str,\n\"date_order\": str,  # Format: DD-MM-YYYY\n\"total\": float,\n\"state\": str\n},\n...\n],\n\"sent\": [...],\n\"sale\": [...],\n...\n},\n\"pagination\": {\n\"total\": int,    # Total number of records\n\"page\": int,     # Current page number\n\"limit\": int,    # Records per page\n\"pages\": int     # Total number of pages\n}\n}\nExamples:\n# Get first page of orders\nGET /angkort/api/v1/my/order?page=1&limit=20\n# Get second page with 50 records\nGET /angkort/api/v1/my/order?page=2&limit=50\nPerformance:\n- Uses field limiting to minimize data transfer\n- Implements pagination to handle large datasets\n- Uses read() for efficient field access\n- Includes proper indexing hints\n- Limits maximum records per page to prevent overload\nSecurity:\n- Requires authentication (auth=\"angkit\")\n- Uses sudo() for proper access rights\n- Validates and sanitizes input parameters\n- Limits maximum records per page to prevent DoS\nNotes:\n- Orders are sorted by date_order in descending order\n- Empty or null dates are handled gracefully\n- State values are mapped using ORDER_STATE dictionary\n- All monetary values are returned as floats\n- Response includes pagination metadata for frontend implementation\nRaises:\nNone: This endpoint handles errors gracefully and returns empty results\nrather than raising exceptions\n"
+          },
+          "response": []
+        },
+        {
+          "name": "my_order_detail - Get detailed information about a specific order.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "angkit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "angkit"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "order_id (int)",
+                  "value": "{{order_id (int)}}",
+                  "description": "The ID of the order to get details for"
+                }
+              ]
+            },
+            "description": "dict: Response containing order details\n{\n'id': int,              # Order ID\n'partner_id': int,       # Customer ID\n'partner_name': str,     # Customer name\n'delivery_address': str, # Delivery address\n'name': str,            # Order reference number\n'date_order': str,      # Order date (DD-MM-YYYY)\n'total': float,         # Total order amount\n'state': str,           # Order state\n'order_lines': list     # List of order line items\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "cart_checkout - Check the availability of products in the cart and calculate total amount.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/cart/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "cart",
+                "checkout"
+              ],
+              "variable": []
+            },
+            "description": "{\n\"cart\": [\n{\n\"product_id\": int,  # Required - ID of the product\n\"quantity\": int     # Required - Quantity of the product\n}\n]\n}\ndict: Response containing stock status and details\n{\n'status': str,          # 'sufficient_stock' or 'insufficient_stock'\n'details': list,        # List of product details\n'total_amount': float   # Total amount of all products\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "shop - Retrieve a paginated list of all available shops in the system.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "page (int)",
+                  "value": "{{page (int)}}",
+                  "description": "Page number for pagination (default: 1)"
+                },
+                {
+                  "key": "limit (int)",
+                  "value": "{{limit (int)}}",
+                  "description": "Number of records per page (default: 20, max: 100)"
+                }
+              ]
+            },
+            "description": "This endpoint provides public access to shop information, including basic details\nsuch as contact information, location, and banking details. The response is formatted\nas a paginated list of shop objects, each containing comprehensive shop information.\ndict: A dictionary containing shops and pagination information:\n{\n'shops': list[dict],     # List of shop dictionaries\n'pagination': {\n'total': int,        # Total number of records\n'page': int,         # Current page number\n'limit': int,        # Records per page\n'pages': int         # Total number of pages\n}\n}\nEach shop dictionary contains:\n{\n'id': int,              # Unique identifier for the shop\n'name': str,            # Name of the shop\n'phoneNumber': list[str], # List of contact phone numbers\n'address': list[str],    # List of shop addresses\n'wifi': list[str],       # List of WiFi network names\n'banks': list[dict]      # List of bank account details\n}\nEach bank dictionary in the 'banks' list contains:\n{\n'name': str,            # Name of the bank\n'link': str,            # Bank account link/URL\n'currency': str,        # Currency of the account\n'logo': str             # Bank logo image data\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "shop_detail - Get detailed information about a specific shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to get details for"
+                }
+              ]
+            },
+            "description": "dict: Response containing shop details\n{\n'id': int,              # Shop ID\n'name': str,            # Shop name\n'phoneNumber': list,    # List of phone numbers\n'address': list,        # List of addresses\n'wifi': list,           # List of WiFi names\n'banks': list           # List of bank details\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "create_shop - Create a new shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "create"
+              ],
+              "variable": []
+            },
+            "description": "{\n'params': {\n'name': str,         # Required: Shop name\n'phone': str,        # Required: Shop phone number\n'wifi_name': str,    # Required: Shop WiFi name\n'customer_address': str,  # Required: Shop address\n# ... other valid shop fields\n}\n}\ndict: Response containing status and shop data\n{\n'status': bool,    # True for success, False for error\n'message': str,    # Error message if status is False\n'shop_data': {     # Only present if status is True\n'name': str,   # Created shop name\n'id': int      # Created shop ID\n}\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "update_shop - Update an existing shop's information.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "update"
+              ],
+              "variable": []
+            },
+            "description": "{\n'id': int,           # Required: ID of the shop to update\n'name': str,         # Optional: New shop name\n'phone': str,        # Optional: New phone number\n'wifi_name': str,    # Optional: New WiFi name\n'customer_address': str  # Optional: New shop address\n# ... other valid shop fields\n}\ndict: Response containing status and message\n{\n'status': bool,    # True for success, False for error\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_detail - Get detailed information about a specific product from a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "<int:product_id>"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{product_id}}",
+                  "description": "product_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the product"
+                },
+                {
+                  "key": "product_id (int)",
+                  "value": "{{product_id (int)}}",
+                  "description": "The ID of the product to retrieve"
+                }
+              ]
+            },
+            "description": "dict: Product details including:\n{\n'id': int,              # Product ID\n'name': str,            # Product name\n'price': float,         # Product price\n'description': str,     # Product description\n'image': str,           # Product image URL\n'options': list,        # Radio-type product options\n'choices': list         # Multi-select product choices\n}\n"
+          },
+          "response": [
+            {
+              "name": "Example Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "{BASE_URL}",
+                    "shop",
+                    "<int:shop_id>",
+                    "product",
+                    "<int:product_id>"
+                  ],
+                  "variable": [
+                    {
+                      "key": "shop_id",
+                      "value": "{{shop_id}}",
+                      "description": "shop_id parameter"
+                    },
+                    {
+                      "key": "product_id",
+                      "value": "{{product_id}}",
+                      "description": "product_id parameter"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "shop_id (int)",
+                      "value": "{{shop_id (int)}}",
+                      "description": "The ID of the shop containing the product"
+                    },
+                    {
+                      "key": "product_id (int)",
+                      "value": "{{product_id (int)}}",
+                      "description": "The ID of the product to retrieve"
+                    }
+                  ]
+                },
+                "description": "dict: Product details including:\n{\n'id': int,              # Product ID\n'name': str,            # Product name\n'price': float,         # Product price\n'description': str,     # Product description\n'image': str,           # Product image URL\n'options': list,        # Radio-type product options\n'choices': list         # Multi-select product choices\n}\n"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"id\": 4,\n  \"name\": \"Bacon\",\n  \"price\": 3\n}"
+            }
+          ]
+        },
+        {
+          "name": "product - Get all products from a specific shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to get products from"
+                }
+              ]
+            },
+            "description": "list: List of product dictionaries containing:\n{\n'id': int,              # Product ID\n'name': str,            # Product name\n'price': float,         # Product price\n'description': str,     # Product description\n'image': str,           # Product image URL\n'options': list,        # Radio-type product options\n'choices': list         # Multi-select product choices\n}\n"
+          },
+          "response": [
+            {
+              "name": "Example Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{BASE_URL}/shop/<int:shop_id>/product",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "{BASE_URL}",
+                    "shop",
+                    "<int:shop_id>",
+                    "product"
+                  ],
+                  "variable": [
+                    {
+                      "key": "shop_id",
+                      "value": "{{shop_id}}",
+                      "description": "shop_id parameter"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "shop_id (int)",
+                      "value": "{{shop_id (int)}}",
+                      "description": "The ID of the shop to get products from"
+                    }
+                  ]
+                },
+                "description": "list: List of product dictionaries containing:\n{\n'id': int,              # Product ID\n'name': str,            # Product name\n'price': float,         # Product price\n'description': str,     # Product description\n'image': str,           # Product image URL\n'options': list,        # Radio-type product options\n'choices': list         # Multi-select product choices\n}\n"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"id\": 4,\n  \"name\": \"Bacon\",\n  \"price\": 3\n}"
+            }
+          ]
+        },
+        {
+          "name": "create_product - Create a new product in a shop.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "create"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to create the product in"
+                },
+                {
+                  "key": "Form Data",
+                  "value": "{{Form Data}}",
+                  "description": ""
+                },
+                {
+                  "key": "name (str)",
+                  "value": "{{name (str)}}",
+                  "description": "Required - Name of the new product"
+                },
+                {
+                  "key": "price (float)",
+                  "value": "{{price (float)}}",
+                  "description": "Required - Price of the new product"
+                },
+                {
+                  "key": "category_id (int)",
+                  "value": "{{category_id (int)}}",
+                  "description": "Required - Category ID for the new product"
+                },
+                {
+                  "key": "image (file)",
+                  "value": "{{image (file)}}",
+                  "description": "Optional - Image file for the product"
+                },
+                {
+                  "key": "description (str)",
+                  "value": "{{description (str)}}",
+                  "description": "Optional - Description of the product"
+                },
+                {
+                  "key": "barcode (str)",
+                  "value": "{{barcode (str)}}",
+                  "description": "Optional - Barcode of the product"
+                },
+                {
+                  "key": "qty_available (float)",
+                  "value": "{{qty_available (float)}}",
+                  "description": "Optional - Initial quantity available"
+                },
+                {
+                  "key": "attributes (json)",
+                  "value": "{{attributes (json)}}",
+                  "description": "Optional - Product attributes configuration"
+                },
+                {
+                  "key": "Format",
+                  "value": "{{Format}}",
+                  "description": ""
+                },
+                {
+                  "key": "\"attributes\"",
+                  "value": "{{\"attributes\"}}",
+                  "description": "["
+                },
+                {
+                  "key": "\"attribute_id\"",
+                  "value": "{{\"attribute_id\"}}",
+                  "description": "int,  # ID of the attribute"
+                },
+                {
+                  "key": "\"values\"",
+                  "value": "{{\"values\"}}",
+                  "description": "[int]       # List of value IDs to associate"
+                },
+                {
+                  "key": "attribute_values (json)",
+                  "value": "{{attribute_values (json)}}",
+                  "description": "Optional - New attribute values to create"
+                },
+                {
+                  "key": "Format",
+                  "value": "{{Format}}",
+                  "description": ""
+                },
+                {
+                  "key": "\"attribute_values\"",
+                  "value": "{{\"attribute_values\"}}",
+                  "description": "["
+                },
+                {
+                  "key": "\"attribute_id\"",
+                  "value": "{{\"attribute_id\"}}",
+                  "description": "int,      # ID of the attribute"
+                },
+                {
+                  "key": "\"name\"",
+                  "value": "{{\"name\"}}",
+                  "description": "str,             # Name of the value"
+                },
+                {
+                  "key": "\"price_extra\"",
+                  "value": "{{\"price_extra\"}}",
+                  "description": "float     # Optional: Extra price for this value"
+                }
+              ]
+            },
+            "description": "dict: Response containing status and message\n{\n'status': bool,    # True for success, False for error\n'message': str,    # Success or error message\n'product': {       # Only present on success\n'id': int,     # Product ID\n'name': str,   # Product name\n'price': float,# Product price\n'category_id': int,  # Category ID\n'attributes': [      # List of product attributes\n{\n'id': int,          # Attribute ID\n'name': str,        # Attribute name\n'values': [         # List of attribute values\n{\n'id': int,          # Value ID\n'name': str,        # Value name\n'price_extra': float # Extra price\n}\n]\n}\n]\n}\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "update_product - Update a product in a shop.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "<int:product_id>",
+                "update"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{product_id}}",
+                  "description": "product_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the product"
+                },
+                {
+                  "key": "product_id (int)",
+                  "value": "{{product_id (int)}}",
+                  "description": "The ID of the product to update"
+                },
+                {
+                  "key": "Form Data",
+                  "value": "{{Form Data}}",
+                  "description": ""
+                },
+                {
+                  "key": "name (str)",
+                  "value": "{{name (str)}}",
+                  "description": "Required - New name for the product"
+                },
+                {
+                  "key": "price (float)",
+                  "value": "{{price (float)}}",
+                  "description": "Required - New price for the product"
+                },
+                {
+                  "key": "category_id (int)",
+                  "value": "{{category_id (int)}}",
+                  "description": "Required - New category ID for the product"
+                },
+                {
+                  "key": "image (file)",
+                  "value": "{{image (file)}}",
+                  "description": "Optional - New image file for the product"
+                },
+                {
+                  "key": "description (str)",
+                  "value": "{{description (str)}}",
+                  "description": "Optional - New description for the product"
+                },
+                {
+                  "key": "barcode (str)",
+                  "value": "{{barcode (str)}}",
+                  "description": "Optional - New barcode for the product"
+                },
+                {
+                  "key": "qty_available (float)",
+                  "value": "{{qty_available (float)}}",
+                  "description": "Optional - New quantity available"
+                },
+                {
+                  "key": "attributes (json)",
+                  "value": "{{attributes (json)}}",
+                  "description": "Optional - Product attributes configuration"
+                },
+                {
+                  "key": "Format",
+                  "value": "{{Format}}",
+                  "description": ""
+                },
+                {
+                  "key": "\"attributes\"",
+                  "value": "{{\"attributes\"}}",
+                  "description": "["
+                },
+                {
+                  "key": "\"attribute_id\"",
+                  "value": "{{\"attribute_id\"}}",
+                  "description": "int,  # ID of the attribute"
+                },
+                {
+                  "key": "\"values\"",
+                  "value": "{{\"values\"}}",
+                  "description": "[int]       # List of value IDs to associate"
+                },
+                {
+                  "key": "attribute_values (json)",
+                  "value": "{{attribute_values (json)}}",
+                  "description": "Optional - New attribute values to create"
+                },
+                {
+                  "key": "Format",
+                  "value": "{{Format}}",
+                  "description": ""
+                },
+                {
+                  "key": "\"attribute_values\"",
+                  "value": "{{\"attribute_values\"}}",
+                  "description": "["
+                },
+                {
+                  "key": "\"attribute_id\"",
+                  "value": "{{\"attribute_id\"}}",
+                  "description": "int,      # ID of the attribute"
+                },
+                {
+                  "key": "\"name\"",
+                  "value": "{{\"name\"}}",
+                  "description": "str,             # Name of the value"
+                },
+                {
+                  "key": "\"price_extra\"",
+                  "value": "{{\"price_extra\"}}",
+                  "description": "float     # Optional: Extra price for this value"
+                }
+              ]
+            },
+            "description": "dict: Response containing status, message and updated product data\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'product': {       # Only present on success\n'id': int,     # Product ID\n'name': str,   # Product name\n'price': float,# Product price\n'category_id': int,  # Category ID\n'attributes': [      # List of product attributes\n{\n'id': int,          # Attribute ID\n'name': str,        # Attribute name\n'values': [         # List of attribute values\n{\n'id': int,          # Value ID\n'name': str,        # Value name\n'price_extra': float # Extra price\n}\n]\n}\n]\n}\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "delete_product - Delete a product from a shop.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/delete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "<int:product_id>",
+                "delete"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{product_id}}",
+                  "description": "product_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the product"
+                },
+                {
+                  "key": "product_id (int)",
+                  "value": "{{product_id (int)}}",
+                  "description": "The ID of the product to delete"
+                }
+              ]
+            },
+            "description": "dict: Response containing status and message\n{\n'status': bool,    # True for success, False for error\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "create_product_category - Create a new product category in a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/category/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "category",
+                "create"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to create the category in"
+                }
+              ]
+            },
+            "description": "{\n'name': str    # Required: Name of the new category\n}\ndict: Response containing status, message and created category data\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'category': dict   # Created category data (only on success)\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "update_product_category - Update a product category in a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "category",
+                "<int:cate_id>",
+                "update"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "cate_id",
+                  "value": "{{cate_id}}",
+                  "description": "cate_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the category"
+                },
+                {
+                  "key": "cate_id (int)",
+                  "value": "{{cate_id (int)}}",
+                  "description": "The ID of the category to update"
+                }
+              ]
+            },
+            "description": "{\n'name': str,      # Required: New name for the category\n'shop_id': int    # Required: Shop ID the category belongs to\n}\ndict: Response containing status, message and updated category data\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'category': dict   # Updated category data (only on success)\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "delete_product_category - Delete a product category from a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>/delete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "category",
+                "<int:cate_id>",
+                "delete"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "cate_id",
+                  "value": "{{cate_id}}",
+                  "description": "cate_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the category"
+                },
+                {
+                  "key": "cate_id (int)",
+                  "value": "{{cate_id (int)}}",
+                  "description": "The ID of the category to delete"
+                }
+              ]
+            },
+            "description": "dict: Response containing status and message\n{\n'status': str,     # 'success' or 'error'\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_variant_list - List all product attributes (variants) for a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to list attributes for"
+                }
+              ]
+            },
+            "description": "list: List of attribute data for the shop\n[\n{\n'id': int,\n'name': str,\n'display_type': str,\n'create_variant': str,\n'visibility': str\n},\n...\n]\n"
+          },
+          "response": []
+        },
+        {
+          "name": "create_product_variant - Create a new product attribute (variant) for a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "create"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to create the attribute for"
+                }
+              ]
+            },
+            "description": "{\n\"create_variant\": str,  # Required: Either \"no_variant\" or \"always\"\n\"display_type\": str,    # Required: Either \"multi\" or \"radio\"\n\"name\": str,           # Required: Name of the attribute (e.g., \"Extras\")\n\"visibility\": str      # Required: Either \"visible\" or \"hidden\"\n}\ndict: Response containing status, message and created attribute data\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'attribute': {     # Only present on success\n'id': int,\n'name': str,\n'create_variant': str,\n'display_type': str,\n'visibility': str\n}\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "update_product_variant - Update an existing product attribute (variant).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/update/<int:variant_id>",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "update",
+                "<int:variant_id>"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "variant_id",
+                  "value": "{{variant_id}}",
+                  "description": "variant_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the attribute"
+                },
+                {
+                  "key": "variant_id (int)",
+                  "value": "{{variant_id (int)}}",
+                  "description": "The ID of the attribute to update"
+                }
+              ]
+            },
+            "description": "{\n\"name\": str,              # Optional: New name for the attribute\n\"create_variant\": str,     # Optional: New create_variant setting\n\"display_type\": str,       # Optional: New display type\n\"sequence\": int           # Optional: New sequence number\n}\ndict: Response containing status and message\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'attribute': dict  # Updated attribute data (if successful)\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "delete_product_variant - Delete a product attribute (variant).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/delete/<int:variant_id>",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "delete",
+                "<int:variant_id>"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "variant_id",
+                  "value": "{{variant_id}}",
+                  "description": "variant_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the attribute"
+                },
+                {
+                  "key": "variant_id (int)",
+                  "value": "{{variant_id (int)}}",
+                  "description": "The ID of the attribute to delete"
+                }
+              ]
+            },
+            "description": "dict: Response containing status and message\n{\n'status': str,     # 'success' or 'error'\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "product_vairiant_value_by_vairant - Get all values for a specific product attribute (variant) in a shop.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>/value",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "<int:variant_id>",
+                "value"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "variant_id",
+                  "value": "{{variant_id}}",
+                  "description": "variant_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop"
+                },
+                {
+                  "key": "variant_id (int)",
+                  "value": "{{variant_id (int)}}",
+                  "description": "The ID of the attribute to get values for"
+                }
+              ]
+            },
+            "description": "dict: Response containing status and variant values\n{\n'status': str,     # 'success' or 'error'\n'message': str,    # Success or error message\n'values': [        # List of variant values (if successful)\n{\n'id': int,\n'name': str,\n'extra_price': float\n},\n...\n]\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "create_product_variant_value - Create values for a product attribute (variant).",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/value",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "value"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop to create the attribute values for"
+                }
+              ]
+            },
+            "description": "{\n\"attribute_id\": int,    # Required: ID of the attribute to add values to\n\"values\": [             # Required: List of values to create\n{\n\"name\": str,           # Required: Name of the value\n\"extra_price\": float   # Required: Additional price for this value\n},\n...\n]\n}\ndict: Response containing status and message\n{\n'status': str,     # 'success' or 'error'\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "update_product_variant_value - Update a product variant value.",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "variant",
+                "value",
+                "<int:value_id>"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "value_id",
+                  "value": "{{value_id}}",
+                  "description": "value_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the variant"
+                },
+                {
+                  "key": "value_id (int)",
+                  "value": "{{value_id (int)}}",
+                  "description": "The ID of the variant value to update"
+                }
+              ]
+            },
+            "description": "{\n\"name\": str,           # Optional: New name for the variant value\n\"extra_price\": float   # Optional: New additional price for this value\n}\ndict: Response containing status and message\n{\n'status': str,     # 'success' or 'error'\n'message': str     # Success or error message\n}\n"
+          },
+          "response": []
+        },
+        {
+          "name": "calculate_product_price - Calculate the total price of a product including its variants.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Access-Control-Allow-Origin",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{BASE_URL}",
+                "shop",
+                "<int:shop_id>",
+                "product",
+                "<int:product_id>",
+                "calculate-price"
+              ],
+              "variable": [
+                {
+                  "key": "shop_id",
+                  "value": "{{shop_id}}",
+                  "description": "shop_id parameter"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{product_id}}",
+                  "description": "product_id parameter"
+                }
+              ],
+              "query": [
+                {
+                  "key": "shop_id (int)",
+                  "value": "{{shop_id (int)}}",
+                  "description": "The ID of the shop containing the product"
+                },
+                {
+                  "key": "product_id (int)",
+                  "value": "{{product_id (int)}}",
+                  "description": "The ID of the product to calculate price for"
+                }
+              ]
+            },
+            "description": "{\n\"quantity\": int,           # Required: Quantity of the product\n\"variants\": [              # Optional: List of selected variants\n{\n\"attribute_id\": int,    # Required: ID of the attribute\n\"value_id\": int         # Required: ID of the selected value\n},\n...\n]\n}\ndict: Response containing calculated price details\n{\n'status': str,         # 'success' or 'error'\n'message': str,        # Success or error message\n'price_details': {     # Only present on success\n'base_price': float,    # Original product price\n'variant_prices': [     # List of variant prices\n{\n'attribute_name': str,\n'value_name': str,\n'price': float\n}\n],\n'total_variant_price': float,  # Sum of all variant prices\n'quantity': int,               # Requested quantity\n'subtotal': float,            # Base price * quantity\n'total': float                # Final total with variants\n}\n}\n"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8069",
+      "type": "string"
+    }
+  ]
+}
