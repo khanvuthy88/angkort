@@ -673,7 +673,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/create", auth="public", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", methods=["POST"])
+    @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", methods=["POST"])
     def create_shop(self, **kw):
         """
         Create a new shop (alternative endpoint).
@@ -969,7 +969,7 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="public", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="angkit", type="http", csrf=False, cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069")
     def calculate_product_price(self, shop_id, product_id):
         """
         Calculate the total price of a product including its variants.
@@ -1563,7 +1563,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/image/add", auth="public", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
+    @http.route(f"{BASE_URL}/image/add", auth="angkit", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
         """
         Upload, validate, process, and store an image with automatic WebP conversion.
@@ -1903,7 +1903,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/order", auth="public", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
+    @http.route(f"{BASE_URL}/order", auth="angkit", type="http", methods=["POST"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def global_new_order(self):
         """
         Create a new sale order (global order creation).

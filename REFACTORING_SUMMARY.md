@@ -202,6 +202,12 @@ return request.make_json_response({
 - **JSON Responses**: Consistent error response format across all endpoints
 - **Authentication Errors**: Clear error messages for authentication failures
 
+## 2025-07-06: Secure All Write Operations
+
+- Updated all create, edit, and delete (POST/PUT/PATCH/DELETE) API routes to require `auth='angkit'`.
+- Only the login route remains `auth='public'` for authentication purposes.
+- This ensures only authenticated users can create, update, or delete resources via the API.
+
 ## Summary
 
 The refactoring successfully transformed scattered, undocumented controllers into a well-organized, performant, and maintainable RESTful API controller. The improvements provide:
