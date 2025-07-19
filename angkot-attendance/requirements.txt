@@ -1,0 +1,20 @@
+# HR Attendance API Dependencies
+
+# Core Odoo dependencies (usually included with Odoo installation)
+# These are listed for reference but typically come with Odoo
+
+# For JWT authentication
+PyJWT>=2.0.0
+
+# For testing the API
+requests>=2.25.0
+
+# For development and testing (optional)
+# pytest>=6.0.0
+# pytest-requests>=0.10.0
+# black>=21.0.0
+# flake8>=3.8.0
+
+# For production deployment (optional)
+# gunicorn>=20.0.0
+# uvicorn>=0.15.0 

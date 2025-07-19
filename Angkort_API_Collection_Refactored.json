@@ -78,6 +78,94 @@
               ]
             }
           }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "refresh"
+              ]
+            },
+            "description": "Generate a new access token using a valid refresh token. Update the api_key environment variable with the new access token."
+          }
+        },
+        {
+          "name": "Validate Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"access_token\": \"{{api_key}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "validate"
+              ]
+            },
+            "description": "Validate an access token and return user information with remaining expiration time."
+          }
+        },
+        {
+          "name": "Revoke All Tokens",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/angkort/api/v1/revoke-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "angkort",
+                "api",
+                "v1",
+                "revoke-all"
+              ]
+            },
+            "description": "Revoke all active tokens for the authenticated user. This will invalidate all sessions for the user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{api_key}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
         }
       ]
     },
