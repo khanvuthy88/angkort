@@ -11,7 +11,10 @@ class HrAttendance(models.Model):
     radius = fields.Char()
 
     check_in_note = fields.Char()
+    check_in_photo = fields.Image()
+
     check_out_note = fields.Char()
+    check_out_photo = fields.Image()
     in_mode = fields.Selection(
         selection_add=[('mobile', 'Mobile')]
     )
