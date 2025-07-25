@@ -1372,7 +1372,7 @@ class ShopController(http.Controller):
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/logout", auth="angkit", type="http", cors="*", methods=["POST"])
+    @http.route(f"{BASE_URL}/logout", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
     def logout(self):
         """
         Logout user and invalidate their access token.
