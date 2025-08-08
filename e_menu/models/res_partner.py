@@ -18,6 +18,9 @@ class Partner(models.Model):
     customer_address = fields.Char()
     shop_latitude = fields.Char()
     shop_longitude = fields.Char()
+    shop_wifi_ids = fields.One2many('shop.wifi', 'shop_id')
+    shop_open_hour_ids = fields.One2many('shop.open.hour', 'shop_id')
+    shop_banner = fields.Image()
 
     def generate_telegram_token(self):
         for partner in self:
@@ -31,3 +34,39 @@ class Partner(models.Model):
                 val['type'] = 'store'
         res = super().create(vals)
         return res
+
+class ShopWifi(models.Model):
+    _name= "shop.wifi"
+
+    name = fields.Char(required=True)
+    password = fields.Char(required=True)
+    wifi_qr_code = fields.Image()
+    shop_id = fields.Many2one('res.partner')
+
+
+class ShopOpenHour(models.Model):
+    _name = "shop.open.hour"
+    _description = "Shop OpenHour"
+
+    day = fields.Selection(
+        selection=[
+            ('0', 'Monday'),
+            ('1', 'Tuesday'),
+            ('2', 'Wednesday'),
+            ('3', 'Thursday'),
+            ('4', 'Friday'),
+            ('5', 'Saturday'),
+            ('6', 'Sunday'),
+        ],
+        string='Day of Week',
+        required=True
+    )
+    open = fields.Char(
+        string='Opening Time',
+        help="Time when the business opens (e.g., '9:00 AM')",
+    )
+    close = fields.Char(
+        string='Closing Time',
+        help="Time when the business closes (e.g., '5:00 PM')",
+    )
+    shop_id = fields.Many2one('res.partner')

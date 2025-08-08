@@ -1,4 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_angkort_shop_bank,angkort_shop_bank,model_angkort_shop_bank,base.group_user,1,1,1,1
 access_res_user_token,res_user_token,model_res_user_token,base.group_user,1,1,1,0
-
+access_group_user_shop_wifi,group_user_shop_wifi,model_shop_wifi,base.group_user,1,1,1,1
+access_shop_open_hour,shop_open_hour,model_shop_open_hour,base.group_user,1,1,1,1

@@ -5,9 +5,9 @@ class HrAttendance(models.Model):
     _inherit = 'hr.attendance'
 
     check_in_lat = fields.Char()
-    check_in_lng = fields.Char()
+    check_in_long = fields.Char()
     check_out_lat = fields.Char()
-    check_out_lng = fields.Char()
+    check_out_long = fields.Char()
     radius = fields.Char()
 
     check_in_note = fields.Char()

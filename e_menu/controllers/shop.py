@@ -352,73 +352,140 @@ class ShopController(http.Controller):
     @http.route(f"{BASE_URL}/my/order", auth="angkit", type="http", methods=["GET"], cors="*", csrf=False)
     def my_order(self, **kwargs):
         """
-        Retrieve paginated list of orders for the authenticated user.
+        Retrieve paginated list of orders for the authenticated user with search and ordering capabilities.
 
         Route: GET /angkort/api/v1/my/order
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for name, state, or date_order.
+            order_by (str, optional): Field to order by (id, name, date_order). Default: date_order.
+            order_direction (str, optional): Order direction (asc, desc). Default: desc.
 
         Returns:
-            200: Paginated list of user orders grouped by state.
+            200: Paginated list of user orders.
+            400: Invalid parameters.
             500: On server error.
 
         Example Response:
             {
-                "orders": {
-                    "draft": [
-                        {
-                            "id": 1,
-                            "name": "SO001",
-                            "date_order": "01-01-2024",
-                            "total": 100.0,
-                            "state": "Quotation"
-                        }
-                    ]
-                },
-                "pagination": {
-                    "total": 10,
-                    "page": 1,
-                    "limit": 20,
-                    "pages": 1
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "SO001",
+                        "date_order": "01-01-2024",
+                        "total": 100.0,
+                        "state": "Quotation"
+                    }
+                ],
+                "meta": {
+                    "pagination": {
+                        "total": 10,
+                        "page": 1,
+                        "limit": 20,
+                        "pages": 1
+                    },
+                    "search": "SO001",
+                    "order_by": "date_order",
+                    "order_direction": "desc"
                 }
             }
         """
         try:
+            # Parse and validate pagination parameters
             page = int(request.httprequest.args.get('page', 1))
-            limit = min(int(request.httprequest.args.get('limit', 20)), 100)
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
             offset = (page - 1) * limit
+            
+            # Parse search parameter
+            search_term = request.httprequest.args.get('search', '').strip()
+            
+            # Parse and validate ordering parameters
+            order_by = request.httprequest.args.get('order_by', 'date_order')
+            order_direction = request.httprequest.args.get('order_direction', 'desc').lower()
+            
+            # Validate order_by field
+            valid_order_fields = {'id', 'name', 'date_order'}
+            if order_by not in valid_order_fields:
+                return request.make_json_response(
+                    {'error': f'Invalid order_by field. Must be one of: {", ".join(valid_order_fields)}'}, 
+                    status=400
+                )
+            
+            # Validate order direction
+            if order_direction not in {'asc', 'desc'}:
+                return request.make_json_response(
+                    {'error': 'Invalid order_direction. Must be "asc" or "desc"'}, 
+                    status=400
+                )
+            
+            # Build domain with search functionality
             domain = [('partner_id', '=', request.env.user.partner_id.id)]
-            total = request.env['sale.order'].sudo().search_count(domain)
+            
+            if search_term:
+                # Create search domain for name, state, and date_order
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search_term),
+                    ('state', 'ilike', search_term),
+                    ('date_order', 'ilike', search_term)
+                ]
+                domain = ['&'] + domain + search_domain
+            
+            # Build order clause
+            order_clause = f"{order_by} {order_direction}"
+            
+            # Use sudo() for better performance and get total count
+            sale_order_model = request.env['sale.order'].sudo()
+            total = sale_order_model.search_count(domain)
+            
+            # Calculate pagination
             pages = (total + limit - 1) // limit
             page = min(max(1, page), pages) if pages > 0 else 1
-            sales = request.env['sale.order'].sudo().search(
+            
+            # Fetch orders with optimized query
+            sales = sale_order_model.search(
                 domain,
                 offset=offset,
                 limit=limit,
-                order='date_order desc'
+                order=order_clause
             )
-            sales_data = sales.read(['id', 'name', 'date_order', 'amount_total', 'state'])
-            grouped_orders = defaultdict(list)
-            for sale in sales_data:
-                grouped_orders[sale['state']].append({
-                    'id': sale['id'],
-                    'name': sale['name'],
-                    'date_order': sale['date_order'].strftime('%d-%m-%Y') if sale['date_order'] else '',
-                    'total': sale['amount_total'],
-                    'state': ORDER_STATE.get(sale['state'])
+            
+            # Optimize data retrieval by selecting only needed fields and process in one pass
+            orders_data = []
+            for sale in sales:
+                orders_data.append({
+                    'id': sale.id,
+                    'name': sale.name,
+                    'date_order': sale.date_order.strftime('%d-%m-%Y') if sale.date_order else '',
+                    'total': sale.amount_total,
+                    'state': ORDER_STATE.get(sale.state, sale.state)
                 })
+            
+            # Build response with optimized structure
             response = {
-                'orders': {state: orders for state, orders in grouped_orders.items()},
-                'pagination': {
-                    'total': total,
-                    'page': page,
-                    'limit': limit,
-                    'pages': pages
+                'data': orders_data,
+                'meta': {
+                    'pagination': {
+                        'total': total,
+                        'page': page,
+                        'limit': limit,
+                        'pages': pages
+                    },
+                    'search': search_term if search_term else None,
+                    'order_by': order_by,
+                    'order_direction': order_direction
                 }
             }
+            
             return request.make_json_response(response, status=200)
+            
+        except ValueError as e:
+            return request.make_json_response(
+                {'error': f'Invalid parameter value: {str(e)}'}, 
+                status=400
+            )
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
@@ -552,13 +619,18 @@ class ShopController(http.Controller):
     @http.route(f"{BASE_URL}/shop", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_list(self, **kw):
         """
-        Retrieve a paginated list of all shops.
+        Retrieve a paginated list of all shops with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/shop
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for shop name, phone, or address.
+            sort (str, optional): Sort field (id, name, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_industry (str, optional): Filter by industry name.
+            filter_has_wifi (bool, optional): Filter shops with/without WiFi.
 
         Returns:
             200: Paginated list of shops with pagination metadata.
@@ -566,56 +638,149 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "shops": [
+                "data": [
                     {
                         "id": 1,
                         "name": "Shop A",
                         "phoneNumber": ["123456789"],
                         "address": ["123 Main St"],
                         "wifi": ["ShopWiFi"],
-                        "banks": [...]
+                        "banks": [...],
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
                     }
                 ],
-                "pagination": {
-                    "total": 50,
-                    "page": 1,
-                    "limit": 20,
-                    "pages": 3
+                "meta": {
+                    "pagination": {
+                        "page": 1,
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "coffee",
+                        "sort": "name",
+                        "order": "asc",
+                        "filter": {
+                            "industry": "Food & Beverage",
+                            "has_wifi": true
+                        }
+                    }
                 }
             }
         """
         try:
+            # Parse query parameters
             page = int(request.httprequest.args.get('page', 1))
-            limit = min(int(request.httprequest.args.get('limit', 20)), 100)
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_industry = request.httprequest.args.get('filter_industry', '').strip()
+            filter_has_wifi = request.httprequest.args.get('filter_has_wifi', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('type', '=', 'store')]
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search),
+                    ('phone', 'ilike', search),
+                    ('customer_address', 'ilike', search)
+                ]
+                domain = ['&'] + domain + search_domain
+            
+            # Add filters
+            if filter_industry:
+                domain.append(('industry_id.name', 'ilike', filter_industry))
+            
+            if filter_has_wifi:
+                if filter_has_wifi.lower() == 'true':
+                    domain.append(('wifi_name', '!=', False))
+                elif filter_has_wifi.lower() == 'false':
+                    domain.append(('wifi_name', '=', False))
+            
+            # Calculate pagination
             offset = (page - 1) * limit
             stores_sudo = request.env['res.partner'].sudo()
-            total = stores_sudo.search_count([('type', '=', 'store')])
-            pages = (total + limit - 1) // limit
-            page = min(max(1, page), pages) if pages > 0 else 1
+            total = stores_sudo.search_count(domain)
+            page_count = (total + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch shops
             stores = stores_sudo.search(
-                [('type', '=', 'store')],
+                domain,
                 offset=offset,
                 limit=limit,
-                order='id'
+                order=order_clause
             )
+            
             shops_data = [{
                 'id': shop.id,
                 'name': shop.name or '',
                 'phoneNumber': self._string_to_string_list(shop.phone) or [],
                 "address": [shop.customer_address] if shop.customer_address else [],
                 'wifi': self._string_to_string_list(shop.wifi_name) or [],
-                'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids]
+                'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids],
+                'shop_wifi_ids': [{
+                    'id': wifi.id,
+                    'name': wifi.name,
+                    'password': wifi.password,
+                    'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                } for wifi in shop.shop_wifi_ids],
+                'shop_open_hour_ids': [{
+                    'id': hour.id,
+                    'day': hour.day,
+                    'day_name': dict(hour._fields['day'].selection).get(hour.day, ''),
+                    'open': hour.open,
+                    'close': hour.close
+                } for hour in shop.shop_open_hour_ids],
+                'createdAt': shop.create_date.isoformat() if shop.create_date else None,
+                'updatedAt': shop.write_date.isoformat() if shop.write_date else None,
+                'publishedAt': shop.create_date.isoformat() if shop.create_date else None
             } for shop in stores]
-            resp = {
-                'shops': shops_data,
-                'pagination': {
-                    'total': total,
-                    'page': page,
-                    'limit': limit,
-                    'pages': pages
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_industry:
+                keyword_meta["filter"]["industry"] = filter_industry
+            if filter_has_wifi:
+                keyword_meta["filter"]["has_wifi"] = filter_has_wifi.lower() == 'true'
+            
+            response = {
+                'data': shops_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total
+                    },
+                    'keyword': keyword_meta
                 }
             }
-            return Response(json.dumps(resp), status=200, content_type='application/json')
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
@@ -636,12 +801,17 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "id": 1,
-                "name": "Shop A",
-                "phoneNumber": ["123456789"],
-                "address": ["123 Main St"],
-                "wifi": ["ShopWiFi"],
-                "banks": [...]
+                "data": {
+                    "id": 1,
+                    "name": "Shop A",
+                    "phoneNumber": ["123456789"],
+                    "address": ["123 Main St"],
+                    "wifi": ["ShopWiFi"],
+                    "banks": [...],
+                    "createdAt": "2024-03-06T13:42:05.098Z",
+                    "updatedAt": "2024-03-06T13:42:05.098Z",
+                    "publishedAt": "2024-03-06T13:42:05.103Z"
+                }
             }
         """
         try:
@@ -651,15 +821,33 @@ class ShopController(http.Controller):
             ], limit=1)
             if not shop:
                 return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
-            resp = {
-                'id': shop.id,
-                'name': shop.name or '',
-                'phoneNumber': self._string_to_string_list(shop.phone) or [],
-                "address": [shop.customer_address] if shop.customer_address else [],
-                'wifi': self._string_to_string_list(shop.wifi_name) or [],
-                'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids]
+            response = {
+                'data': {
+                    'id': shop.id,
+                    'name': shop.name or '',
+                    'phoneNumber': self._string_to_string_list(shop.phone) or [],
+                    "address": [shop.customer_address] if shop.customer_address else [],
+                    'wifi': self._string_to_string_list(shop.wifi_name) or [],
+                    'shop_wifi_ids': [{
+                        'id': wifi.id,
+                        'name': wifi.name,
+                        'password': wifi.password,
+                        'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                    } for wifi in shop.shop_wifi_ids],
+                    'shop_open_hour_ids': [{
+                        'id': hour.id,
+                        'day': hour.day,
+                        'day_name': dict(hour._fields['day'].selection).get(hour.day, ''),
+                        'open': hour.open,
+                        'close': hour.close
+                    } for hour in shop.shop_open_hour_ids],
+                    'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids],
+                    'createdAt': shop.create_date.isoformat() if shop.create_date else None,
+                    'updatedAt': shop.write_date.isoformat() if shop.write_date else None,
+                    'publishedAt': shop.create_date.isoformat() if shop.create_date else None
+                }
             }
-            return Response(json.dumps(resp), status=200, content_type='application/json')
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
@@ -693,15 +881,40 @@ class ShopController(http.Controller):
         try:
             data = request.httprequest.form
             create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
-            if not all(field in create_data for field in ['name', 'phone', 'customer_address']):
-                return Response(json.dumps({'error': 'Missing required fields'}), status=400, content_type='application/json')
+            
+            # Validate required fields
+            required_fields = ['name', 'phone', 'customer_address']
+            missing_fields = [field for field in required_fields if not create_data.get(field)]
+            
+            if missing_fields:
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Shop name is required"})
+                    elif field == 'phone':
+                        errors.append({"name": "phone", "message": "Phone number is required"})
+                    elif field == 'customer_address':
+                        errors.append({"name": "customer_address", "message": "Shop address is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create shop",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
             shop = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
             if shop:
                 request.env.user.partner_id.update({'parent_id': shop.id})
             resp = {'id': shop.id, 'name': shop.name}
             return Response(json.dumps(resp), status=201, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     def shop_update(self, shop_id, **kw):
@@ -724,14 +937,29 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': f'Shop with ID {shop_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update shop",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update shop",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             shop.write(update_fields)
             return Response(json.dumps({'message': f'Shop with ID {shop_id} updated successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PATCH"], cors="*")
     def shop_patch(self, shop_id, **kw):
@@ -754,14 +982,29 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': f'Shop with ID {shop_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch shop",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch shop",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             shop.write(update_fields)
             return Response(json.dumps({'message': f'Shop with ID {shop_id} patched successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     def shop_delete(self, shop_id, **kw):
@@ -781,11 +1024,545 @@ class ShopController(http.Controller):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': f'Shop with ID {shop_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete shop",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
             shop.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    def shop_wifi_create(self, shop_id, **kw):
+        """
+        Create a new WiFi entry for a shop.
+
+        Route: POST /angkort/api/v1/shop/<shop_id>/wifi
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            name (str): WiFi name (required).
+            password (str): WiFi password (required).
+            wifi_qr_code (file, optional): WiFi QR code image.
+
+        Returns:
+            201: Created WiFi details.
+            400: If required fields are missing.
+            404: If the shop is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            wifi_qr_code_file = request.httprequest.files.get('wifi_qr_code')
+            
+            # Validate required fields
+            if 'name' not in data or 'password' not in data:
+                errors = []
+                if 'name' not in data:
+                    errors.append({"name": "name", "message": "WiFi name is required"})
+                if 'password' not in data:
+                    errors.append({"name": "password", "message": "WiFi password is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create WiFi",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Prepare WiFi data
+            wifi_data = {
+                'name': data['name'],
+                'password': data['password'],
+                'shop_id': shop_id
+            }
+            
+            # Handle QR code image if provided
+            if wifi_qr_code_file:
+                image_data = wifi_qr_code_file.read()
+                wifi_data['wifi_qr_code'] = base64.b64encode(image_data)
+            
+            # Create WiFi entry
+            wifi = request.env['shop.wifi'].sudo().create(wifi_data)
+            
+            response_data = {
+                'id': wifi.id,
+                'name': wifi.name,
+                'password': wifi.password,
+                'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+            }
+            
+            return Response(json.dumps(response_data), status=201, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create WiFi",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    def shop_wifi_update(self, shop_id, wifi_id, **kw):
+        """
+        Update a WiFi entry for a shop.
+
+        Route: PUT /angkort/api/v1/shop/<shop_id>/wifi/<wifi_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            wifi_id (int): The ID of the WiFi entry.
+            name (str, optional): New WiFi name.
+            password (str, optional): New WiFi password.
+            wifi_qr_code (file, optional): New WiFi QR code image.
+
+        Returns:
+            200: Updated WiFi details.
+            400: If no valid fields to update.
+            404: If the shop or WiFi is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            wifi_qr_code_file = request.httprequest.files.get('wifi_qr_code')
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Verify WiFi exists and belongs to shop
+            wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
+            if not wifi:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Prepare update data
+            update_data = {}
+            if 'name' in data:
+                update_data['name'] = data['name']
+            if 'password' in data:
+                update_data['password'] = data['password']
+            
+            # Handle QR code image if provided
+            if wifi_qr_code_file:
+                image_data = wifi_qr_code_file.read()
+                update_data['wifi_qr_code'] = base64.b64encode(image_data)
+            
+            if not update_data:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            # Update WiFi entry
+            wifi.write(update_data)
+            
+            response_data = {
+                'id': wifi.id,
+                'name': wifi.name,
+                'password': wifi.password,
+                'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+            }
+            
+            return Response(json.dumps(response_data), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update WiFi",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    def shop_wifi_delete(self, shop_id, wifi_id, **kw):
+        """
+        Delete a WiFi entry from a shop.
+
+        Route: DELETE /angkort/api/v1/shop/<shop_id>/wifi/<wifi_id>
+
+        Parameters:
+            shop_id (int): The ID of the shop.
+            wifi_id (int): The ID of the WiFi entry.
+
+        Returns:
+            204: On successful deletion.
+            404: If the shop or WiFi is not found.
+            500: On server error.
+        """
+        try:
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Verify WiFi exists and belongs to shop
+            wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
+            if not wifi:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Delete WiFi entry
+            wifi.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete WiFi",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/banner", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    def shop_banner_update(self, shop_id, **kw):
+        """
+        Update shop banner image.
+
+        Route: POST /angkort/api/v1/shop/<shop_id>/banner
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            shop_banner (file): Shop banner image (required).
+
+        Returns:
+            200: Success message with banner URL.
+            400: If no banner image provided.
+            404: If the shop is not found.
+            500: On server error.
+        """
+        try:
+            banner_file = request.httprequest.files.get('shop_banner')
+            
+            if not banner_file:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update banner",
+                    "statusCode": "400",
+                    "errors": [{"name": "shop_banner", "message": "Banner image is required"}]
+                }), status=400, content_type='application/json')
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update banner",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Read and encode banner image
+            image_data = banner_file.read()
+            encoded_image = base64.b64encode(image_data)
+            
+            # Update shop banner
+            shop.write({'shop_banner': encoded_image})
+            
+            response_data = {
+                'message': 'Banner updated successfully',
+                'banner_url': f'/web/image/res.partner/{shop_id}/shop_banner'
+            }
+            
+            return Response(json.dumps(response_data), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update banner",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    def shop_open_hours_create(self, shop_id, **kw):
+        """
+        Create a new open hour entry for a shop.
+
+        Route: POST /angkort/api/v1/shop/<shop_id>/open-hours
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            day (str): Day of week (0-6, where 0=Monday) (required).
+            open (str): Opening time (required).
+            close (str): Closing time (required).
+
+        Returns:
+            201: Created open hour details.
+            400: If required fields are missing or invalid.
+            404: If the shop is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            
+            # Validate required fields
+            if 'day' not in data or 'open' not in data or 'close' not in data:
+                errors = []
+                if 'day' not in data:
+                    errors.append({"name": "day", "message": "Day is required"})
+                if 'open' not in data:
+                    errors.append({"name": "open", "message": "Opening time is required"})
+                if 'close' not in data:
+                    errors.append({"name": "close", "message": "Closing time is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create open hour",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
+            # Validate day value
+            valid_days = ['0', '1', '2', '3', '4', '5', '6']
+            if data['day'] not in valid_days:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create open hour",
+                    "statusCode": "400",
+                    "errors": [{"name": "day", "message": "Day must be between 0-6 (0=Monday, 6=Sunday)"}]
+                }), status=400, content_type='application/json')
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create open hour",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Check if open hour for this day already exists
+            existing_hour = request.env['shop.open.hour'].sudo().search([
+                ('shop_id', '=', shop_id),
+                ('day', '=', data['day'])
+            ], limit=1)
+            
+            if existing_hour:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create open hour",
+                    "statusCode": "400",
+                    "errors": [{"name": "day", "message": "Open hour for this day already exists"}]
+                }), status=400, content_type='application/json')
+            
+            # Create open hour entry
+            open_hour_data = {
+                'day': data['day'],
+                'open': data['open'],
+                'close': data['close'],
+                'shop_id': shop_id
+            }
+            
+            open_hour = request.env['shop.open.hour'].sudo().create(open_hour_data)
+            
+            response_data = {
+                'id': open_hour.id,
+                'day': open_hour.day,
+                'day_name': dict(open_hour._fields['day'].selection).get(open_hour.day, ''),
+                'open': open_hour.open,
+                'close': open_hour.close
+            }
+            
+            return Response(json.dumps(response_data), status=201, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create open hour",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    def shop_open_hours_update(self, shop_id, hour_id, **kw):
+        """
+        Update an open hour entry for a shop.
+
+        Route: PUT /angkort/api/v1/shop/<shop_id>/open-hours/<hour_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            hour_id (int): The ID of the open hour entry.
+            day (str, optional): Day of week (0-6, where 0=Monday).
+            open (str, optional): Opening time.
+            close (str, optional): Closing time.
+
+        Returns:
+            200: Updated open hour details.
+            400: If no valid fields to update or invalid data.
+            404: If the shop or open hour is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update open hour",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Verify open hour exists and belongs to shop
+            open_hour = request.env['shop.open.hour'].sudo().search([('id', '=', hour_id), ('shop_id', '=', shop_id)], limit=1)
+            if not open_hour:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update open hour",
+                    "statusCode": "404",
+                    "errors": [{"name": "hour_id", "message": "Open hour not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Validate day value if provided
+            if 'day' in data:
+                valid_days = ['0', '1', '2', '3', '4', '5', '6']
+                if data['day'] not in valid_days:
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update open hour",
+                        "statusCode": "400",
+                        "errors": [{"name": "day", "message": "Day must be between 0-6 (0=Monday, 6=Sunday)"}]
+                    }), status=400, content_type='application/json')
+                
+                # Check if day is being changed and if new day already exists
+                if data['day'] != open_hour.day:
+                    existing_hour = request.env['shop.open.hour'].sudo().search([
+                        ('shop_id', '=', shop_id),
+                        ('day', '=', data['day']),
+                        ('id', '!=', hour_id)
+                    ], limit=1)
+                    
+                    if existing_hour:
+                        return Response(json.dumps({
+                            "status": "error",
+                            "message": "Failed to update open hour",
+                            "statusCode": "400",
+                            "errors": [{"name": "day", "message": "Open hour for this day already exists"}]
+                        }), status=400, content_type='application/json')
+            
+            # Prepare update data
+            update_data = {}
+            if 'day' in data:
+                update_data['day'] = data['day']
+            if 'open' in data:
+                update_data['open'] = data['open']
+            if 'close' in data:
+                update_data['close'] = data['close']
+            
+            if not update_data:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update open hour",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            # Update open hour entry
+            open_hour.write(update_data)
+            
+            response_data = {
+                'id': open_hour.id,
+                'day': open_hour.day,
+                'day_name': dict(open_hour._fields['day'].selection).get(open_hour.day, ''),
+                'open': open_hour.open,
+                'close': open_hour.close
+            }
+            
+            return Response(json.dumps(response_data), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update open hour",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    def shop_open_hours_delete(self, shop_id, hour_id, **kw):
+        """
+        Delete an open hour entry from a shop.
+
+        Route: DELETE /angkort/api/v1/shop/<shop_id>/open-hours/<hour_id>
+
+        Parameters:
+            shop_id (int): The ID of the shop.
+            hour_id (int): The ID of the open hour entry.
+
+        Returns:
+            204: On successful deletion.
+            404: If the shop or open hour is not found.
+            500: On server error.
+        """
+        try:
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete open hour",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Verify open hour exists and belongs to shop
+            open_hour = request.env['shop.open.hour'].sudo().search([('id', '=', hour_id), ('shop_id', '=', shop_id)], limit=1)
+            if not open_hour:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete open hour",
+                    "statusCode": "404",
+                    "errors": [{"name": "hour_id", "message": "Open hour not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Delete open hour entry
+            open_hour.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete open hour",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
     def create_shop(self, **kw):
@@ -824,7 +1601,21 @@ class ShopController(http.Controller):
             required_fields = ['name', 'phone', 'customer_address']
             missing_fields = [field for field in required_fields if not create_data.get(field)]
             if missing_fields:
-                return request.make_json_response({'status': False, 'message': f"Missing required fields: {', '.join(missing_fields)}"}, status=400)
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Shop name is required"})
+                    elif field == 'phone':
+                        errors.append({"name": "phone", "message": "Phone number is required"})
+                    elif field == 'customer_address':
+                        errors.append({"name": "customer_address", "message": "Shop address is required"})
+                
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to create shop",
+                    "statusCode": "400",
+                    "errors": errors
+                }, status=400)
             shop_data = request.env['res.partner'].sudo().with_context(create_company=True).create([{
                 'name': create_data['name'],
                 'phone': create_data['phone'],
@@ -839,17 +1630,33 @@ class ShopController(http.Controller):
                 request.env.user.partner_id.update({'parent_id': shop_data.id})
             return request.make_json_response({'status': True, 'data': {'name': shop_data.name, 'id': shop_data.id}, 'message': 'Shop created successfully'}, status=201)
         except Exception as e:
-            return request.make_json_response({'status': False, 'message': f'Error creating shop: {str(e)}'}, status=500)
+            return request.make_json_response({
+                "status": "error",
+                "message": "Failed to create shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def product_list(self, shop_id, **kw):
         """
-        Retrieve all products for a given shop.
+        Retrieve all products for a given shop with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/shop/<shop_id>/product
 
         Parameters:
             shop_id (int): The ID of the shop.
+
+        Query Parameters:
+            page (int, optional): Page number for pagination (default: 1).
+            limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for product name, code, or description.
+            sort (str, optional): Sort field (id, name, list_price, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_category (int, optional): Filter by category ID.
+            filter_price_min (float, optional): Minimum price filter.
+            filter_price_max (float, optional): Maximum price filter.
+            filter_has_variants (bool, optional): Filter products with/without variants.
 
         Returns:
             200: List of products with their details.
@@ -857,24 +1664,171 @@ class ShopController(http.Controller):
             500: On server error.
 
         Example Response:
-            [
-                {
-                    "id": 1,
-                    "name": "Product A",
-                    ...
-                },
-                ...
-            ]
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Product A",
+                        "code": "PROD001",
+                        "description": "Product description",
+                        "sale_price": 99.99,
+                        "image": "base64_image_data",
+                        "category": {
+                            "id": 1,
+                            "name": "Electronics"
+                        },
+                        "options": [...],
+                        "choices": [...],
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
+                    "pagination": {
+                        "page": 1,
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "coffee",
+                        "sort": "list_price",
+                        "order": "desc",
+                        "filter": {
+                            "category": 1,
+                            "price_min": 10.0,
+                            "price_max": 100.0,
+                            "has_variants": true
+                        }
+                    }
+                }
+            }
         """
         try:
-            products = request.env['product.product'].sudo().search([('shop_id', '=', shop_id)])
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_category = request.httprequest.args.get('filter_category', '').strip()
+            filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
+            filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
+            filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('shop_id', '=', shop_id)]
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search),
+                    ('default_code', 'ilike', search),
+                    ('description', 'ilike', search)
+                ]
+                domain = ['&'] + domain + search_domain
+            
+            # Add filters
+            if filter_category:
+                try:
+                    category_id = int(filter_category)
+                    domain.append(('categ_id', '=', category_id))
+                except ValueError:
+                    pass
+            
+            if filter_price_min:
+                try:
+                    price_min = float(filter_price_min)
+                    domain.append(('list_price', '>=', price_min))
+                except ValueError:
+                    pass
+            
+            if filter_price_max:
+                try:
+                    price_max = float(filter_price_max)
+                    domain.append(('list_price', '<=', price_max))
+                except ValueError:
+                    pass
+            
+            if filter_has_variants:
+                if filter_has_variants.lower() == 'true':
+                    domain.append(('attribute_line_ids', '!=', False))
+                elif filter_has_variants.lower() == 'false':
+                    domain.append(('attribute_line_ids', '=', False))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total = request.env['product.product'].sudo().search_count(domain)
+            page_count = (total + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch products
+            products = request.env['product.product'].sudo().search(
+                domain,
+                offset=offset,
+                limit=limit,
+                order=order_clause
+            )
+            
             data = []
             for product in products:
                 tmp_data = self._product_to_dict(product)
                 tmp_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'radio')]
                 tmp_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'multi')]
+                tmp_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+                tmp_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+                tmp_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
                 data.append(tmp_data)
-            return Response(json.dumps(data), status=200, content_type='application/json')
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_category:
+                keyword_meta["filter"]["category"] = int(filter_category)
+            if filter_price_min:
+                keyword_meta["filter"]["price_min"] = float(filter_price_min)
+            if filter_price_max:
+                keyword_meta["filter"]["price_max"] = float(filter_price_max)
+            if filter_has_variants:
+                keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
+            
+            response = {
+                'data': data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
@@ -896,16 +1850,36 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "id": 1,
-                "name": "Product A",
-                ...
+                "data": {
+                    "id": 1,
+                    "name": "Product A",
+                    "code": "PROD001",
+                    "description": "Product description",
+                    "sale_price": 99.99,
+                    "image": "base64_image_data",
+                    "category": {
+                        "id": 1,
+                        "name": "Electronics"
+                    },
+                    "options": [...],
+                    "choices": [...],
+                    "createdAt": "2024-03-06T13:42:05.098Z",
+                    "updatedAt": "2024-03-06T13:42:05.098Z",
+                    "publishedAt": "2024-03-06T13:42:05.103Z"
+                }
             }
         """
         try:
             product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
             if not product:
                 return Response(json.dumps({'error': 'Product not found'}), status=404, content_type='application/json')
-            response = self._get_product_details(product)
+            product_data = self._get_product_details(product)
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+            response = {
+                'data': product_data
+            }
             return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
@@ -947,13 +1921,40 @@ class ShopController(http.Controller):
             required_fields = ['name', 'price', 'category_id']
             missing_fields = [field for field in required_fields if field not in data]
             if missing_fields:
-                return Response(json.dumps({'error': f'Missing required fields: {", ".join(missing_fields)}'}), status=400, content_type='application/json')
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Product name is required"})
+                    elif field == 'price':
+                        errors.append({"name": "price", "message": "Product price is required"})
+                    elif field == 'category_id':
+                        errors.append({"name": "category_id", "message": "Category ID is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create product",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': f'Shop with ID {shop_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create product",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
+            
             category = request.env['product.category'].sudo().search([('id', '=', data.get('category_id'))], limit=1)
             if not category:
-                return Response(json.dumps({'error': f'Category with ID {data.get("category_id")} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create product",
+                    "statusCode": "404",
+                    "errors": [{"name": "category_id", "message": f"Category with ID {data.get('category_id')} not found"}]
+                }), status=404, content_type='application/json')
+            
             product_data = {
                 'name': data.get('name'),
                 'list_price': data.get('price'),
@@ -978,7 +1979,12 @@ class ShopController(http.Controller):
             }
             return Response(json.dumps(resp), status=201, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create product",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
     def product_update(self, shop_id, product_id, **kw):
@@ -1009,18 +2015,33 @@ class ShopController(http.Controller):
             image_file = request.httprequest.files.get('image')
             product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
             if not product:
-                return Response(json.dumps({'error': f'Product with ID {product_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update product",
+                    "statusCode": "404",
+                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in ['name', 'list_price', 'categ_id', 'description', 'barcode', 'qty_available']}
             if image_file:
                 image_data = image_file.read()
                 encoded_image = base64.b64encode(image_data)
                 update_fields['image_1920'] = encoded_image
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update product",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             product.write(update_fields)
             return Response(json.dumps({'message': f'Product with ID {product_id} updated successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update product",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
     def product_patch(self, shop_id, product_id, **kw):
@@ -1045,18 +2066,33 @@ class ShopController(http.Controller):
             image_file = request.httprequest.files.get('image')
             product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
             if not product:
-                return Response(json.dumps({'error': f'Product with ID {product_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch product",
+                    "statusCode": "404",
+                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in ['name', 'list_price', 'categ_id', 'description', 'barcode', 'qty_available']}
             if image_file:
                 image_data = image_file.read()
                 encoded_image = base64.b64encode(image_data)
                 update_fields['image_1920'] = encoded_image
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch product",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             product.write(update_fields)
             return Response(json.dumps({'message': f'Product with ID {product_id} patched successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch product",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     def product_delete(self, shop_id, product_id, **kw):
@@ -1077,11 +2113,21 @@ class ShopController(http.Controller):
         try:
             product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
             if not product:
-                return Response(json.dumps({'error': f'Product with ID {product_id} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete product",
+                    "statusCode": "404",
+                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
+                }), status=404, content_type='application/json')
             product.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete product",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="angkit", type="http", csrf=False, cors="*")
     def calculate_product_price(self, shop_id, product_id):
@@ -1193,16 +2239,18 @@ class ShopController(http.Controller):
             }
 
     @http.route(f"{BASE_URL}/industries", methods=['GET'], auth="public", type="http", cors="*")
-    @paginate_results
-    def industries(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
+    def industries(self, **kw):
         """
-        Retrieve a paginated list of all available industries.
+        Retrieve a paginated list of all available industries with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/industries
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for industry name or full name.
+            sort (str, optional): Sort field (id, name, full_name, create_date). Default: name.
+            order (str, optional): Sort order (asc, desc). Default: asc.
 
         Returns:
             200: Paginated list of industries with pagination metadata.
@@ -1210,50 +2258,113 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "status": true,
-                "data": {
-                    "industries": [
-                        {
-                            "id": 1,
-                            "full_name": "Information Technology",
-                            "name": "IT"
-                        }
-                    ],
+                "data": [
+                    {
+                        "id": 1,
+                        "full_name": "Information Technology",
+                        "name": "IT",
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
                     "pagination": {
-                        "total": 42,
                         "page": 1,
-                        "limit": 20,
-                        "pages": 3
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "technology",
+                        "sort": "name",
+                        "order": "asc"
                     }
                 }
             }
         """
         try:
-            industries = request.env['res.partner.industry'].sudo().search([], limit=limit, offset=offset, order='name')
-            total_count = request.env['res.partner.industry'].sudo().search_count([])
-            industries_data = [{
-                'id': industry.id,
-                'full_name': getattr(industry, 'full_name', industry.name),
-                'name': industry.name
-            } for industry in industries]
-            pagination_data = {
-                'total': total_count,
-                'page': page,
-                'limit': limit,
-                'pages': (total_count + limit - 1) // limit
-            }
-            return request.make_json_response({
-                'status': True,
-                'data': {
-                    'industries': industries_data,
-                    'pagination': pagination_data
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'full_name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|',
+                    ('name', 'ilike', search),
+                    ('full_name', 'ilike', search)
+                ]
+                domain = search_domain
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['res.partner.industry'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch industries
+            industries = request.env['res.partner.industry'].sudo().search(
+                domain,
+                limit=limit,
+                offset=offset,
+                order=order_clause
+            )
+            
+            industries_data = []
+            for industry in industries:
+                industry_data = {
+                    'id': industry.id,
+                    'full_name': getattr(industry, 'full_name', industry.name),
+                    'name': industry.name,
+                    'createdAt': industry.create_date.isoformat() if industry.create_date else None,
+                    'updatedAt': industry.write_date.isoformat() if industry.write_date else None,
+                    'publishedAt': industry.create_date.isoformat() if industry.create_date else None
                 }
-            }, status=200)
+                industries_data.append(industry_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order
+            }
+            
+            response = {
+                'data': industries_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving industries',
-                'error': str(e)
+                'error': 'Error retrieving industries',
+                'message': str(e)
             }, status=500)
 
     @http.route(f"{BASE_URL}/login", auth="public", type="http", csrf=False, cors="*", methods=["POST"])
@@ -1739,33 +2850,101 @@ class ShopController(http.Controller):
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def category_list(self, shop_id, **kw):
         """
-        Retrieve all product categories for a given shop.
+        Retrieve all product categories for a given shop with search and sort capabilities.
 
         Route: GET /angkort/api/v1/shop/<shop_id>/product/category
 
         Parameters:
             shop_id (int): The ID of the shop.
 
+        Query Parameters:
+            search (str, optional): Search term for category name.
+            sort (str, optional): Sort field (id, name, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+
         Returns:
             200: List of categories as JSON array.
+            404: If the shop is not found.
             500: On server error.
 
         Example Response:
-            [
-                {
-                    "id": 1,
-                    "name": "Electronics"
-                },
-                {
-                    "id": 2,
-                    "name": "Clothing"
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Electronics",
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
+                    "keyword": {
+                        "search": "electronics",
+                        "sort": "name",
+                        "order": "asc"
+                    }
                 }
-            ]
+            }
         """
         try:
-            categories = request.env['product.category'].sudo().search([('shop_id', '=', shop_id)])
-            data = [self._category_to_dict(category) for category in categories]
-            return Response(json.dumps(data), status=200, content_type='application/json')
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('shop_id', '=', shop_id)]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch categories
+            categories = request.env['product.category'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            data = []
+            for category in categories:
+                category_data = self._category_to_dict(category)
+                category_data['createdAt'] = category.create_date.isoformat() if category.create_date else None
+                category_data['updatedAt'] = category.write_date.isoformat() if category.write_date else None
+                category_data['publishedAt'] = category.create_date.isoformat() if category.create_date else None
+                data.append(category_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order
+            }
+            
+            response = {
+                'data': data,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
@@ -1794,14 +2973,24 @@ class ShopController(http.Controller):
         try:
             data = request.httprequest.form
             if 'name' not in data:
-                return Response(json.dumps({'error': 'Missing required field: name'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create category",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": "Category name is required"}]
+                }), status=400, content_type='application/json')
             category = request.env['product.category'].sudo().create({
                 'name': data['name'],
                 'shop_id': shop_id,
             })
             return Response(json.dumps(self._category_to_dict(category)), status=201, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create category",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_update(self, shop_id, cate_id, **kw):
@@ -1825,14 +3014,29 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
             if not category:
-                return Response(json.dumps({'error': 'Category not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update category",
+                    "statusCode": "404",
+                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in ['name']}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update category",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             category.write(update_fields)
             return Response(json.dumps(self._category_to_dict(category)), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update category",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
     def category_patch(self, shop_id, cate_id, **kw):
@@ -1856,14 +3060,29 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
             if not category:
-                return Response(json.dumps({'error': 'Category not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch category",
+                    "statusCode": "404",
+                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                }), status=404, content_type='application/json')
             update_fields = {k: v for k, v in data.items() if k in ['name']}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch category",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             category.write(update_fields)
             return Response(json.dumps(self._category_to_dict(category)), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch category",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     def category_delete(self, shop_id, cate_id, **kw):
@@ -1884,24 +3103,38 @@ class ShopController(http.Controller):
         try:
             category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
             if not category:
-                return Response(json.dumps({'error': 'Category not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete category",
+                    "statusCode": "404",
+                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                }), status=404, content_type='application/json')
             category.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete category",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     # --- GLOBAL ROUTES (System-wide functionality) ---
     @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="*")
-    @paginate_results
-    def global_product_category(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
+    def global_product_category(self, **kw):
         """
-        Retrieve a paginated list of all product categories (global, not shop-specific).
+        Retrieve a paginated list of all product categories (global, not shop-specific) with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/product/category
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for category name.
+            sort (str, optional): Sort field (id, name, create_date). Default: name.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_parent (int, optional): Filter by parent category ID.
+            filter_has_children (bool, optional): Filter categories with/without children.
 
         Returns:
             200: Paginated list of all product categories with hierarchical information.
@@ -1909,57 +3142,142 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "status": true,
-                "data": {
-                    "categories": [
-                        {
-                            "id": 15,
-                            "name": "Electronics",
-                            "parent_id": null,
-                            "parent_name": null
-                        }
-                    ],
+                "data": [
+                    {
+                        "id": 15,
+                        "name": "Electronics",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
                     "pagination": {
-                        "total": 42,
                         "page": 1,
-                        "limit": 20,
-                        "pages": 3
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "electronics",
+                        "sort": "name",
+                        "order": "asc",
+                        "filter": {
+                            "parent": null,
+                            "has_children": true
+                        }
                     }
                 }
             }
         """
         try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_parent = request.httprequest.args.get('filter_parent', '').strip()
+            filter_has_children = request.httprequest.args.get('filter_has_children', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_parent:
+                if filter_parent.lower() == 'null':
+                    domain.append(('parent_id', '=', False))
+                else:
+                    try:
+                        parent_id = int(filter_parent)
+                        domain.append(('parent_id', '=', parent_id))
+                    except ValueError:
+                        pass
+            
+            if filter_has_children:
+                if filter_has_children.lower() == 'true':
+                    domain.append(('child_ids', '!=', False))
+                elif filter_has_children.lower() == 'false':
+                    domain.append(('child_ids', '=', False))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.category'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch categories
             categories = request.env['product.category'].sudo().search(
-                [],
+                domain,
                 limit=limit,
                 offset=offset,
-                order='name'
+                order=order_clause
             )
-            total_count = request.env['product.category'].sudo().search_count([])
-            categories_data = [{
-                'id': category.id,
-                'name': category.name,
-                'parent_id': category.parent_id.id if category.parent_id else None,
-                'parent_name': category.parent_id.name if category.parent_id else None
-            } for category in categories]
-            pagination_data = {
-                'total': total_count,
-                'page': page,
-                'limit': limit,
-                'pages': (total_count + limit - 1) // limit
-            }
-            return request.make_json_response({
-                'status': True,
-                'data': {
-                    'categories': categories_data,
-                    'pagination': pagination_data
+            
+            categories_data = []
+            for category in categories:
+                category_data = {
+                    'id': category.id,
+                    'name': category.name,
+                    'parent_id': category.parent_id.id if category.parent_id else None,
+                    'parent_name': category.parent_id.name if category.parent_id else None,
+                    'createdAt': category.create_date.isoformat() if category.create_date else None,
+                    'updatedAt': category.write_date.isoformat() if category.write_date else None,
+                    'publishedAt': category.create_date.isoformat() if category.create_date else None
                 }
-            }, status=200)
+                categories_data.append(category_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_parent:
+                if filter_parent.lower() == 'null':
+                    keyword_meta["filter"]["parent"] = None
+                else:
+                    keyword_meta["filter"]["parent"] = int(filter_parent)
+            if filter_has_children:
+                keyword_meta["filter"]["has_children"] = filter_has_children.lower() == 'true'
+            
+            response = {
+                'data': categories_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving product categories',
-                'error': str(e)
+                'error': 'Error retrieving product categories',
+                'message': str(e)
             }, status=500)
 
     @http.route(f"{BASE_URL}/image/add", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
@@ -2053,15 +3371,22 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "id": 1,
-                "name": "Product A",
-                "code": "PROD001",
-                "description": "Product description",
-                "sale_price": 99.99,
-                "image": "base64_image_data",
-                "category": {
+                "data": {
                     "id": 1,
-                    "name": "Electronics"
+                    "name": "Product A",
+                    "code": "PROD001",
+                    "description": "Product description",
+                    "sale_price": 99.99,
+                    "image": "base64_image_data",
+                    "category": {
+                        "id": 1,
+                        "name": "Electronics"
+                    },
+                    "options": [...],
+                    "choices": [...],
+                    "createdAt": "2024-03-06T13:42:05.098Z",
+                    "updatedAt": "2024-03-06T13:42:05.098Z",
+                    "publishedAt": "2024-03-06T13:42:05.103Z"
                 }
             }
         """
@@ -2069,9 +3394,8 @@ class ShopController(http.Controller):
             product = request.env['product.product'].sudo().search([('id', '=', product_id)], limit=1)
             if not product:
                 return request.make_json_response({
-                    'status': False,
-                    'message': 'Product not found',
-                    'error': 'Product does not exist'
+                    'error': 'Product not found',
+                    'message': 'Product does not exist'
                 }, status=404)
 
             product_data = self._product_to_dict(product)
@@ -2079,29 +3403,35 @@ class ShopController(http.Controller):
                 lambda x: x.attribute_id.display_type == 'radio')]
             product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
                 lambda x: x.attribute_id.display_type == 'multi')]
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
 
-            return request.make_json_response({
-                'status': True,
+            response = {
                 'data': product_data
-            }, status=200)
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving product',
-                'error': str(e)
+                'error': 'Error retrieving product',
+                'message': str(e)
             }, status=500)
 
     @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="*")
-    @paginate_results
-    def global_product_variant(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
+    def global_product_variant(self, **kw):
         """
-        Retrieve a paginated list of all product attributes (global, not shop-specific).
+        Retrieve a paginated list of all product attributes (global, not shop-specific) with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/product/variant
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for attribute name.
+            sort (str, optional): Sort field (id, name, create_date). Default: name.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_create_variant (str, optional): Filter by create_variant type (no_variant, always).
+            filter_display_type (str, optional): Filter by display_type (multi, radio).
 
         Returns:
             200: Paginated list of product attributes.
@@ -2109,65 +3439,146 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "status": true,
-                "data": {
-                    "attributes": [
-                        {
-                            "id": 1,
-                            "name": "Color",
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Color",
+                        "create_variant": "always",
+                        "display_type": "radio",
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
+                    "pagination": {
+                        "page": 1,
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "color",
+                        "sort": "name",
+                        "order": "asc",
+                        "filter": {
                             "create_variant": "always",
                             "display_type": "radio"
                         }
-                    ],
-                    "pagination": {
-                        "total": 10,
-                        "page": 1,
-                        "limit": 20,
-                        "pages": 1
                     }
                 }
             }
         """
         try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_create_variant = request.httprequest.args.get('filter_create_variant', '').strip()
+            filter_display_type = request.httprequest.args.get('filter_display_type', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_create_variant:
+                if filter_create_variant in ['no_variant', 'always']:
+                    domain.append(('create_variant', '=', filter_create_variant))
+            
+            if filter_display_type:
+                if filter_display_type in ['multi', 'radio']:
+                    domain.append(('display_type', '=', filter_display_type))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.attribute'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch attributes
             attributes = request.env['product.attribute'].sudo().search(
-                [],
+                domain,
                 limit=limit,
                 offset=offset,
-                order='name'
+                order=order_clause
             )
-            total_count = request.env['product.attribute'].sudo().search_count([])
-            attributes_data = [self._attribute_to_dict(attribute) for attribute in attributes]
-            pagination_data = {
-                'total': total_count,
-                'page': page,
-                'limit': limit,
-                'pages': (total_count + limit - 1) // limit
+            
+            attributes_data = []
+            for attribute in attributes:
+                attribute_data = self._attribute_to_dict(attribute)
+                attribute_data['createdAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
+                attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attributes_data.append(attribute_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
             }
-            return request.make_json_response({
-                'status': True,
-                'data': {
-                    'attributes': attributes_data,
-                    'pagination': pagination_data
+            
+            if filter_create_variant:
+                keyword_meta["filter"]["create_variant"] = filter_create_variant
+            if filter_display_type:
+                keyword_meta["filter"]["display_type"] = filter_display_type
+            
+            response = {
+                'data': attributes_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
                 }
-            }, status=200)
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving product variants',
-                'error': str(e)
+                'error': 'Error retrieving product variants',
+                'message': str(e)
             }, status=500)
 
     @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="*")
-    @paginate_results
-    def global_product_list(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
+    def global_product_list(self, **kw):
         """
-        Retrieve a paginated list of all products (global, not shop-specific).
+        Retrieve a paginated list of all products (global, not shop-specific) with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/product
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for product name, code, or description.
+            sort (str, optional): Sort field (id, name, list_price, create_date). Default: name.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_category (int, optional): Filter by category ID.
+            filter_price_min (float, optional): Minimum price filter.
+            filter_price_max (float, optional): Maximum price filter.
+            filter_has_variants (bool, optional): Filter products with/without variants.
+            filter_shop (int, optional): Filter by shop ID.
 
         Returns:
             200: Paginated list of all products.
@@ -2175,69 +3586,197 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "status": true,
-                "data": {
-                    "products": [
-                        {
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Product A",
+                        "code": "PROD001",
+                        "description": "Product description",
+                        "sale_price": 99.99,
+                        "image": "base64_image_data",
+                        "category": {
                             "id": 1,
-                            "name": "Product A",
-                            "code": "PROD001",
-                            "sale_price": 99.99,
-                            "category": {
-                                "id": 1,
-                                "name": "Electronics"
-                            }
-                        }
-                    ],
+                            "name": "Electronics"
+                        },
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
                     "pagination": {
-                        "total": 100,
                         "page": 1,
-                        "limit": 20,
-                        "pages": 5
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "coffee",
+                        "sort": "list_price",
+                        "order": "desc",
+                        "filter": {
+                            "category": 1,
+                            "price_min": 10.0,
+                            "price_max": 100.0,
+                            "has_variants": true,
+                            "shop": 5
+                        }
                     }
                 }
             }
         """
         try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_category = request.httprequest.args.get('filter_category', '').strip()
+            filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
+            filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
+            filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            filter_shop = request.httprequest.args.get('filter_shop', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search),
+                    ('default_code', 'ilike', search),
+                    ('description', 'ilike', search)
+                ]
+                domain = search_domain
+            
+            # Add filters
+            if filter_category:
+                try:
+                    category_id = int(filter_category)
+                    domain.append(('categ_id', '=', category_id))
+                except ValueError:
+                    pass
+            
+            if filter_price_min:
+                try:
+                    price_min = float(filter_price_min)
+                    domain.append(('list_price', '>=', price_min))
+                except ValueError:
+                    pass
+            
+            if filter_price_max:
+                try:
+                    price_max = float(filter_price_max)
+                    domain.append(('list_price', '<=', price_max))
+                except ValueError:
+                    pass
+            
+            if filter_has_variants:
+                if filter_has_variants.lower() == 'true':
+                    domain.append(('attribute_line_ids', '!=', False))
+                elif filter_has_variants.lower() == 'false':
+                    domain.append(('attribute_line_ids', '=', False))
+            
+            if filter_shop:
+                try:
+                    shop_id = int(filter_shop)
+                    domain.append(('shop_id', '=', shop_id))
+                except ValueError:
+                    pass
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.product'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch products
             products = request.env['product.product'].sudo().search(
-                [],
+                domain,
                 limit=limit,
                 offset=offset,
-                order='name'
+                order=order_clause
             )
-            total_count = request.env['product.product'].sudo().search_count([])
-            products_data = [self._product_to_dict(product) for product in products]
-            pagination_data = {
-                'total': total_count,
-                'page': page,
-                'limit': limit,
-                'pages': (total_count + limit - 1) // limit
+            
+            products_data = []
+            for product in products:
+                product_data = self._product_to_dict(product)
+                product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+                product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+                product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+                products_data.append(product_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
             }
-            return request.make_json_response({
-                'status': True,
-                'data': {
-                    'products': products_data,
-                    'pagination': pagination_data
+            
+            if filter_category:
+                keyword_meta["filter"]["category"] = int(filter_category)
+            if filter_price_min:
+                keyword_meta["filter"]["price_min"] = float(filter_price_min)
+            if filter_price_max:
+                keyword_meta["filter"]["price_max"] = float(filter_price_max)
+            if filter_has_variants:
+                keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
+            if filter_shop:
+                keyword_meta["filter"]["shop"] = int(filter_shop)
+            
+            response = {
+                'data': products_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
                 }
-            }, status=200)
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving products',
-                'error': str(e)
+                'error': 'Error retrieving products',
+                'message': str(e)
             }, status=500)
 
     @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http", cors="*")
-    @paginate_results
-    def global_sale_order(self, page=1, limit=DEFAULT_PAGE_SIZE, offset=0):
+    def global_sale_order(self, **kw):
         """
-        Retrieve a paginated list of all sale orders (global, not user-specific).
+        Retrieve a paginated list of all sale orders (global, not user-specific) with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/sale
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
+            search (str, optional): Search term for order name or customer name.
+            sort (str, optional): Sort field (id, name, date_order, amount_total, create_date). Default: date_order.
+            order (str, optional): Sort order (asc, desc). Default: desc.
+            filter_state (str, optional): Filter by order state (draft, sent, sale, done, cancel).
+            filter_date_from (str, optional): Filter orders from date (YYYY-MM-DD).
+            filter_date_to (str, optional): Filter orders to date (YYYY-MM-DD).
+            filter_amount_min (float, optional): Minimum amount filter.
+            filter_amount_max (float, optional): Maximum amount filter.
+            filter_customer (int, optional): Filter by customer ID.
 
         Returns:
             200: Paginated list of all sale orders.
@@ -2245,61 +3784,190 @@ class ShopController(http.Controller):
 
         Example Response:
             {
-                "status": true,
-                "data": {
-                    "orders": [
-                        {
-                            "id": 1,
-                            "name": "SO001",
-                            "partner_name": "Customer A",
-                            "date_order": "2024-01-01",
-                            "amount_total": 100.0,
-                            "state": "sale"
-                        }
-                    ],
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "SO001",
+                        "partner_name": "Customer A",
+                        "date_order": "2024-01-01",
+                        "amount_total": 100.0,
+                        "state": "sale",
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
                     "pagination": {
-                        "total": 50,
                         "page": 1,
-                        "limit": 20,
-                        "pages": 3
+                        "pageSize": 25,
+                        "pageCount": 1,
+                        "total": 2
+                    },
+                    "keyword": {
+                        "search": "SO001",
+                        "sort": "date_order",
+                        "order": "desc",
+                        "filter": {
+                            "state": "sale",
+                            "date_from": "2024-01-01",
+                            "date_to": "2024-12-31",
+                            "amount_min": 50.0,
+                            "amount_max": 200.0,
+                            "customer": 1
+                        }
                     }
                 }
             }
         """
         try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'date_order')
+            order = request.httprequest.args.get('order', 'desc').lower()
+            filter_state = request.httprequest.args.get('filter_state', '').strip()
+            filter_date_from = request.httprequest.args.get('filter_date_from', '').strip()
+            filter_date_to = request.httprequest.args.get('filter_date_to', '').strip()
+            filter_amount_min = request.httprequest.args.get('filter_amount_min', '').strip()
+            filter_amount_max = request.httprequest.args.get('filter_amount_max', '').strip()
+            filter_customer = request.httprequest.args.get('filter_customer', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'date_order', 'amount_total', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'date_order'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'desc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|',
+                    ('name', 'ilike', search),
+                    ('partner_id.name', 'ilike', search)
+                ]
+                domain = search_domain
+            
+            # Add filters
+            if filter_state:
+                valid_states = ['draft', 'sent', 'sale', 'done', 'cancel']
+                if filter_state in valid_states:
+                    domain.append(('state', '=', filter_state))
+            
+            if filter_date_from:
+                try:
+                    from datetime import datetime
+                    date_from = datetime.strptime(filter_date_from, '%Y-%m-%d').date()
+                    domain.append(('date_order', '>=', date_from))
+                except ValueError:
+                    pass
+            
+            if filter_date_to:
+                try:
+                    from datetime import datetime
+                    date_to = datetime.strptime(filter_date_to, '%Y-%m-%d').date()
+                    domain.append(('date_order', '<=', date_to))
+                except ValueError:
+                    pass
+            
+            if filter_amount_min:
+                try:
+                    amount_min = float(filter_amount_min)
+                    domain.append(('amount_total', '>=', amount_min))
+                except ValueError:
+                    pass
+            
+            if filter_amount_max:
+                try:
+                    amount_max = float(filter_amount_max)
+                    domain.append(('amount_total', '<=', amount_max))
+                except ValueError:
+                    pass
+            
+            if filter_customer:
+                try:
+                    customer_id = int(filter_customer)
+                    domain.append(('partner_id', '=', customer_id))
+                except ValueError:
+                    pass
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['sale.order'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch orders
             orders = request.env['sale.order'].sudo().search(
-                [],
+                domain,
                 limit=limit,
                 offset=offset,
-                order='date_order desc'
+                order=order_clause
             )
-            total_count = request.env['sale.order'].sudo().search_count([])
-            orders_data = [{
-                'id': order.id,
-                'name': order.name,
-                'partner_name': order.partner_id.name,
-                'date_order': order.date_order.strftime('%Y-%m-%d') if order.date_order else '',
-                'amount_total': order.amount_total,
-                'state': order.state
-            } for order in orders]
-            pagination_data = {
-                'total': total_count,
-                'page': page,
-                'limit': limit,
-                'pages': (total_count + limit - 1) // limit
-            }
-            return request.make_json_response({
-                'status': True,
-                'data': {
-                    'orders': orders_data,
-                    'pagination': pagination_data
+            
+            orders_data = []
+            for order in orders:
+                order_data = {
+                    'id': order.id,
+                    'name': order.name,
+                    'partner_name': order.partner_id.name,
+                    'date_order': order.date_order.strftime('%Y-%m-%d') if order.date_order else '',
+                    'amount_total': order.amount_total,
+                    'state': order.state,
+                    'createdAt': order.create_date.isoformat() if order.create_date else None,
+                    'updatedAt': order.write_date.isoformat() if order.write_date else None,
+                    'publishedAt': order.create_date.isoformat() if order.create_date else None
                 }
-            }, status=200)
+                orders_data.append(order_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_state:
+                keyword_meta["filter"]["state"] = filter_state
+            if filter_date_from:
+                keyword_meta["filter"]["date_from"] = filter_date_from
+            if filter_date_to:
+                keyword_meta["filter"]["date_to"] = filter_date_to
+            if filter_amount_min:
+                keyword_meta["filter"]["amount_min"] = float(filter_amount_min)
+            if filter_amount_max:
+                keyword_meta["filter"]["amount_max"] = float(filter_amount_max)
+            if filter_customer:
+                keyword_meta["filter"]["customer"] = int(filter_customer)
+            
+            response = {
+                'data': orders_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'status': False,
-                'message': 'Error retrieving sale orders',
-                'error': str(e)
+                'error': 'Error retrieving sale orders',
+                'message': str(e)
             }, status=500)
 
     @http.route(f"{BASE_URL}/order", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
@@ -2403,6 +4071,46 @@ class ShopController(http.Controller):
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
     def variant_value_list(self, shop_id, variant_id, **kw):
+        """
+        Retrieve all values for a specific product variant in a shop with search and sort capabilities.
+
+        Route: GET /angkort/api/v1/shop/<shop_id>/product/<variant_id>/value
+
+        Parameters:
+            shop_id (int): The ID of the shop.
+            variant_id (int): The ID of the variant.
+
+        Query Parameters:
+            search (str, optional): Search term for value name.
+            sort (str, optional): Sort field (id, name, price_extra, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+
+        Returns:
+            200: List of variant values.
+            404: If the shop or attribute is not found.
+            500: On server error.
+
+        Example Response:
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Red",
+                        "extra_price": 5.0,
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
+                    "keyword": {
+                        "search": "red",
+                        "sort": "name",
+                        "order": "asc"
+                    }
+                }
+            }
+        """
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
@@ -2410,30 +4118,127 @@ class ShopController(http.Controller):
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
                 return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
-            value_list = [{
-                'id': value.id,
-                'name': value.name,
-                'extra_price': value.price_extra
-            } for value in attribute.value_ids]
-            return Response(json.dumps({'values': value_list}), status=200, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'price_extra', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('attribute_id', '=', variant_id)]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch values
+            values = request.env['product.attribute.value'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            value_list = []
+            for value in values:
+                value_data = {
+                    'id': value.id,
+                    'name': value.name,
+                    'extra_price': value.price_extra,
+                    'createdAt': value.create_date.isoformat() if value.create_date else None,
+                    'updatedAt': value.write_date.isoformat() if value.write_date else None,
+                    'publishedAt': value.create_date.isoformat() if value.create_date else None
+                }
+                value_list.append(value_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order
+            }
+            
+            response = {
+                'data': value_list,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     def variant_value_create(self, shop_id, **kw):
+        """
+        Create new variant values for a product attribute.
+
+        Route: POST /angkort/api/v1/shop/<shop_id>/product/variant/value
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            attribute_id (int): The ID of the attribute (required).
+            values (str): JSON string of values array (required).
+
+        Returns:
+            201: Success message.
+            400: If required fields are missing or invalid.
+            404: If the attribute is not found.
+            500: On server error.
+        """
         try:
             data = request.httprequest.form
             if 'attribute_id' not in data or 'values' not in data:
-                return Response(json.dumps({'error': 'Missing required fields: attribute_id, values'}), status=400, content_type='application/json')
+                errors = []
+                if 'attribute_id' not in data:
+                    errors.append({"name": "attribute_id", "message": "Attribute ID is required"})
+                if 'values' not in data:
+                    errors.append({"name": "values", "message": "Values are required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
             attribute = request.env['product.attribute'].sudo().browse(int(data['attribute_id']))
             if not attribute.exists():
-                return Response(json.dumps({'error': f'Attribute with ID {data["attribute_id"]} not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "404",
+                    "errors": [{"name": "attribute_id", "message": f"Attribute with ID {data['attribute_id']} not found"}]
+                }), status=404, content_type='application/json')
+            
             if attribute.shop_id.id != shop_id:
-                return Response(json.dumps({'error': "Attribute doesn't belong to this shop"}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "attribute_id", "message": "Attribute doesn't belong to this shop"}]
+                }), status=400, content_type='application/json')
+            
             try:
                 values_data = json.loads(data['values'])
                 if not isinstance(values_data, list):
-                    return Response(json.dumps({'error': 'Values must be a list'}), status=400, content_type='application/json')
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to create variant values",
+                        "statusCode": "400",
+                        "errors": [{"name": "values", "message": "Values must be a list"}]
+                    }), status=400, content_type='application/json')
+                
                 values_to_create = [{
                     'default_extra_price': value.get('extra_price', 0.0),
                     'name': value['name'],
@@ -2442,79 +4247,308 @@ class ShopController(http.Controller):
                 request.env['product.attribute.value'].sudo().create(values_to_create)
                 return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
             except json.JSONDecodeError:
-                return Response(json.dumps({'error': 'Invalid JSON format for values'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "values", "message": "Invalid JSON format for values"}]
+                }), status=400, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create variant values",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
     def variant_value_update(self, shop_id, value_id, **kw):
+        """
+        Update an existing variant value.
+
+        Route: PUT /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+            name (str, optional): New name.
+            price_extra (float, optional): New extra price.
+
+        Returns:
+            200: Success message.
+            400: If no valid fields to update.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
         try:
             data = request.httprequest.form
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({'error': 'Variant value not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
             if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({'error': 'You are not authorized to update this variant value'}), status=403, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "403",
+                    "errors": [{"name": "authorization", "message": "You are not authorized to update this variant value"}]
+                }), status=403, content_type='application/json')
+            
             update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
             variant_value.write(update_fields)
             return Response(json.dumps({'message': 'Variant value updated successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
     def variant_value_patch(self, shop_id, value_id, **kw):
+        """
+        Partially update an existing variant value.
+
+        Route: PATCH /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+            name (str, optional): New name.
+            price_extra (float, optional): New extra price.
+
+        Returns:
+            200: Success message.
+            400: If no valid fields to update.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
         try:
             data = request.httprequest.form
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({'error': 'Variant value not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
             if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({'error': 'You are not authorized to update this variant value'}), status=403, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "403",
+                    "errors": [{"name": "authorization", "message": "You are not authorized to update this variant value"}]
+                }), status=403, content_type='application/json')
+            
             update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
             if not update_fields:
-                return Response(json.dumps({'error': 'No valid fields to update'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
             variant_value.write(update_fields)
             return Response(json.dumps({'message': 'Variant value patched successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     def variant_value_delete(self, shop_id, value_id, **kw):
+        """
+        Delete a variant value.
+
+        Route: DELETE /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters:
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+
+        Returns:
+            204: On successful deletion.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
         try:
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({'error': 'Variant value not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
             if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({'error': 'You are not authorized to delete this variant value'}), status=403, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant value",
+                    "statusCode": "403",
+                    "errors": [{"name": "authorization", "message": "You are not authorized to delete this variant value"}]
+                }), status=403, content_type='application/json')
+            
             variant_value.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     # --- SHOP-SPECIFIC PRODUCT VARIANT ROUTES ---
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
     def variant_list(self, shop_id, **kw):
         """
-        Retrieve all product variants for a specific shop.
+        Retrieve all product variants for a specific shop with search, filter, and sort capabilities.
 
         Route: GET /angkort/api/v1/shop/<shop_id>/product/variant
 
         Parameters:
             shop_id (int): The ID of the shop.
 
+        Query Parameters:
+            search (str, optional): Search term for variant name.
+            sort (str, optional): Sort field (id, name, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_create_variant (str, optional): Filter by create_variant type (no_variant, always).
+            filter_display_type (str, optional): Filter by display_type (multi, radio).
+
         Returns:
             200: List of product variants for the shop.
+            404: If the shop is not found.
             500: On server error.
+
+        Example Response:
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Color",
+                        "create_variant": "always",
+                        "display_type": "radio",
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
+                    }
+                ],
+                "meta": {
+                    "keyword": {
+                        "search": "color",
+                        "sort": "name",
+                        "order": "asc",
+                        "filter": {
+                            "create_variant": "always",
+                            "display_type": "radio"
+                        }
+                    }
+                }
+            }
         """
         try:
-            attributes = request.env['product.attribute'].sudo().search([
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_create_variant = request.httprequest.args.get('filter_create_variant', '').strip()
+            filter_display_type = request.httprequest.args.get('filter_display_type', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [
                 ('create_uid', '=', request.env.user.id),
                 ('shop_id', '=', shop_id)
-            ])
-            data = [self._attribute_to_dict(attribute) for attribute in attributes]
-            return Response(json.dumps(data), status=200, content_type='application/json')
+            ]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_create_variant:
+                if filter_create_variant in ['no_variant', 'always']:
+                    domain.append(('create_variant', '=', filter_create_variant))
+            
+            if filter_display_type:
+                if filter_display_type in ['multi', 'radio']:
+                    domain.append(('display_type', '=', filter_display_type))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch attributes
+            attributes = request.env['product.attribute'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            data = []
+            for attribute in attributes:
+                attribute_data = self._attribute_to_dict(attribute)
+                attribute_data['createdAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
+                attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                data.append(attribute_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_create_variant:
+                keyword_meta["filter"]["create_variant"] = filter_create_variant
+            if filter_display_type:
+                keyword_meta["filter"]["display_type"] = filter_display_type
+            
+            response = {
+                'data': data,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
@@ -2542,14 +4576,48 @@ class ShopController(http.Controller):
             VALID_DISPLAY_TYPES = {'multi', 'radio'}
             REQUIRED_FIELDS = {'create_variant', 'display_type', 'name'}
             missing_fields = REQUIRED_FIELDS - set(data.keys())
+            
             if missing_fields:
-                return Response(json.dumps({'error': f'Missing required fields: {", ".join(missing_fields)}'}), status=400, content_type='application/json')
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Variant name is required"})
+                    elif field == 'create_variant':
+                        errors.append({"name": "create_variant", "message": "Create variant type is required"})
+                    elif field == 'display_type':
+                        errors.append({"name": "display_type", "message": "Display type is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
             if data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({'error': f'Invalid create_variant value. Must be one of: {", ".join(VALID_CREATE_VARIANTS)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
             if data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({'error': f'Invalid display_type value. Must be one of: {", ".join(VALID_DISPLAY_TYPES)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
             if request.env['product.attribute'].sudo().search_count([('name', '=', data['name']), ('shop_id', '=', shop_id)], limit=1):
-                return Response(json.dumps({'error': f'Attribute with name {data["name"]} already exists'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                }), status=400, content_type='application/json')
+            
             variant_create_data = {
                 'name': data['name'],
                 'create_variant': data['create_variant'],
@@ -2561,7 +4629,12 @@ class ShopController(http.Controller):
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
             return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
     def variant_update(self, shop_id, variant_id, **kw):
@@ -2587,25 +4660,61 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
-                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
             VALID_CREATE_VARIANTS = {'no_variant', 'always'}
             VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
             if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({'error': f'Invalid create_variant value. Must be one of: {", ".join(VALID_CREATE_VARIANTS)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
             if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({'error': f'Invalid display_type value. Must be one of: {", ".join(VALID_DISPLAY_TYPES)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
             if 'name' in data and data['name'] != attribute.name:
                 if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
-                    return Response(json.dumps({'error': f'Attribute with name {data["name"]} already exists'}), status=400, content_type='application/json')
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
     def variant_patch(self, shop_id, variant_id, **kw):
@@ -2629,25 +4738,61 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
-                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
             VALID_CREATE_VARIANTS = {'no_variant', 'always'}
             VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
             if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({'error': f'Invalid create_variant value. Must be one of: {", ".join(VALID_CREATE_VARIANTS)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
             if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({'error': f'Invalid display_type value. Must be one of: {", ".join(VALID_DISPLAY_TYPES)}'}), status=400, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
             if 'name' in data and data['name'] != attribute.name:
                 if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
-                    return Response(json.dumps({'error': f'Attribute with name {data["name"]} already exists'}), status=400, content_type='application/json')
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to patch variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     def variant_delete(self, shop_id, variant_id, **kw):
@@ -2668,15 +4813,32 @@ class ShopController(http.Controller):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
             attribute = request.env['product.attribute'].sudo().search([
                 ('id', '=', variant_id),
                 ('shop_id', '=', shop_id),
                 ('create_uid', '=', request.env.user.id)
             ], limit=1)
             if not attribute:
-                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
             attribute.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')

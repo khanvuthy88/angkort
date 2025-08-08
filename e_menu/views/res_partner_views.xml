@@ -32,6 +32,24 @@
                     <page invisible="company_type == 'person'" string="Banks">
                         <field name="shop_bank_ids" />
                     </page>
+                    <page string="Wifi" invisible="type != 'store'">
+                        <field name="shop_wifi_ids" widget="one2many">
+                            <list editable="bottom">
+                                <field name="name" />
+                                <field name="password" />
+                                <field name="wifi_qr_code" />
+                            </list>
+                        </field>
+                    </page>
+                    <page string="Open Hour" invisible="type != 'store'">
+                        <field name="shop_open_hour_ids" widget="one2many">
+                            <list editable="bottom">
+                                <field name="day" />
+                                <field name="open" />
+                                <field name="close" />
+                            </list>
+                        </field>
+                    </page>
                 </xpath>
             </field>
         </record>
