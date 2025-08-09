@@ -708,9 +708,9 @@ class ShopController(http.Controller):
             
             if filter_has_wifi:
                 if filter_has_wifi.lower() == 'true':
-                    domain.append(('wifi_name', '!=', False))
+                    domain.append(('shop_wifi_ids', '!=', False))
                 elif filter_has_wifi.lower() == 'false':
-                    domain.append(('wifi_name', '=', False))
+                    domain.append(('shop_wifi_ids', '=', False))
             
             # Calculate pagination
             offset = (page - 1) * limit
@@ -3211,9 +3211,9 @@ class ShopController(http.Controller):
             
             if filter_has_children:
                 if filter_has_children.lower() == 'true':
-                    domain.append(('child_ids', '!=', False))
+                    domain.append(('child_id', '!=', False))
                 elif filter_has_children.lower() == 'false':
-                    domain.append(('child_ids', '=', False))
+                    domain.append(('child_id', '=', False))
             
             # Calculate pagination
             offset = (page - 1) * limit
