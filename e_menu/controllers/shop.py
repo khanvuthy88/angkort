@@ -485,6 +485,13 @@ class ShopController(http.Controller):
         return None
 
     @classmethod
+    def _get_image_url(cls, model_name, record_id, field_name):
+        """Generate image URL for Odoo image fields instead of returning base64 data."""
+        if record_id and field_name:
+            return f'/web/image/{model_name}/{record_id}/{field_name}'
+        return ''
+
+    @classmethod
     def _product_to_dict(cls, product):
         return {
             'id': product.id,
@@ -492,7 +499,7 @@ class ShopController(http.Controller):
             'code': product.default_code or '',
             'description': product.description or '',
             'sale_price': product.list_price,
-            'image': product.image_512,
+            'image': cls._get_image_url('product.product', product.id, 'image_1920') if product.image_1920 else '',
             'category': {
                 'id': product.categ_id.id,
                 'name': product.categ_id.name
@@ -512,7 +519,7 @@ class ShopController(http.Controller):
             'name': bank.name or '',
             'link': bank.link or '',
             'currency': bank.currency or '',
-            'logo': bank.logo
+            'logo': cls._get_image_url('angkort.shop.bank', bank.id, 'logo') if bank.logo else ''
         }
 
     @classmethod
@@ -947,12 +954,13 @@ class ShopController(http.Controller):
                 'phoneNumber': self._string_to_string_list(shop.phone) or [],
                 "address": [shop.customer_address] if shop.customer_address else [],
                 'wifi': self._string_to_string_list(shop.wifi_name) or [],
+                'banner': self._get_image_url('res.partner', shop.id, 'shop_banner') if shop.shop_banner else '',
                 'banks': [self._shop_bank_to_dict(bank) for bank in shop.shop_bank_ids],
                 'shop_wifi_ids': [{
                     'id': wifi.id,
                     'name': wifi.name,
                     'password': wifi.password,
-                    'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                    'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
                 } for wifi in shop.shop_wifi_ids],
                 'shop_open_hour_ids': [{
                     'id': hour.id,
@@ -1039,11 +1047,12 @@ class ShopController(http.Controller):
                     'phoneNumber': self._string_to_string_list(shop.phone) or [],
                     "address": [shop.customer_address] if shop.customer_address else [],
                     'wifi': self._string_to_string_list(shop.wifi_name) or [],
+                    'banner': self._get_image_url('res.partner', shop.id, 'shop_banner') if shop.shop_banner else '',
                     'shop_wifi_ids': [{
                         'id': wifi.id,
                         'name': wifi.name,
                         'password': wifi.password,
-                        'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                        'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
                     } for wifi in shop.shop_wifi_ids],
                     'shop_open_hour_ids': [{
                         'id': hour.id,
@@ -1322,7 +1331,7 @@ class ShopController(http.Controller):
                 'id': wifi.id,
                 'name': wifi.name,
                 'password': wifi.password,
-                'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
             return Response(json.dumps(response_data), status=201, content_type='application/json')
@@ -1406,7 +1415,7 @@ class ShopController(http.Controller):
                 'id': wifi.id,
                 'name': wifi.name,
                 'password': wifi.password,
-                'wifi_qr_code': wifi.wifi_qr_code.decode('utf-8') if wifi.wifi_qr_code else ''
+                'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
             return Response(json.dumps(response_data), status=200, content_type='application/json')
