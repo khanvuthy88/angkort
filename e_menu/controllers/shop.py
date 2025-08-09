@@ -82,6 +82,217 @@ def paginate_results(func):
             return request.make_json_response({'error': str(e)}, status=500)
     return wrapper
 
+
+def verify_ownership(entity_type='shop'):
+    """
+    Decorator to verify that the current user owns the entity they're trying to modify.
+    
+    Args:
+        entity_type (str): Type of entity to check ('shop', 'product', 'category', 'variant', 'variant_value', 'wifi', 'open_hour')
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                current_user_id = request.env.user.id
+                
+                if entity_type == 'shop':
+                    shop_id = kwargs.get('shop_id')
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    shop = request.env['res.partner'].sudo().search([
+                        ('id', '=', shop_id),
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    
+                    if not shop:
+                        return request.make_json_response({'error': 'Shop not found'}, status=404)
+                    
+                    if shop.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify shops you own'
+                        }, status=403)
+                
+                elif entity_type == 'product':
+                    shop_id = kwargs.get('shop_id')
+                    product_id = kwargs.get('product_id')
+                    
+                    if not shop_id or not product_id:
+                        return request.make_json_response({'error': 'Shop ID and Product ID are required'}, status=400)
+                    
+                    product = request.env['product.template'].sudo().search([
+                        ('id', '=', product_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not product:
+                        return request.make_json_response({'error': 'Product not found'}, status=404)
+                    
+                    if product.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify products you own'
+                        }, status=403)
+                
+                elif entity_type == 'category':
+                    shop_id = kwargs.get('shop_id')
+                    cate_id = kwargs.get('cate_id')
+                    
+                    if not shop_id or not cate_id:
+                        return request.make_json_response({'error': 'Shop ID and Category ID are required'}, status=400)
+                    
+                    category = request.env['product.category'].sudo().search([
+                        ('id', '=', cate_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not category:
+                        return request.make_json_response({'error': 'Category not found'}, status=404)
+                    
+                    if category.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify categories you own'
+                        }, status=403)
+                
+                elif entity_type == 'variant':
+                    shop_id = kwargs.get('shop_id')
+                    variant_id = kwargs.get('variant_id')
+                    
+                    if not shop_id or not variant_id:
+                        return request.make_json_response({'error': 'Shop ID and Variant ID are required'}, status=400)
+                    
+                    variant = request.env['product.attribute'].sudo().search([
+                        ('id', '=', variant_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not variant:
+                        return request.make_json_response({'error': 'Variant not found'}, status=404)
+                    
+                    if variant.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify variants you own'
+                        }, status=403)
+                
+                elif entity_type == 'variant_value':
+                    shop_id = kwargs.get('shop_id')
+                    value_id = kwargs.get('value_id')
+                    
+                    if not shop_id or not value_id:
+                        return request.make_json_response({'error': 'Shop ID and Value ID are required'}, status=400)
+                    
+                    variant_value = request.env['product.attribute.value'].sudo().search([
+                        ('id', '=', value_id)
+                    ], limit=1)
+                    
+                    if not variant_value:
+                        return request.make_json_response({'error': 'Variant value not found'}, status=404)
+                    
+                    if variant_value.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify variant values you own'
+                        }, status=403)
+                
+                elif entity_type == 'wifi':
+                    shop_id = kwargs.get('shop_id')
+                    wifi_id = kwargs.get('wifi_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    # For wifi creation, check shop ownership
+                    if not wifi_id:
+                        shop = request.env['res.partner'].sudo().search([
+                            ('id', '=', shop_id),
+                            ('type', '=', 'store')
+                        ], limit=1)
+                        
+                        if not shop:
+                            return request.make_json_response({'error': 'Shop not found'}, status=404)
+                        
+                        if shop.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only create wifi for shops you own'
+                            }, status=403)
+                    else:
+                        # For wifi update/delete, check wifi ownership
+                        wifi = request.env['shop.wifi'].sudo().search([
+                            ('id', '=', wifi_id),
+                            ('shop_id', '=', shop_id)
+                        ], limit=1)
+                        
+                        if not wifi:
+                            return request.make_json_response({'error': 'WiFi not found'}, status=404)
+                        
+                        if wifi.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only modify wifi you own'
+                            }, status=403)
+                
+                elif entity_type == 'open_hour':
+                    shop_id = kwargs.get('shop_id')
+                    hour_id = kwargs.get('hour_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    # For open hour creation, check shop ownership
+                    if not hour_id:
+                        shop = request.env['res.partner'].sudo().search([
+                            ('id', '=', shop_id),
+                            ('type', '=', 'store')
+                        ], limit=1)
+                        
+                        if not shop:
+                            return request.make_json_response({'error': 'Shop not found'}, status=404)
+                        
+                        if shop.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only create open hours for shops you own'
+                            }, status=403)
+                    else:
+                        # For open hour update/delete, check open hour ownership
+                        open_hour = request.env['shop.open.hour'].sudo().search([
+                            ('id', '=', hour_id),
+                            ('shop_id', '=', shop_id)
+                        ], limit=1)
+                        
+                        if not open_hour:
+                            return request.make_json_response({'error': 'Open hour not found'}, status=404)
+                        
+                        if open_hour.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only modify open hours you own'
+                            }, status=403)
+                
+                elif entity_type == 'banner':
+                    shop_id = kwargs.get('shop_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    shop = request.env['res.partner'].sudo().search([
+                        ('id', '=', shop_id),
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    
+                    if not shop:
+                        return request.make_json_response({'error': 'Shop not found'}, status=404)
+                    
+                    if shop.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only update banners for shops you own'
+                        }, status=403)
+                
+                return func(*args, **kwargs)
+                
+            except Exception as e:
+                return request.make_json_response({'error': f'Authorization check failed: {str(e)}'}, status=500)
+        
+        return wrapper
+    return decorator
+
+
 BASE_URL = '/angkort/api/v1'
 
 PARTNER_FIELDS = [
@@ -917,6 +1128,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    @verify_ownership(entity_type='shop')
     def shop_update(self, shop_id, **kw):
         """
         Update an existing shop.
@@ -962,6 +1174,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PATCH"], cors="*")
+    @verify_ownership(entity_type='shop')
     def shop_patch(self, shop_id, **kw):
         """
         Partially update an existing shop.
@@ -1007,6 +1220,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    @verify_ownership(entity_type='shop')
     def shop_delete(self, shop_id, **kw):
         """
         Delete a shop.
@@ -1041,6 +1255,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='wifi')
     def shop_wifi_create(self, shop_id, **kw):
         """
         Create a new WiFi entry for a shop.
@@ -1120,6 +1335,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    @verify_ownership(entity_type='wifi')
     def shop_wifi_update(self, shop_id, wifi_id, **kw):
         """
         Update a WiFi entry for a shop.
@@ -1203,6 +1419,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    @verify_ownership(entity_type='wifi')
     def shop_wifi_delete(self, shop_id, wifi_id, **kw):
         """
         Delete a WiFi entry from a shop.
@@ -1251,6 +1468,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/banner", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='banner')
     def shop_banner_update(self, shop_id, **kw):
         """
         Update shop banner image.
@@ -1310,6 +1528,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='open_hour')
     def shop_open_hours_create(self, shop_id, **kw):
         """
         Create a new open hour entry for a shop.
@@ -1410,6 +1629,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    @verify_ownership(entity_type='open_hour')
     def shop_open_hours_update(self, shop_id, hour_id, **kw):
         """
         Update an open hour entry for a shop.
@@ -1517,6 +1737,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    @verify_ownership(entity_type='open_hour')
     def shop_open_hours_delete(self, shop_id, hour_id, **kw):
         """
         Delete an open hour entry from a shop.
@@ -1885,6 +2106,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='shop')
     def product_create(self, shop_id, **kw):
         """
         Create a new product for a given shop.
@@ -1987,6 +2209,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
     def product_update(self, shop_id, product_id, **kw):
         """
         Update an existing product in a shop.
@@ -2044,6 +2267,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
     def product_patch(self, shop_id, product_id, **kw):
         """
         Partially update an existing product in a shop.
@@ -2095,6 +2319,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
     def product_delete(self, shop_id, product_id, **kw):
         """
         Delete a product from a shop.
@@ -2949,6 +3174,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
     def category_create(self, shop_id, **kw):
         """
         Create a new product category for a given shop.
@@ -2993,6 +3219,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
+    @verify_ownership(entity_type='category')
     def category_update(self, shop_id, cate_id, **kw):
         """
         Update an existing product category in a shop.
@@ -3039,6 +3266,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
+    @verify_ownership(entity_type='category')
     def category_patch(self, shop_id, cate_id, **kw):
         """
         Partially update an existing product category in a shop.
@@ -3085,6 +3313,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='category')
     def category_delete(self, shop_id, cate_id, **kw):
         """
         Delete a product category from a shop.
@@ -4179,6 +4408,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
     def variant_value_create(self, shop_id, **kw):
         """
         Create new variant values for a product attribute.
@@ -4262,6 +4492,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
     def variant_value_update(self, shop_id, value_id, **kw):
         """
         Update an existing variant value.
@@ -4292,13 +4523,7 @@ class ShopController(http.Controller):
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
                 }), status=404, content_type='application/json')
             
-            if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update variant value",
-                    "statusCode": "403",
-                    "errors": [{"name": "authorization", "message": "You are not authorized to update this variant value"}]
-                }), status=403, content_type='application/json')
+
             
             update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
             if not update_fields:
@@ -4320,6 +4545,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
     def variant_value_patch(self, shop_id, value_id, **kw):
         """
         Partially update an existing variant value.
@@ -4350,13 +4576,7 @@ class ShopController(http.Controller):
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
                 }), status=404, content_type='application/json')
             
-            if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch variant value",
-                    "statusCode": "403",
-                    "errors": [{"name": "authorization", "message": "You are not authorized to update this variant value"}]
-                }), status=403, content_type='application/json')
+
             
             update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
             if not update_fields:
@@ -4378,6 +4598,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
     def variant_value_delete(self, shop_id, value_id, **kw):
         """
         Delete a variant value.
@@ -4404,13 +4625,7 @@ class ShopController(http.Controller):
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
                 }), status=404, content_type='application/json')
             
-            if variant_value.create_uid.id != request.env.user.id:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to delete variant value",
-                    "statusCode": "403",
-                    "errors": [{"name": "authorization", "message": "You are not authorized to delete this variant value"}]
-                }), status=403, content_type='application/json')
+
             
             variant_value.unlink()
             return Response(status=204)
@@ -4553,6 +4768,7 @@ class ShopController(http.Controller):
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
     def variant_create(self, shop_id, **kw):
         """
         Create a new product variant for a specific shop.
@@ -4637,6 +4853,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
     def variant_update(self, shop_id, variant_id, **kw):
         """
         Update an existing product variant for a specific shop.
@@ -4717,6 +4934,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
     def variant_patch(self, shop_id, variant_id, **kw):
         """
         Partially update an existing product variant for a specific shop.
@@ -4795,6 +5013,7 @@ class ShopController(http.Controller):
             }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
     def variant_delete(self, shop_id, variant_id, **kw):
         """
         Delete a product variant from a specific shop.
