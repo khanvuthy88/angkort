@@ -16,7 +16,7 @@ from typing import List
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 DEFAULT_TIMEOUT = 10
-
+ 
 SALE_STATE = {
     'draft': 'Draft',
     'sent': 'Quotation Sent',
@@ -296,7 +296,8 @@ def verify_ownership(entity_type='shop'):
 BASE_URL = '/angkort/api/v1'
 
 PARTNER_FIELDS = [
-    'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email'
+    'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email',
+    'shop_banner', 'shop_wifi_ids', 'shop_open_hour_ids'
 ]
 
 ORDER_STATE = {
@@ -332,6 +333,91 @@ class ShopController(http.Controller):
             return []
         string_list = string.split(',')
         return string_list
+
+    def _handle_shop_related_fields(self, data, files, operation='create'):
+        """
+        Helper method to handle shop related fields (shop_banner, shop_wifi_ids, shop_open_hour_ids)
+        
+        Args:
+            data: form data
+            files: uploaded files
+            operation: 'create' or 'update'
+            
+        Returns:
+            dict: processed fields ready for create/write
+        """
+        import json
+        import base64
+        
+        processed_fields = {}
+        
+        # Handle banner file upload (Image field expects base64 string)
+        banner_file = files.get('shop_banner')
+        if banner_file:
+            try:
+                content = banner_file.read()
+                if content:
+                    processed_fields['shop_banner'] = base64.b64encode(content).decode('utf-8')
+            except Exception:
+                # ignore banner if something goes wrong reading it
+                pass
+
+        # Helper to parse possible JSON payload passed as string
+        def _parse_json_field(val):
+            if not val:
+                return None
+            if isinstance(val, (list, tuple)):
+                return val
+            try:
+                return json.loads(val)
+            except Exception:
+                return None
+
+        # shop_wifi_ids: accept JSON array and convert to One2many commands
+        wifi_payload = data.get('shop_wifi_ids')
+        wifi_list = _parse_json_field(wifi_payload)
+        if wifi_list:
+            wifi_commands = []
+            for wifi in wifi_list:
+                if not isinstance(wifi, dict):
+                    continue
+                name = wifi.get('name')
+                password = wifi.get('password')
+                if not name or not password:
+                    continue
+                wifi_commands.append((0, 0, {'name': name, 'password': password}))
+            if wifi_commands:
+                if operation == 'update':
+                    # For updates, replace all existing records
+                    processed_fields['shop_wifi_ids'] = [(5, 0, 0)] + wifi_commands
+                else:
+                    # For create, just add new records
+                    processed_fields['shop_wifi_ids'] = wifi_commands
+
+        # shop_open_hour_ids: accept JSON array and convert to One2many commands
+        hour_payload = data.get('shop_open_hour_ids')
+        hour_list = _parse_json_field(hour_payload)
+        if hour_list:
+            hour_commands = []
+            for hour in hour_list:
+                if not isinstance(hour, dict):
+                    continue
+                day = hour.get('day')
+                open_time = hour.get('open')
+                close_time = hour.get('close')
+                if day is None:
+                    continue
+                # ensure day is stored as string (model expects selection string values like '0','1',...)
+                hour_commands.append((0, 0, {'day': str(day), 'open': open_time, 'close': close_time}))
+            if hour_commands:
+                if operation == 'update':
+                    # For updates, replace all existing records
+                    processed_fields['shop_open_hour_ids'] = [(5, 0, 0)] + hour_commands
+                else:
+                    # For create, just add new records
+                    processed_fields['shop_open_hour_ids'] = hour_commands
+                    
+        return processed_fields
 
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
         """
@@ -1078,34 +1164,26 @@ class ShopController(http.Controller):
 
         Route: POST /angkort/api/v1/shop
 
-        Parameters (form-data):
-            name (str): Shop name (required).
-            phone (str): Phone number (required).
-            customer_address (str): Shop address (required).
-            wifi_name (str, optional): WiFi network name.
-            shop_latitude (float, optional): Shop latitude.
-            shop_longitude (float, optional): Shop longitude.
-            email (str, optional): Shop email.
-
-        Returns:
-            201: Created shop details as JSON object.
-            400: If required fields are missing.
-            500: On server error.
-
-        Example Response:
-            {
-                "id": 1,
-                "name": "Shop A"
-            }
+        Supports additional fields in form-data or JSON string fields:
+        - shop_banner: file upload (image)
+        - shop_wifi_ids: JSON array of {"name": "..", "password": ".."}
+        - shop_open_hour_ids: JSON array of {"day": "0", "open": "09:00", "close": "17:00"}
         """
         try:
             data = request.httprequest.form
+            files = request.httprequest.files
+
+            # only allow base partner fields from PARTNER_FIELDS
             create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
-            
+
+            # Handle shop related fields using helper method
+            shop_related_fields = self._handle_shop_related_fields(data, files, 'create')
+            create_data.update(shop_related_fields)
+
             # Validate required fields
             required_fields = ['name', 'phone', 'customer_address']
             missing_fields = [field for field in required_fields if not create_data.get(field)]
-            
+
             if missing_fields:
                 errors = []
                 for field in missing_fields:
@@ -1115,17 +1193,23 @@ class ShopController(http.Controller):
                         errors.append({"name": "phone", "message": "Phone number is required"})
                     elif field == 'customer_address':
                         errors.append({"name": "customer_address", "message": "Shop address is required"})
-                
+
                 return Response(json.dumps({
                     "status": "error",
                     "message": "Failed to create shop",
                     "statusCode": "400",
                     "errors": errors
                 }), status=400, content_type='application/json')
-            
+
+            # Create partner (shop). Use create_company context to mark as company/store.
             shop = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
             if shop:
-                request.env.user.partner_id.update({'parent_id': shop.id})
+                # set the current user's partner parent to the created shop
+                try:
+                    request.env.user.partner_id.update({'parent_id': shop.id})
+                except Exception:
+                    pass
+
             resp = {'id': shop.id, 'name': shop.name}
             return Response(json.dumps(resp), status=201, content_type='application/json')
         except Exception as e:
@@ -1147,6 +1231,9 @@ class ShopController(http.Controller):
         Parameters (form-data):
             shop_id (int): The ID of the shop.
             (Any updatable shop field)
+            shop_banner: file upload (image)
+            shop_wifi_ids: JSON array of {"name": "..", "password": ".."}
+            shop_open_hour_ids: JSON array of {"day": "0", "open": "09:00", "close": "17:00"}
 
         Returns:
             200: Success message.
@@ -1155,7 +1242,79 @@ class ShopController(http.Controller):
             500: On server error.
         """
         try:
+            import json
+            import base64
+
             data = request.httprequest.form
+            files = request.httprequest.files
+
+            # only allow base partner fields from PARTNER_FIELDS
+            update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
+
+            # Handle banner file upload (Image field expects base64 string)
+            banner_file = files.get('shop_banner')
+            if banner_file:
+                try:
+                    content = banner_file.read()
+                    if content:
+                        update_fields['shop_banner'] = base64.b64encode(content).decode('utf-8')
+                except Exception:
+                    # ignore banner if something goes wrong reading it
+                    pass
+
+            # Helper to parse possible JSON payload passed as string
+            def _parse_json_field(val):
+                if not val:
+                    return None
+                if isinstance(val, (list, tuple)):
+                    return val
+                try:
+                    return json.loads(val)
+                except Exception:
+                    return None
+
+            # shop_wifi_ids: accept JSON array and convert to One2many commands
+            wifi_payload = data.get('shop_wifi_ids') or kw.get('shop_wifi_ids')
+            wifi_list = _parse_json_field(wifi_payload)
+            if wifi_list:
+                wifi_commands = []
+                for wifi in wifi_list:
+                    if not isinstance(wifi, dict):
+                        continue
+                    name = wifi.get('name')
+                    password = wifi.get('password')
+                    if not name or not password:
+                        continue
+                    wifi_commands.append((0, 0, {'name': name, 'password': password}))
+                if wifi_commands:
+                    update_fields['shop_wifi_ids'] = wifi_commands
+
+            # shop_open_hour_ids: accept JSON array and convert to One2many commands
+            hour_payload = data.get('shop_open_hour_ids') or kw.get('shop_open_hour_ids')
+            hour_list = _parse_json_field(hour_payload)
+            if hour_list:
+                hour_commands = []
+                for hour in hour_list:
+                    if not isinstance(hour, dict):
+                        continue
+                    day = hour.get('day')
+                    open_time = hour.get('open')
+                    close_time = hour.get('close')
+                    if day is None:
+                        continue
+                    # ensure day is stored as string (model expects selection string values like '0','1',...)
+                    hour_commands.append((0, 0, {'day': str(day), 'open': open_time, 'close': close_time}))
+                if hour_commands:
+                    update_fields['shop_open_hour_ids'] = hour_commands
+
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update shop",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
                 return Response(json.dumps({
@@ -1164,14 +1323,7 @@ class ShopController(http.Controller):
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
                 }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
-            if not update_fields:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update shop",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+
             shop.write(update_fields)
             return Response(json.dumps({'message': f'Shop with ID {shop_id} updated successfully'}), status=200, content_type='application/json')
         except Exception as e:
@@ -1193,6 +1345,9 @@ class ShopController(http.Controller):
         Parameters (form-data):
             shop_id (int): The ID of the shop.
             (Any updatable shop field)
+            shop_banner: file upload (image)
+            shop_wifi_ids: JSON array of {"name": "..", "password": ".."}
+            shop_open_hour_ids: JSON array of {"day": "0", "open": "09:00", "close": "17:00"}
 
         Returns:
             200: Success message.
@@ -1202,6 +1357,23 @@ class ShopController(http.Controller):
         """
         try:
             data = request.httprequest.form
+            files = request.httprequest.files
+
+            # only allow base partner fields from PARTNER_FIELDS
+            update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
+
+            # Handle shop related fields using helper method
+            shop_related_fields = self._handle_shop_related_fields(data, files, 'update')
+            update_fields.update(shop_related_fields)
+
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch shop",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
                 return Response(json.dumps({
@@ -1210,14 +1382,7 @@ class ShopController(http.Controller):
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
                 }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
-            if not update_fields:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch shop",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+
             shop.write(update_fields)
             return Response(json.dumps({'message': f'Shop with ID {shop_id} patched successfully'}), status=200, content_type='application/json')
         except Exception as e:
@@ -1854,7 +2019,7 @@ class ShopController(http.Controller):
                 'wifi_name': create_data.get('wifi_name', ''),
                 'shop_latitude': create_data.get('shop_latitude', 0.0),
                 'shop_longitude': create_data.get('shop_longitude', 0.0),
-                'email': create_data.get('email', ''),
+                               'email': create_data.get('email', ''),
             }])
             if request.env.user.id != request.env.ref('base.public_user').id:
                 request.env.user.partner_id.update({'parent_id': shop_data.id})
@@ -2019,15 +2184,17 @@ class ShopController(http.Controller):
                 order=order_clause
             )
             
-            data = []
+            products_data = []
             for product in products:
-                tmp_data = self._product_to_dict(product)
-                tmp_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'radio')]
-                tmp_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(lambda x: x.attribute_id.display_type == 'multi')]
-                tmp_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
-                tmp_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
-                tmp_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
-                data.append(tmp_data)
+                product_data = self._product_to_dict(product)
+                product_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(
+                    lambda x: x.attribute_id.display_type == 'radio')]
+                product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
+                    lambda x: x.attribute_id.display_type == 'multi')]
+                product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+                product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+                product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+                products_data.append(product_data)
             
             # Build keyword metadata
             keyword_meta = {
@@ -2045,9 +2212,11 @@ class ShopController(http.Controller):
                 keyword_meta["filter"]["price_max"] = float(filter_price_max)
             if filter_has_variants:
                 keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
+            if filter_shop:
+                keyword_meta["filter"]["shop"] = int(filter_shop)
             
             response = {
-                'data': data,
+                'data': products_data,
                 'meta': {
                     'pagination': {
                         'page': page,
@@ -2058,436 +2227,35 @@ class ShopController(http.Controller):
                     'keyword': keyword_meta
                 }
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({
+                'error': 'Error retrieving products',
+                'message': str(e)
+            }, status=500)
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
-    def product_detail(self, shop_id, product_id, **kw):
+    @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http", cors="*")
+    def global_sale_order(self, **kw):
         """
-        Retrieve details for a specific product in a shop.
+        Retrieve a paginated list of all sale orders (global, not user-specific) with search, filter, and sort capabilities.
 
-        Route: GET /angkort/api/v1/shop/<shop_id>/product/<product_id>
-
-        Parameters:
-            shop_id (int): The ID of the shop.
-            product_id (int): The ID of the product.
-
-        Returns:
-            200: Product details as a JSON object.
-            404: If the product is not found.
-            500: On server error.
-
-        Example Response:
-            {
-                "data": {
-                    "id": 1,
-                    "name": "Product A",
-                    "code": "PROD001",
-                    "description": "Product description",
-                    "sale_price": 99.99,
-                    "image": "base64_image_data",
-                    "category": {
-                        "id": 1,
-                        "name": "Electronics"
-                    },
-                    "options": [...],
-                    "choices": [...],
-                    "createdAt": "2024-03-06T13:42:05.098Z",
-                    "updatedAt": "2024-03-06T13:42:05.098Z",
-                    "publishedAt": "2024-03-06T13:42:05.103Z"
-                }
-            }
-        """
-        try:
-            product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
-            if not product:
-                return Response(json.dumps({'error': 'Product not found'}), status=404, content_type='application/json')
-            product_data = self._get_product_details(product)
-            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
-            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
-            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
-            response = {
-                'data': product_data
-            }
-            return Response(json.dumps(response), status=200, content_type='application/json')
-        except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
-    @verify_ownership(entity_type='shop')
-    def product_create(self, shop_id, **kw):
-        """
-        Create a new product for a given shop.
-
-        Route: POST /angkort/api/v1/shop/<shop_id>/product
-
-        Parameters (form-data):
-            shop_id (int): The ID of the shop.
-            name (str): Name of the product (required).
-            price (float): Price of the product (required).
-            category_id (int): Category ID (required).
-            description (str, optional): Product description.
-            barcode (str, optional): Product barcode.
-            qty_available (float, optional): Initial stock quantity.
-            image (file, optional): Product image.
-
-        Returns:
-            201: Created product details as a JSON object.
-            400: If required fields are missing.
-            404: If the shop or category is not found.
-            500: On server error.
-
-        Example Response:
-            {
-                "id": 1,
-                "name": "Product A",
-                "price": 10.0,
-                "category_id": 2
-            }
-        """
-        try:
-            data = request.httprequest.form
-            image_file = request.httprequest.files.get('image')
-            required_fields = ['name', 'price', 'category_id']
-            missing_fields = [field for field in required_fields if field not in data]
-            if missing_fields:
-                errors = []
-                for field in missing_fields:
-                    if field == 'name':
-                        errors.append({"name": "name", "message": "Product name is required"})
-                    elif field == 'price':
-                        errors.append({"name": "price", "message": "Product price is required"})
-                    elif field == 'category_id':
-                        errors.append({"name": "category_id", "message": "Category ID is required"})
-                
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to create product",
-                    "statusCode": "400",
-                    "errors": errors
-                }), status=400, content_type='application/json')
-            
-            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
-            if not shop:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to create product",
-                    "statusCode": "404",
-                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
-            
-            category = request.env['product.category'].sudo().search([('id', '=', data.get('category_id'))], limit=1)
-            if not category:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to create product",
-                    "statusCode": "404",
-                    "errors": [{"name": "category_id", "message": f"Category with ID {data.get('category_id')} not found"}]
-                }), status=404, content_type='application/json')
-            
-            product_data = {
-                'name': data.get('name'),
-                'list_price': data.get('price'),
-                'categ_id': category.id,
-                'shop_id': shop_id,
-            }
-            optional_fields = ['description', 'barcode', 'qty_available']
-            for field in optional_fields:
-                if field in data:
-                    product_data[field] = data.get(field)
-            product = request.env['product.product'].with_user(request.env.user).create(product_data)
-            if image_file:
-                image_data = image_file.read()
-                encoded_image = base64.b64encode(image_data)
-                product.write({'image_1920': encoded_image})
-            # (Attributes/values logic omitted for brevity, can be added as needed)
-            resp = {
-                'id': product.id,
-                'name': product.name,
-                'price': product.list_price,
-                'category_id': product.categ_id.id
-            }
-            return Response(json.dumps(resp), status=201, content_type='application/json')
-        except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to create product",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
-    @verify_ownership(entity_type='product')
-    def product_update(self, shop_id, product_id, **kw):
-        """
-        Update an existing product in a shop.
-
-        Route: PUT /angkort/api/v1/shop/<shop_id>/product/<product_id>
-
-        Parameters (form-data):
-            shop_id (int): The ID of the shop.
-            product_id (int): The ID of the product.
-            name (str, optional): New name.
-            list_price (float, optional): New price.
-            categ_id (int, optional): New category ID.
-            description (str, optional): New description.
-            barcode (str, optional): New barcode.
-            qty_available (float, optional): New stock quantity.
-            image (file, optional): New product image.
-
-        Returns:
-            200: Success message.
-            400: If no valid fields to update.
-            404: If the product is not found.
-            500: On server error.
-        """
-        try:
-            data = request.httprequest.form
-            image_file = request.httprequest.files.get('image')
-            product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
-            if not product:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update product",
-                    "statusCode": "404",
-                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
-                }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in ['name', 'list_price', 'categ_id', 'description', 'barcode', 'qty_available']}
-            if image_file:
-                image_data = image_file.read()
-                encoded_image = base64.b64encode(image_data)
-                update_fields['image_1920'] = encoded_image
-            if not update_fields:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update product",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
-            product.write(update_fields)
-            return Response(json.dumps({'message': f'Product with ID {product_id} updated successfully'}), status=200, content_type='application/json')
-        except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to update product",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
-    @verify_ownership(entity_type='product')
-    def product_patch(self, shop_id, product_id, **kw):
-        """
-        Partially update an existing product in a shop.
-
-        Route: PATCH /angkort/api/v1/shop/<shop_id>/product/<product_id>
-
-        Parameters (form-data):
-            shop_id (int): The ID of the shop.
-            product_id (int): The ID of the product.
-            (Any updatable product field)
-
-        Returns:
-            200: Success message.
-            400: If no valid fields to update.
-            404: If the product is not found.
-            500: On server error.
-        """
-        try:
-            data = request.httprequest.form
-            image_file = request.httprequest.files.get('image')
-            product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
-            if not product:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch product",
-                    "statusCode": "404",
-                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
-                }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in ['name', 'list_price', 'categ_id', 'description', 'barcode', 'qty_available']}
-            if image_file:
-                image_data = image_file.read()
-                encoded_image = base64.b64encode(image_data)
-                update_fields['image_1920'] = encoded_image
-            if not update_fields:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch product",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
-            product.write(update_fields)
-            return Response(json.dumps({'message': f'Product with ID {product_id} patched successfully'}), status=200, content_type='application/json')
-        except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to patch product",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
-    @verify_ownership(entity_type='product')
-    def product_delete(self, shop_id, product_id, **kw):
-        """
-        Delete a product from a shop.
-
-        Route: DELETE /angkort/api/v1/shop/<shop_id>/product/<product_id>
-
-        Parameters:
-            shop_id (int): The ID of the shop.
-            product_id (int): The ID of the product.
-
-        Returns:
-            204: On successful deletion.
-            404: If the product is not found.
-            500: On server error.
-        """
-        try:
-            product = request.env['product.product'].sudo().search([('id', '=', product_id), ('shop_id', '=', shop_id)], limit=1)
-            if not product:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to delete product",
-                    "statusCode": "404",
-                    "errors": [{"name": "product_id", "message": f"Product with ID {product_id} not found"}]
-                }), status=404, content_type='application/json')
-            product.unlink()
-            return Response(status=204)
-        except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to delete product",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
-
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/calculate-price", auth="angkit", type="http", csrf=False, cors="*")
-    def calculate_product_price(self, shop_id, product_id):
-        """
-        Calculate the total price of a product including its variants.
-
-        Route: POST /angkort/api/v1/shop/<shop_id>/product/<product_id>/calculate-price
-
-        Parameters (JSON body):
-            quantity (int): Quantity of the product (required).
-            variants (list, optional): List of selected variants, each with attribute_id and value_id.
-
-        Returns:
-            200: Price calculation details.
-            400: If required fields are missing or invalid.
-            404: If the product or variant is not found.
-            500: On server error.
-
-        Example Response:
-            {
-                "status": "success",
-                "price_details": {
-                    "base_price": 99.99,
-                    "variant_prices": [...],
-                    "total_variant_price": 7.50,
-                    "quantity": 2,
-                    "subtotal": 199.98,
-                    "total": 214.98
-                }
-            }
-        """
-        try:
-            data = request.get_json_data()
-
-            # Validate required fields
-            if 'quantity' not in data:
-                return {
-                    'status': 'error',
-                    'message': 'Quantity is required'
-                }
-
-            # Validate quantity is positive
-            quantity = int(data['quantity'])
-            if quantity <= 0:
-                return {
-                    'status': 'error',
-                    'message': 'Quantity must be greater than 0'
-                }
-
-            # Get product
-            product = request.env['product.product'].sudo().search([
-                ('id', '=', product_id),
-                ('shop_id', '=', shop_id)
-            ], limit=1)
-
-            if not product:
-                return {
-                    'status': 'error',
-                    'message': 'Product not found'
-                }
-
-            # Initialize price details
-            base_price = product.list_price
-            variant_prices = []
-            total_variant_price = 0.0
-
-            # Calculate variant prices if provided
-            if 'variants' in data and isinstance(data['variants'], list):
-                for variant in data['variants']:
-                    if not all(k in variant for k in ['attribute_id', 'value_id']):
-                        continue
-
-                    # Get attribute and value
-                    attribute = request.env['product.attribute'].sudo().browse(variant['attribute_id'])
-                    value = request.env['product.attribute.value'].sudo().browse(variant['value_id'])
-
-                    if not attribute.exists() or not value.exists():
-                        continue
-
-                    # Add variant price
-                    variant_price = value.price_extra
-                    variant_prices.append({
-                        'attribute_name': attribute.name,
-                        'value_name': value.name,
-                        'price': variant_price
-                    })
-                    total_variant_price += variant_price
-
-            # Calculate totals
-            subtotal = base_price * quantity
-            total = (base_price + total_variant_price) * quantity
-
-            return {
-                'status': 'success',
-                'price_details': {
-                    'base_price': base_price,
-                    'variant_prices': variant_prices,
-                    'total_variant_price': total_variant_price,
-                    'quantity': quantity,
-                    'subtotal': subtotal,
-                    'total': total
-                }
-            }
-
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Error calculating price: {str(e)}'
-            }
-
-    @http.route(f"{BASE_URL}/industries", methods=['GET'], auth="public", type="http", cors="*")
-    def industries(self, **kw):
-        """
-        Retrieve a paginated list of all available industries with search, filter, and sort capabilities.
-
-        Route: GET /angkort/api/v1/industries
+        Route: GET /angkort/api/v1/sale
 
         Query Parameters:
             page (int, optional): Page number for pagination (default: 1).
             limit (int, optional): Number of items per page (default: 20, max: 100).
-            search (str, optional): Search term for industry name or full name.
-            sort (str, optional): Sort field (id, name, full_name, create_date). Default: name.
-            order (str, optional): Sort order (asc, desc). Default: asc.
+            search (str, optional): Search term for order name or customer name.
+            sort (str, optional): Sort field (id, name, date_order, amount_total, create_date). Default: date_order.
+            order (str, optional): Sort order (asc, desc). Default: desc.
+            filter_state (str, optional): Filter by order state (draft, sent, sale, done, cancel).
+            filter_date_from (str, optional): Filter orders from date (YYYY-MM-DD).
+            filter_date_to (str, optional): Filter orders to date (YYYY-MM-DD).
+            filter_amount_min (float, optional): Minimum amount filter.
+            filter_amount_max (float, optional): Maximum amount filter.
+            filter_customer (int, optional): Filter by customer ID.
 
         Returns:
-            200: Paginated list of industries with pagination metadata.
+            200: Paginated list of all sale orders.
             500: On server error.
 
         Example Response:
@@ -2495,8 +2263,11 @@ class ShopController(http.Controller):
                 "data": [
                     {
                         "id": 1,
-                        "full_name": "Information Technology",
-                        "name": "IT",
+                        "name": "SO001",
+                        "partner_name": "Customer A",
+                        "date_order": "2024-01-01",
+                        "amount_total": 100.0,
+                        "state": "sale",
                         "createdAt": "2024-03-06T13:42:05.098Z",
                         "updatedAt": "2024-03-06T13:42:05.098Z",
                         "publishedAt": "2024-03-06T13:42:05.103Z"
@@ -2510,9 +2281,17 @@ class ShopController(http.Controller):
                         "total": 2
                     },
                     "keyword": {
-                        "search": "technology",
-                        "sort": "name",
-                        "order": "asc"
+                        "search": "SO001",
+                        "sort": "date_order",
+                        "order": "desc",
+                        "filter": {
+                            "state": "sale",
+                            "date_from": "2024-01-01",
+                            "date_to": "2024-12-31",
+                            "amount_min": 50.0,
+                            "amount_max": 200.0,
+                            "customer": 1
+                        }
                     }
                 }
             }
@@ -2522,17 +2301,23 @@ class ShopController(http.Controller):
             page = int(request.httprequest.args.get('page', 1))
             limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
             search = request.httprequest.args.get('search', '').strip()
-            sort = request.httprequest.args.get('sort', 'name')
-            order = request.httprequest.args.get('order', 'asc').lower()
+            sort = request.httprequest.args.get('sort', 'date_order')
+            order = request.httprequest.args.get('order', 'desc').lower()
+            filter_state = request.httprequest.args.get('filter_state', '').strip()
+            filter_date_from = request.httprequest.args.get('filter_date_from', '').strip()
+            filter_date_to = request.httprequest.args.get('filter_date_to', '').strip()
+            filter_amount_min = request.httprequest.args.get('filter_amount_min', '').strip()
+            filter_amount_max = request.httprequest.args.get('filter_amount_max', '').strip()
+            filter_customer = request.httprequest.args.get('filter_customer', '').strip()
             
             # Validate sort field
-            valid_sort_fields = {'id', 'name', 'full_name', 'create_date'}
+            valid_sort_fields = {'id', 'name', 'date_order', 'amount_total', 'create_date'}
             if sort not in valid_sort_fields:
-                sort = 'name'
+                sort = 'date_order'
             
             # Validate order
             if order not in {'asc', 'desc'}:
-                order = 'asc'
+                order = 'desc'
             
             # Build domain
             domain = []
@@ -2542,48 +2327,108 @@ class ShopController(http.Controller):
                 search_domain = [
                     '|',
                     ('name', 'ilike', search),
-                    ('full_name', 'ilike', search)
+                    ('partner_id.name', 'ilike', search)
                 ]
                 domain = search_domain
             
+            # Add filters
+            if filter_state:
+                valid_states = ['draft', 'sent', 'sale', 'done', 'cancel']
+                if filter_state in valid_states:
+                    domain.append(('state', '=', filter_state))
+            
+            if filter_date_from:
+                try:
+                    from datetime import datetime
+                    date_from = datetime.strptime(filter_date_from, '%Y-%m-%d').date()
+                    domain.append(('date_order', '>=', date_from))
+                except ValueError:
+                    pass
+            
+            if filter_date_to:
+                try:
+                    from datetime import datetime
+                    date_to = datetime.strptime(filter_date_to, '%Y-%m-%d').date()
+                    domain.append(('date_order', '<=', date_to))
+                except ValueError:
+                    pass
+            
+            if filter_amount_min:
+                try:
+                    amount_min = float(filter_amount_min)
+                    domain.append(('amount_total', '>=', amount_min))
+                except ValueError:
+                    pass
+            
+            if filter_amount_max:
+                try:
+                    amount_max = float(filter_amount_max)
+                    domain.append(('amount_total', '<=', amount_max))
+                except ValueError:
+                    pass
+            
+            if filter_customer:
+                try:
+                    customer_id = int(filter_customer)
+                    domain.append(('partner_id', '=', customer_id))
+                except ValueError:
+                    pass
+            
             # Calculate pagination
             offset = (page - 1) * limit
-            total_count = request.env['res.partner.industry'].sudo().search_count(domain)
+            total_count = request.env['sale.order'].sudo().search_count(domain)
             page_count = (total_count + limit - 1) // limit
             page = min(max(1, page), page_count) if page_count > 0 else 1
             
             # Build order clause
             order_clause = f"{sort} {order}"
             
-            # Fetch industries
-            industries = request.env['res.partner.industry'].sudo().search(
+            # Fetch orders
+            orders = request.env['sale.order'].sudo().search(
                 domain,
                 limit=limit,
                 offset=offset,
                 order=order_clause
             )
             
-            industries_data = []
-            for industry in industries:
-                industry_data = {
-                    'id': industry.id,
-                    'full_name': getattr(industry, 'full_name', industry.name),
-                    'name': industry.name,
-                    'createdAt': industry.create_date.isoformat() if industry.create_date else None,
-                    'updatedAt': industry.write_date.isoformat() if industry.write_date else None,
-                    'publishedAt': industry.create_date.isoformat() if industry.create_date else None
+            orders_data = []
+            for order in orders:
+                order_data = {
+                    'id': order.id,
+                    'name': order.name,
+                    'partner_name': order.partner_id.name,
+                    'date_order': order.date_order.strftime('%Y-%m-%d') if order.date_order else '',
+                    'amount_total': order.amount_total,
+                    'state': order.state,
+                    'createdAt': order.create_date.isoformat() if order.create_date else None,
+                    'updatedAt': order.write_date.isoformat() if order.write_date else None,
+                    'publishedAt': order.create_date.isoformat() if order.create_date else None
                 }
-                industries_data.append(industry_data)
+                orders_data.append(order_data)
             
             # Build keyword metadata
             keyword_meta = {
                 "search": search if search else None,
                 "sort": sort,
-                "order": order
+                "order": order,
+                "filter": {}
             }
             
+            if filter_state:
+                keyword_meta["filter"]["state"] = filter_state
+            if filter_date_from:
+                keyword_meta["filter"]["date_from"] = filter_date_from
+            if filter_date_to:
+                keyword_meta["filter"]["date_to"] = filter_date_to
+            if filter_amount_min:
+                keyword_meta["filter"]["amount_min"] = float(filter_amount_min)
+            if filter_amount_max:
+                keyword_meta["filter"]["amount_max"] = float(filter_amount_max)
+            if filter_customer:
+                keyword_meta["filter"]["customer"] = int(filter_customer)
+            
             response = {
-                'data': industries_data,
+                'data': orders_data,
                 'meta': {
                     'pagination': {
                         'page': page,
@@ -2597,46 +2442,41 @@ class ShopController(http.Controller):
             return request.make_json_response(response, status=200)
         except Exception as e:
             return request.make_json_response({
-                'error': 'Error retrieving industries',
+                'error': 'Error retrieving sale orders',
                 'message': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/login", auth="public", type="http", csrf=False, cors="*", methods=["POST"])
-    def login(self):
+    @http.route(f"{BASE_URL}/order", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
+    def global_new_order(self):
         """
-        Authenticate user credentials and generate an API access token.
+        Create a new sale order (global order creation).
 
-        Route: POST /angkort/api/v1/login
+        Route: POST /angkort/api/v1/order
 
         Parameters (JSON body):
-            username (str): User's login name (required).
-            password (str): User's password (required).
+            partner_id (int): Customer ID (required).
+            order_lines (list): List of order line items, each containing:
+                - product_id (int): Product ID (required).
+                - quantity (float): Quantity (required).
+                - price_unit (float, optional): Unit price.
 
         Returns:
-            200: Authentication success with token and user details.
+            201: Created order details.
             400: If required fields are missing.
-            401: If authentication fails.
             500: On server error.
 
         Example Response:
             {
                 "status": true,
-                "message": "Login successful",
+                "message": "Order created successfully",
                 "data": {
-                    "token_key": "a1b2c3d4e5f6",
-                    "user_id": 1,
-                    "username": "admin"
+                    "order_id": 1,
+                    "order_name": "SO001"
                 }
             }
         """
         try:
-            # Get JSON data from request
-            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
-                data = request.get_json_data()
-            else:
-                data = dict(request.params)
-
-            # Validate required fields
+            data = request.get_json_data()
             if not data:
                 return request.make_json_response({
                     'status': False,
@@ -2644,460 +2484,426 @@ class ShopController(http.Controller):
                     'error': 'Missing request body'
                 }, status=400)
 
-            username = data.get('username')
-            password = data.get('password')
-
-            if not username or not password:
+            if 'partner_id' not in data or 'order_lines' not in data:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Missing required fields',
-                    'error': 'username and password are required'
+                    'error': 'partner_id and order_lines are required'
                 }, status=400)
 
-            # Authenticate the user
-            user = request.env['res.users'].sudo().search([('login', '=', username)], limit=1)
-            if not user:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Invalid username or password'
-                }, status=401)
-
-            # Verify password using session authentication
-            try:
-                db = config['db_name']
-                credential = {'login': username, 'password': password, 'type': 'password'}
-                uid = request.session.authenticate(db, credential)
-
-                if not uid:
-                    return request.make_json_response({
-                        'status': False,
-                        'message': 'Authentication failed',
-                        'error': 'Invalid username or password'
-                    }, status=401)
-
-                # Generate tokens
-                access_token = self._generate_token(user.id, 'access', minutes=30)
-                refresh_token = self._generate_token(user.id, 'refresh', days=7)
-
-                # Store tokens in the database
-                token_model = request.env['res.user.token'].sudo()
-                token_model.create_token(
-                    user_id=user.id,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    access_expiry=fields.Datetime.now() + timedelta(minutes=30),
-                    refresh_expiry=fields.Datetime.now() + timedelta(days=7)
-                )
-
-                return request.make_json_response({
-                    'status': True,
-                    'message': 'Login successful',
-                    'data': {
-                        'access_token': access_token,
-                        'refresh_token': refresh_token,
-                        'token_type': 'Bearer',
-                        'expires_in': 1800,  # 30 minutes in seconds
-                        'user_id': user.id,
-                        'username': user.login
-                    }
-                }, status=200)
-
-            except Exception as auth_error:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': str(auth_error)
-                }, status=401)
-
-        except Exception as e:
-            return request.make_json_response({
-                'status': False,
-                'message': 'Error during login',
-                'error': str(e)
-            }, status=500)
-
-    @http.route(f"{BASE_URL}/logout", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
-    def logout(self):
-        """
-        Logout user and invalidate their access token.
-
-        Route: POST /angkort/api/v1/logout
-
-        Headers:
-            Authorization: Bearer <access_token> (required)
-
-        Returns:
-            200: Logout successful.
-            401: If authentication fails or token is invalid.
-            500: On server error.
-
-        Example Response:
-            {
-                "status": true,
-                "message": "Logout successful"
-            }
-        """
-        try:
-            # Get the current user from the authenticated session
-            user = request.env.user
-
-            if not user or user.id == request.env.ref('base.public_user').id:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication required',
-                    'error': 'No valid user session'
-                }, status=401)
-
-            # Get the authorization header
-            auth_header = request.httprequest.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Invalid authorization header',
-                    'error': 'Bearer token required'
-                }, status=401)
-
-            # Extract the token
-            access_token = auth_header[7:]  # Remove 'Bearer ' prefix
-
-            # Hash the token for database search (same as create_token method)
-            import hashlib
-            hashed_access_token = hashlib.sha256(access_token.encode()).hexdigest()
-
-            # Find and invalidate the token
-            token_model = request.env['res.user.token'].sudo()
-            token_record = token_model.search([
-                ('user_id', '=', user.id),
-                ('access_token', '=', hashed_access_token),
-                ('active', '=', True)
-            ], limit=1)
-
-            if token_record:
-                # Deactivate the token
-                token_record.write({
-                    'active': False,
-                    'deactivated_at': fields.Datetime.now()
+            # Create order lines
+            order_lines = []
+            for line in data['order_lines']:
+                if 'product_id' not in line or 'quantity' not in line:
+                    continue
+                order_line = Command.create({
+                    'product_id': line['product_id'],
+                    'product_uom_qty': line['quantity'],
+                    'price_unit': line.get('price_unit', 0.0)
                 })
+                order_lines.append(order_line)
 
-                return request.make_json_response({
-                    'status': True,
-                    'message': 'Logout successful'
-                }, status=200)
-            else:
+            if not order_lines:
                 return request.make_json_response({
                     'status': False,
-                    'message': 'Token not found',
-                    'error': 'Invalid or expired token'
-                }, status=401)
-
-        except Exception as e:
-            return request.make_json_response({
-                'status': False,
-                'message': 'Error during logout',
-                'error': str(e)
-            }, status=500)
-
-    @http.route(f"{BASE_URL}/refresh", auth="public", type="http", csrf=False, cors="*", methods=["POST"])
-    def refresh_token(self):
-        """
-        Generate a new access token using a valid refresh token.
-
-        Route: POST /angkort/api/v1/refresh
-
-        Parameters (JSON body):
-            refresh_token (str): The refresh token to generate new access token (required).
-
-        Returns:
-            200: New access token generated successfully.
-            400: If refresh token is missing or invalid.
-            401: If refresh token is expired or invalid.
-            500: On server error.
-
-        Example Request:
-            {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            }
-
-        Example Response:
-            {
-                "status": true,
-                "message": "Token refreshed successfully",
-                "data": {
-                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                    "token_type": "Bearer",
-                    "expires_in": 1800,
-                    "user_id": 1,
-                    "username": "admin"
-                }
-            }
-        """
-        try:
-            # Get JSON data from request
-            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
-                data = request.get_json_data()
-            else:
-                data = dict(request.params)
-
-            # Validate required fields
-            if not data:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'No data provided',
-                    'error': 'Missing request body'
+                    'message': 'No valid order lines',
+                    'error': 'At least one valid order line is required'
                 }, status=400)
 
-            refresh_token = data.get('refresh_token')
-            if not refresh_token:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Missing required field',
-                    'error': 'refresh_token is required'
-                }, status=400)
-
-            # Validate the refresh token and get user
-            user = self._get_user_from_token(refresh_token, 'refresh')
-            if not user:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Invalid refresh token',
-                    'error': 'Refresh token is expired or invalid'
-                }, status=401)
-
-            # Generate new access token
-            new_access_token = self._generate_token(user.id, 'access', minutes=30)
-
-            # Store the new token in the database
-            token_model = request.env['res.user.token'].sudo()
-            token_model.create_token(
-                user_id=user.id,
-                access_token=new_access_token,
-                refresh_token=refresh_token,  # Keep the same refresh token
-                access_expiry=fields.Datetime.now() + timedelta(minutes=30),
-                refresh_expiry=fields.Datetime.now() + timedelta(days=7)  # Keep refresh expiry unchanged
-            )
+            # Create sale order
+            order = request.env['sale.order'].sudo().create({
+                'partner_id': data['partner_id'],
+                'order_line': order_lines
+            })
 
             return request.make_json_response({
                 'status': True,
-                'message': 'Token refreshed successfully',
+                'message': 'Order created successfully',
                 'data': {
-                    'access_token': new_access_token,
-                    'token_type': 'Bearer',
-                    'expires_in': 1800,  # 30 minutes in seconds
-                    'user_id': user.id,
-                    'username': user.login
+                    'order_id': order.id,
+                    'order_name': order.name
                 }
-            }, status=200)
-
+            }, status=201)
         except Exception as e:
             return request.make_json_response({
                 'status': False,
-                'message': 'Error refreshing token',
+                'message': 'Error creating order',
                 'error': str(e)
             }, status=500)
 
-    @http.route(f"{BASE_URL}/validate", auth="public", type="http", csrf=False, cors="*", methods=["POST"])
-    def validate_token(self):
-        """
-        Validate an access token and return user information.
-
-        Route: POST /angkort/api/v1/validate
-
-        Parameters (JSON body):
-            access_token (str): The access token to validate (required).
-
-        Returns:
-            200: Token is valid with user information.
-            400: If access token is missing.
-            401: If access token is expired or invalid.
-            500: On server error.
-
-        Example Request:
-            {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            }
-
-        Example Response:
-            {
-                "status": true,
-                "message": "Token is valid",
-                "data": {
-                    "user_id": 1,
-                    "username": "admin",
-                    "expires_in": 1200
-                }
-            }
-        """
+    def _attribute_to_dict(self, attribute):
         try:
-            # Get JSON data from request
-            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
-                data = request.get_json_data()
-            else:
-                data = dict(request.params)
-
-            # Validate required fields
-            if not data:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'No data provided',
-                    'error': 'Missing request body'
-                }, status=400)
-
-            access_token = data.get('access_token')
-            if not access_token:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Missing required field',
-                    'error': 'access_token is required'
-                }, status=400)
-
-            # Validate the access token and get user
-            user = self._get_user_from_token(access_token, 'access')
-            if not user:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Invalid access token',
-                    'error': 'Access token is expired or invalid'
-                }, status=401)
-
-            # Get token expiry information
-            import hashlib
-            hashed_token = hashlib.sha256(access_token.encode()).hexdigest()
-            token_record = request.env['res.user.token'].sudo().search([
-                ('access_token', '=', hashed_token),
-                ('active', '=', True)
-            ], limit=1)
-
-            # Calculate remaining time
-            expires_in = 0
-            if token_record and token_record.expires_at:
-                from datetime import datetime
-                remaining = token_record.expires_at - fields.Datetime.now()
-                expires_in = max(0, int(remaining.total_seconds()))
-
-            return request.make_json_response({
-                'status': True,
-                'message': 'Token is valid',
-                'data': {
-                    'user_id': user.id,
-                    'username': user.login,
-                    'expires_in': expires_in
-                }
-            }, status=200)
-
+            return {
+                'id': attribute.id,
+                'name': attribute.name,
+                'create_variant': attribute.create_variant,
+                'display_type': attribute.display_type,
+            }
         except Exception as e:
-            return request.make_json_response({
-                'status': False,
-                'message': 'Error validating token',
-                'error': str(e)
-            }, status=500)
+            return {
+                'status': 'error',
+                'message': f'Error converting attribute to dictionary: {str(e)}',
+            }
 
-    @http.route(f"{BASE_URL}/revoke-all", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
-    def revoke_all_tokens(self):
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def variant_value_list(self, shop_id, variant_id, **kw):
         """
-        Revoke all active tokens for the authenticated user.
+        Retrieve all values for a specific product variant in a shop with search and sort capabilities.
 
-        Route: POST /angkort/api/v1/revoke-all
+        Route: GET /angkort/api/v1/shop/<shop_id>/product/<variant_id>/value
 
-        Headers:
-            Authorization: Bearer <access_token> (required)
+        Parameters:
+            shop_id (int): The ID of the shop.
+            variant_id (int): The ID of the variant.
+
+        Query Parameters:
+            search (str, optional): Search term for value name.
+            sort (str, optional): Sort field (id, name, price_extra, create_date). Default: id.
+            order (str, optional): Sort order (asc, desc). Default: asc.
 
         Returns:
-            200: All tokens revoked successfully.
-            401: If authentication fails.
+            200: List of variant values.
+            404: If the shop or attribute is not found.
             500: On server error.
 
         Example Response:
             {
-                "status": true,
-                "message": "All tokens revoked successfully",
-                "data": {
-                    "revoked_count": 3
-                }
-            }
-        """
-        try:
-            # Get the current user from the authenticated session
-            user = request.env.user
-
-            if not user or user.id == request.env.ref('base.public_user').id:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication required',
-                    'error': 'No valid user session'
-                }, status=401)
-
-            # Get the authorization header
-            auth_header = request.httprequest.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Invalid authorization header',
-                    'error': 'Bearer token required'
-                }, status=401)
-
-            # Extract the token
-            access_token = auth_header[7:]  # Remove 'Bearer ' prefix
-
-            # Validate the token belongs to the current user
-            token_user = self._get_user_from_token(access_token, 'access')
-            if not token_user or token_user.id != user.id:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Invalid token',
-                    'error': 'Token does not belong to current user'
-                }, status=401)
-
-            # Get count of active tokens before revocation
-            token_model = request.env['res.user.token'].sudo()
-            active_tokens_count = token_model.search_count([
-                ('user_id', '=', user.id),
-                ('active', '=', True)
-            ])
-
-            # Revoke all tokens
-            revoked = self._revoke_all_user_tokens(user.id)
-
-            if revoked:
-                return request.make_json_response({
-                    'status': True,
-                    'message': 'All tokens revoked successfully',
-                    'data': {
-                        'revoked_count': active_tokens_count
+                "data": [
+                    {
+                        "id": 1,
+                        "name": "Red",
+                        "extra_price": 5.0,
+                        "createdAt": "2024-03-06T13:42:05.098Z",
+                        "updatedAt": "2024-03-06T13:42:05.098Z",
+                        "publishedAt": "2024-03-06T13:42:05.103Z"
                     }
-                }, status=200)
-            else:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'No tokens to revoke',
-                    'error': 'No active tokens found for user'
-                }, status=400)
-
-        except Exception as e:
-            return request.make_json_response({
-                'status': False,
-                'message': 'Error revoking tokens',
-                'error': str(e)
-            }, status=500)
-
-    # --- CATEGORY ROUTES ---
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
-    def category_list(self, shop_id, **kw):
+                ],
+                "meta": {
+                    "keyword": {
+                        "search": "red",
+                        "sort": "name",
+                        "order": "asc"
+                    }
+                }
+            }
         """
-        Retrieve all product categories for a given shop with search and sort capabilities.
+        try:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
+                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'price_extra', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('attribute_id', '=', variant_id)]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch values
+            values = request.env['product.attribute.value'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            value_list = []
+            for value in values:
+                value_data = {
+                    'id': value.id,
+                    'name': value.name,
+                    'extra_price': value.price_extra,
+                    'createdAt': value.create_date.isoformat() if value.create_date else None,
+                    'updatedAt': value.write_date.isoformat() if value.write_date else None,
+                    'publishedAt': value.create_date.isoformat() if value.create_date else None
+                }
+                value_list.append(value_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order
+            }
+            
+            response = {
+                'data': value_list,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-        Route: GET /angkort/api/v1/shop/<shop_id>/product/category
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def variant_value_create(self, shop_id, **kw):
+        """
+        Create new variant values for a product attribute.
+
+        Route: POST /angkort/api/v1/shop/<shop_id>/product/variant/value
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            attribute_id (int): The ID of the attribute (required).
+            values (str): JSON string of values array (required).
+
+        Returns:
+            201: Success message.
+            400: If required fields are missing or invalid.
+            404: If the attribute is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            if 'attribute_id' not in data or 'values' not in data:
+                errors = []
+                if 'attribute_id' not in data:
+                    errors.append({"name": "attribute_id", "message": "Attribute ID is required"})
+                if 'values' not in data:
+                    errors.append({"name": "values", "message": "Values are required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
+            attribute = request.env['product.attribute'].sudo().browse(int(data['attribute_id']))
+            if not attribute.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "404",
+                    "errors": [{"name": "attribute_id", "message": f"Attribute with ID {data['attribute_id']} not found"}]
+                }), status=404, content_type='application/json')
+            
+            if attribute.shop_id.id != shop_id:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "attribute_id", "message": "Attribute doesn't belong to this shop"}]
+                }), status=400, content_type='application/json')
+            
+            try:
+                values_data = json.loads(data['values'])
+                if not isinstance(values_data, list):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to create variant values",
+                        "statusCode": "400",
+                        "errors": [{"name": "values", "message": "Values must be a list"}]
+                    }), status=400, content_type='application/json')
+                
+                values_to_create = [{
+                    'default_extra_price': value.get('extra_price', 0.0),
+                    'name': value['name'],
+                    'attribute_id': attribute.id,
+                } for value in values_data if 'name' in value]
+                request.env['product.attribute.value'].sudo().create(values_to_create)
+                return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
+            except json.JSONDecodeError:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "values", "message": "Invalid JSON format for values"}]
+                }), status=400, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create variant values",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_update(self, shop_id, value_id, **kw):
+        """
+        Update an existing variant value.
+
+        Route: PUT /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+            name (str, optional): New name.
+            price_extra (float, optional): New extra price.
+
+        Returns:
+            200: Success message.
+            400: If no valid fields to update.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+
+            
+            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            variant_value.write(update_fields)
+            return Response(json.dumps({'message': 'Variant value updated successfully'}), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_patch(self, shop_id, value_id, **kw):
+        """
+        Partially update an existing variant value.
+
+        Route: PATCH /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters (form-data):
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+            name (str, optional): New name.
+            price_extra (float, optional): New extra price.
+
+        Returns:
+            200: Success message.
+            400: If no valid fields to update.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
+        try:
+            data = request.httprequest.form
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+
+            
+            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            variant_value.write(update_fields)
+            return Response(json.dumps({'message': 'Variant value patched successfully'}), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_delete(self, shop_id, value_id, **kw):
+        """
+        Delete a variant value.
+
+        Route: DELETE /angkort/api/v1/shop/<shop_id>/product/variant/value/<value_id>
+
+        Parameters:
+            shop_id (int): The ID of the shop.
+            value_id (int): The ID of the variant value.
+
+        Returns:
+            204: On successful deletion.
+            403: If not authorized.
+            404: If the variant value is not found.
+            500: On server error.
+        """
+        try:
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+
+            
+            variant_value.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    # --- SHOP-SPECIFIC PRODUCT VARIANT ROUTES ---
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def variant_list(self, shop_id, **kw):
+        """
+        Retrieve all product variants for a specific shop with search, filter, and sort capabilities.
+
+        Route: GET /angkort/api/v1/shop/<shop_id>/product/variant
 
         Parameters:
             shop_id (int): The ID of the shop.
 
         Query Parameters:
-            search (str, optional): Search term for category name.
+            search (str, optional): Search term for variant name.
             sort (str, optional): Sort field (id, name, create_date). Default: id.
             order (str, optional): Sort order (asc, desc). Default: asc.
+            filter_create_variant (str, optional): Filter by create_variant type (no_variant, always).
+            filter_display_type (str, optional): Filter by display_type (multi, radio).
 
         Returns:
-            200: List of categories as JSON array.
+            200: List of product variants for the shop.
             404: If the shop is not found.
             500: On server error.
 
@@ -3106,7 +2912,9 @@ class ShopController(http.Controller):
                 "data": [
                     {
                         "id": 1,
-                        "name": "Electronics",
+                        "name": "Color",
+                        "create_variant": "always",
+                        "display_type": "radio",
                         "createdAt": "2024-03-06T13:42:05.098Z",
                         "updatedAt": "2024-03-06T13:42:05.098Z",
                         "publishedAt": "2024-03-06T13:42:05.103Z"
@@ -3114,9 +2922,13 @@ class ShopController(http.Controller):
                 ],
                 "meta": {
                     "keyword": {
-                        "search": "electronics",
+                        "search": "color",
                         "sort": "name",
-                        "order": "asc"
+                        "order": "asc",
+                        "filter": {
+                            "create_variant": "always",
+                            "display_type": "radio"
+                        }
                     }
                 }
             }
@@ -3131,6 +2943,8 @@ class ShopController(http.Controller):
             search = request.httprequest.args.get('search', '').strip()
             sort = request.httprequest.args.get('sort', 'id')
             order = request.httprequest.args.get('order', 'asc').lower()
+            filter_create_variant = request.httprequest.args.get('filter_create_variant', '').strip()
+            filter_display_type = request.httprequest.args.get('filter_display_type', '').strip()
             
             # Validate sort field
             valid_sort_fields = {'id', 'name', 'create_date'}
@@ -3142,35 +2956,53 @@ class ShopController(http.Controller):
                 order = 'asc'
             
             # Build domain
-            domain = [('shop_id', '=', shop_id)]
+            domain = [
+                ('create_uid', '=', request.env.user.id),
+                ('shop_id', '=', shop_id)
+            ]
             
             # Add search functionality
             if search:
                 domain.append(('name', 'ilike', search))
             
+            # Add filters
+            if filter_create_variant:
+                if filter_create_variant in ['no_variant', 'always']:
+                    domain.append(('create_variant', '=', filter_create_variant))
+            
+            if filter_display_type:
+                if filter_display_type in ['multi', 'radio']:
+                    domain.append(('display_type', '=', filter_display_type))
+            
             # Build order clause
             order_clause = f"{sort} {order}"
             
-            # Fetch categories
-            categories = request.env['product.category'].sudo().search(
+            # Fetch attributes
+            attributes = request.env['product.attribute'].sudo().search(
                 domain,
                 order=order_clause
             )
             
             data = []
-            for category in categories:
-                category_data = self._category_to_dict(category)
-                category_data['createdAt'] = category.create_date.isoformat() if category.create_date else None
-                category_data['updatedAt'] = category.write_date.isoformat() if category.write_date else None
-                category_data['publishedAt'] = category.create_date.isoformat() if category.create_date else None
-                data.append(category_data)
+            for attribute in attributes:
+                attribute_data = self._attribute_to_dict(attribute)
+                attribute_data['createdAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
+                attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                data.append(attribute_data)
             
             # Build keyword metadata
             keyword_meta = {
                 "search": search if search else None,
                 "sort": sort,
-                "order": order
+                "order": order,
+                "filter": {}
             }
+            
+            if filter_create_variant:
+                keyword_meta["filter"]["create_variant"] = filter_create_variant
+            if filter_display_type:
+                keyword_meta["filter"]["display_type"] = filter_display_type
             
             response = {
                 'data': data,
@@ -3182,182 +3014,301 @@ class ShopController(http.Controller):
         except Exception as e:
             return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
-    def category_create(self, shop_id, **kw):
+    def variant_create(self, shop_id, **kw):
         """
-        Create a new product category for a given shop.
+        Create a new product variant for a specific shop.
 
-        Route: POST /angkort/api/v1/shop/<shop_id>/product/category
+        Route: POST /angkort/api/v1/shop/<shop_id>/product/variant
 
         Parameters (form-data):
             shop_id (int): The ID of the shop.
-            name (str): Name of the category (required).
+            name (str): Variant name (required).
+            create_variant (str): Variant creation type (required).
+            display_type (str): Display type (required).
 
         Returns:
-            201: Created category details as JSON object.
-            400: If name is missing.
+            201: Created variant details.
+            400: If required fields are missing.
             500: On server error.
-
-        Example Response:
-            {
-                "id": 1,
-                "name": "Electronics"
-            }
         """
         try:
             data = request.httprequest.form
-            if 'name' not in data:
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            REQUIRED_FIELDS = {'create_variant', 'display_type', 'name'}
+            missing_fields = REQUIRED_FIELDS - set(data.keys())
+            
+            if missing_fields:
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Variant name is required"})
+                    elif field == 'create_variant':
+                        errors.append({"name": "create_variant", "message": "Create variant type is required"})
+                    elif field == 'display_type':
+                        errors.append({"name": "display_type", "message": "Display type is required"})
+                
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to create category",
+                    "message": "Failed to create variant",
                     "statusCode": "400",
-                    "errors": [{"name": "name", "message": "Category name is required"}]
+                    "errors": errors
                 }), status=400, content_type='application/json')
-            category = request.env['product.category'].sudo().create({
+            
+            if data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
+            if data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if request.env['product.attribute'].sudo().search_count([('name', '=', data['name']), ('shop_id', '=', shop_id)], limit=1):
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                }), status=400, content_type='application/json')
+            
+            variant_create_data = {
                 'name': data['name'],
-                'shop_id': shop_id,
-            })
-            return Response(json.dumps(self._category_to_dict(category)), status=201, content_type='application/json')
+                'create_variant': data['create_variant'],
+                'display_type': data['display_type'],
+                'shop_id': shop_id
+            }
+            if variant_create_data.get('display_type') == 'multi':
+                variant_create_data['create_variant'] = 'no_variant'
+            attribute = request.env['product.attribute'].sudo().create(variant_create_data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
-                "message": "Failed to create category",
+                "message": "Failed to create variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PUT"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
-    @verify_ownership(entity_type='category')
-    def category_update(self, shop_id, cate_id, **kw):
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_update(self, shop_id, variant_id, **kw):
         """
-        Update an existing product category in a shop.
+        Update an existing product variant for a specific shop.
 
-        Route: PUT /angkort/api/v1/shop/<shop_id>/product/category/<cate_id>
+        Route: PUT /angkort/api/v1/shop/<shop_id>/product/variant/<variant_id>
 
         Parameters (form-data):
             shop_id (int): The ID of the shop.
-            cate_id (int): The ID of the category.
-            name (str, optional): New category name.
+            variant_id (int): The ID of the variant.
+            name (str, optional): New variant name.
+            create_variant (str, optional): New variant creation type.
+            display_type (str, optional): New display type.
 
         Returns:
-            200: Updated category details as JSON object.
+            200: Updated variant details.
             400: If no valid fields to update.
-            404: If the category is not found.
+            404: If the variant is not found.
             500: On server error.
         """
         try:
             data = request.httprequest.form
-            category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
-            if not category:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to update category",
+                    "message": "Failed to update variant",
                     "statusCode": "404",
-                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
                 }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in ['name']}
-            if not update_fields:
+            
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to update category",
+                    "message": "Failed to update variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
+            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
                     "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
                 }), status=400, content_type='application/json')
-            category.write(update_fields)
-            return Response(json.dumps(self._category_to_dict(category)), status=200, content_type='application/json')
+            
+            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'name' in data and data['name'] != attribute.name:
+                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
+            if data.get('display_type') == 'multi':
+                data['create_variant'] = 'no_variant'
+            attribute.write(data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
-                "message": "Failed to update category",
+                "message": "Failed to update variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["PATCH"], cors="http://localhost:3000,https://odoo.angkot.org,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080,http://localhost:8069,http://127.0.0.1:8069", csrf=False)
-    @verify_ownership(entity_type='category')
-    def category_patch(self, shop_id, cate_id, **kw):
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_patch(self, shop_id, variant_id, **kw):
         """
-        Partially update an existing product category in a shop.
+        Partially update an existing product variant for a specific shop.
 
-        Route: PATCH /angkort/api/v1/shop/<shop_id>/product/category/<cate_id>
+        Route: PATCH /angkort/api/v1/shop/<shop_id>/product/variant/<variant_id>
 
         Parameters (form-data):
             shop_id (int): The ID of the shop.
-            cate_id (int): The ID of the category.
-            name (str, optional): New category name.
+            variant_id (int): The ID of the variant.
+            (Any updatable variant field)
 
         Returns:
-            200: Updated category details as JSON object.
+            200: Updated variant details.
             400: If no valid fields to update.
-            404: If the category is not found.
+            404: If the variant is not found.
             500: On server error.
         """
         try:
             data = request.httprequest.form
-            category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
-            if not category:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to patch category",
+                    "message": "Failed to patch variant",
                     "statusCode": "404",
-                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
                 }), status=404, content_type='application/json')
-            update_fields = {k: v for k, v in data.items() if k in ['name']}
-            if not update_fields:
+            
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to patch category",
+                    "message": "Failed to patch variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
+            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
                     "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
                 }), status=400, content_type='application/json')
-            category.write(update_fields)
-            return Response(json.dumps(self._category_to_dict(category)), status=200, content_type='application/json')
+            
+            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'name' in data and data['name'] != attribute.name:
+                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to patch variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
+            if data.get('display_type') == 'multi':
+                data['create_variant'] = 'no_variant'
+            attribute.write(data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
-                "message": "Failed to patch category",
+                "message": "Failed to patch variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
 
-    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/category/<int:cate_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
-    @verify_ownership(entity_type='category')
-    def category_delete(self, shop_id, cate_id, **kw):
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_delete(self, shop_id, variant_id, **kw):
         """
-        Delete a product category from a shop.
+        Delete a product variant from a specific shop.
 
-        Route: DELETE /angkort/api/v1/shop/<shop_id>/product/category/<cate_id>
+        Route: DELETE /angkort/api/v1/shop/<shop_id>/product/variant/<variant_id>
 
         Parameters:
             shop_id (int): The ID of the shop.
-            cate_id (int): The ID of the category.
+            variant_id (int): The ID of the variant.
 
         Returns:
             204: On successful deletion.
-            404: If the category is not found.
+            404: If the variant is not found.
             500: On server error.
         """
         try:
-            category = request.env['product.category'].sudo().search([('id', '=', cate_id), ('shop_id', '=', shop_id)], limit=1)
-            if not category:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
                 return Response(json.dumps({
                     "status": "error",
-                    "message": "Failed to delete category",
+                    "message": "Failed to delete variant",
                     "statusCode": "404",
-                    "errors": [{"name": "cate_id", "message": "Category not found"}]
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
                 }), status=404, content_type='application/json')
-            category.unlink()
+            
+            attribute = request.env['product.attribute'].sudo().search([
+                ('id', '=', variant_id),
+                ('shop_id', '=', shop_id),
+                ('create_uid', '=', request.env.user.id)
+            ], limit=1)
+            if not attribute:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            attribute.unlink()
             return Response(status=204)
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
-                "message": "Failed to delete category",
+                "message": "Failed to delete variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
 
-    # --- GLOBAL ROUTES (System-wide functionality) ---
     @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="*")
     def global_product_category(self, **kw):
         """
@@ -3631,29 +3582,17 @@ class ShopController(http.Controller):
         try:
             product = request.env['product.product'].sudo().search([('id', '=', product_id)], limit=1)
             if not product:
-                return request.make_json_response({
-                    'error': 'Product not found',
-                    'message': 'Product does not exist'
-                }, status=404)
-
-            product_data = self._product_to_dict(product)
-            product_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(
-                lambda x: x.attribute_id.display_type == 'radio')]
-            product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
-                lambda x: x.attribute_id.display_type == 'multi')]
+                return Response(json.dumps({'error': 'Product not found'}), status=404, content_type='application/json')
+            product_data = self._get_product_details(product)
             product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
             product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
             product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
-
             response = {
                 'data': product_data
             }
-            return request.make_json_response(response, status=200)
+            return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
-            return request.make_json_response({
-                'error': 'Error retrieving product',
-                'message': str(e)
-            }, status=500)
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="*")
     def global_product_variant(self, **kw):
@@ -3754,8 +3693,6 @@ class ShopController(http.Controller):
             # Fetch attributes
             attributes = request.env['product.attribute'].sudo().search(
                 domain,
-                limit=limit,
-                offset=offset,
                 order=order_clause
             )
             
