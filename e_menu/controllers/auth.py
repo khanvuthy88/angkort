@@ -58,7 +58,7 @@ class Authentication(http.Controller):
     def test(self, **kw):
         return kw
 
-    @route('/api/login', type='json',  cors="*", csrf=False, auth='none', methods=['POST'])
+    @route('/angkort/api/v1/login', type='json',  cors="*", csrf=False, auth='none', methods=['POST'])
     def login(self, **kw):
         """Login and generate tokens."""
         data = request.get_json_data()
@@ -97,7 +97,7 @@ class Authentication(http.Controller):
             "expires_in": 1800  # 30 minutes in seconds
         }
 
-    @route('/api/refresh', type='json', auth='none', methods=['POST'])
+    @route('/angkort/api/v1/refresh', type='json', cores="*", csrf=False, auth='none', methods=['POST'])
     def refresh_token(self, **kwargs):
         """
         Generate a new access token using a valid refresh token.
@@ -166,7 +166,7 @@ class Authentication(http.Controller):
             "expires_in": 1800  # 30 minutes in seconds
         }
 
-    @route('/api/logout', auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
+    @route('/angkort/api/v1/logout', auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
     def logout(self, **kwargs):
         """
         Logout a user by invalidating their access token.
