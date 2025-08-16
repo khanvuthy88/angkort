@@ -58,7 +58,7 @@ class Authentication(http.Controller):
     def test(self, **kw):
         return kw
 
-    @route('/api/login', type='json', auth='none', methods=['POST'])
+    @route('/api/login', type='json',  cors="*", csrf=False, auth='none', methods=['POST'])
     def login(self, **kw):
         """Login and generate tokens."""
         data = request.get_json_data()

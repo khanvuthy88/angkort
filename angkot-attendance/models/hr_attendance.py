@@ -19,3 +19,12 @@ class HrAttendance(models.Model):
         selection_add=[('mobile', 'Mobile')]
     )
     out_mode = fields.Selection(selection_add=[('mobile', 'Mobile')])
+
+    @api.model_create_multi
+    def create(self, values):
+        for val in values:
+            if 'in_mode' == 'mobile':
+                check_in_date = fields.Datetime.fromstring(val['check_in'])
+                val['check_in'] = check_in_date
+        return super().create(values)
+
