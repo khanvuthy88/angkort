@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
     <data>
+        <record id="e_menu_res_partner_filter" model="ir.ui.view">
+            <field name="name">e_menu_res-partner_filter</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_res_partner_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='inactive']" position="before">
+                    <filter name="filter_type_store" string="Store" domain="[('type', '=', 'store')]"/>
+                    <separator/>
+                </xpath>
+            </field>
+        </record>
         <record id="e_menu_res_partner_form" model="ir.ui.view">
             <field name="name">e_menu_res_partner_form</field>
             <field name="model">res.partner</field>

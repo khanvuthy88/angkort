@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Merchant Group -->
+    <record id="group_merchant" model="res.groups">
+        <field name="name">Merchant</field>
+    </record>
+</odoo>

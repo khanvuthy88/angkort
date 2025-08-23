@@ -5,3 +5,4 @@ from . import hr_controller
 from . import shop
 from . import telegram_webhook
 from . import auth
+from . import res_partner
