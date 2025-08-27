@@ -1239,7 +1239,12 @@ class ShopController(http.Controller):
             }
             return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return self._create_error_response(
+                message="An error occurred",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_detail(self, shop_id, **kw):
@@ -1277,7 +1282,11 @@ class ShopController(http.Controller):
                 ('type', '=', 'store')
             ], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Shop not found",
+                    status_code="404",
+                    http_status=404
+                )
             response = {
                 'data': {
                     'id': shop.id,
@@ -2381,8 +2390,7 @@ class ShopController(http.Controller):
                 keyword_meta["filter"]["price_max"] = float(filter_price_max)
             if filter_has_variants:
                 keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
-            if filter_shop:
-                keyword_meta["filter"]["shop"] = int(filter_shop)
+
             
             response = {
                 'data': products_data,
@@ -2891,6 +2899,7 @@ class ShopController(http.Controller):
                     'attribute_id': attribute.id,
                 } for value in values_data if 'name' in value]
                 request.env['product.attribute.value'].sudo().create(values_to_create)
+
                 return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
             except json.JSONDecodeError:
                 return Response(json.dumps({
@@ -3260,9 +3269,9 @@ class ShopController(http.Controller):
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=201
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3344,9 +3353,9 @@ class ShopController(http.Controller):
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=200
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3426,9 +3435,9 @@ class ShopController(http.Controller):
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=200
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -4968,9 +4977,9 @@ class ShopController(http.Controller):
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=201
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -5052,9 +5061,9 @@ class ShopController(http.Controller):
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=200
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -5134,9 +5143,9 @@ class ShopController(http.Controller):
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
             return self._create_success_response(
-                data=self._attribute_to_dict(attribute,
+                data=self._attribute_to_dict(attribute),
                 http_status=200
-            ))
+            )
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
