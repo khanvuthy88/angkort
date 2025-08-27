@@ -1491,7 +1491,11 @@ class ShopController(http.Controller):
                 }), status=404, content_type='application/json')
 
             shop.write(update_fields)
-            return Response(json.dumps({'message': f'Shop with ID {shop_id} updated successfully'}), status=200, content_type='application/json')
+            return Response(json.dumps({
+                "status": "success",
+                "message": f"Shop with ID {shop_id} updated successfully",
+                "statusCode": "200"
+            }), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -2900,7 +2904,11 @@ class ShopController(http.Controller):
                 } for value in values_data if 'name' in value]
                 request.env['product.attribute.value'].sudo().create(values_to_create)
 
-                return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
+                return Response(json.dumps({
+                    "status": "success",
+                    "message": "Attribute values created successfully",
+                    "statusCode": "201"
+                }), status=201, content_type='application/json')
             except json.JSONDecodeError:
                 return Response(json.dumps({
                     "status": "error",
