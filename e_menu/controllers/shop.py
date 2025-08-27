@@ -1,14 +1,8 @@
 import base64
 import json
-import re
-import uuid
-from datetime import timedelta
-import requests
 from odoo import http, Command, fields, _
 from odoo.http import request, Response
 from odoo.tools import config
-from collections import defaultdict
-from werkzeug.exceptions import NotFound, BadRequest
 from functools import wraps
 from typing import List
 
@@ -297,7 +291,7 @@ BASE_URL = '/angkort/api/v1'
 
 PARTNER_FIELDS = [
     'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email',
-    'shop_banner', 'shop_wifi_ids', 'shop_open_hour_ids'
+    'shop_banner', 'shop_wifi_ids', 'shop_open_hour_ids', 'image_1920'
 ]
 
 ORDER_STATE = {
@@ -336,7 +330,7 @@ class ShopController(http.Controller):
 
     def _handle_shop_related_fields(self, data, files, operation='create'):
         """
-        Helper method to handle shop related fields (shop_banner, shop_wifi_ids, shop_open_hour_ids)
+        Helper method to handle shop related fields (shop_banner, shop_wifi_ids, shop_open_hour_ids, image_1920)
         
         Args:
             data: form data
@@ -348,19 +342,104 @@ class ShopController(http.Controller):
         """
         import json
         import base64
+        import os
+        from PIL import Image
+        import io
         
         processed_fields = {}
+        
+        def _validate_image_file(image_file, field_name, max_size_mb=10):
+            """
+            Validate image file for size, format, and dimensions
+            
+            Args:
+                image_file: FileStorage object
+                field_name: Name of the field for error reporting
+                max_size_mb: Maximum file size in MB
+                
+            Returns:
+                tuple: (is_valid, error_message, processed_data)
+            """
+            try:
+                # Check if file exists and has content
+                if not image_file or not image_file.filename:
+                    return False, f"{field_name}: No file provided", None
+                
+                # Check file size
+                image_file.seek(0, os.SEEK_END)
+                file_size = image_file.tell()
+                image_file.seek(0)
+                
+                max_size_bytes = max_size_mb * 1024 * 1024
+                if file_size > max_size_bytes:
+                    return False, f"{field_name}: File size exceeds {max_size_mb}MB limit", None
+                
+                # Check file extension
+                allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+                file_ext = os.path.splitext(image_file.filename.lower())[1]
+                if file_ext not in allowed_extensions:
+                    return False, f"{field_name}: Invalid file format. Allowed: {', '.join(allowed_extensions)}", None
+                
+                # Validate image content and get dimensions
+                try:
+                    content = image_file.read()
+                    image_file.seek(0)  # Reset file pointer
+                    
+                    if not content:
+                        return False, f"{field_name}: Empty file", None
+                    
+                    # Try to open image with PIL to validate format and get dimensions
+                    with Image.open(io.BytesIO(content)) as img:
+                        width, height = img.size
+                        
+                        # Check minimum dimensions (optional)
+                        if width < 50 or height < 50:
+                            return False, f"{field_name}: Image dimensions too small. Minimum: 50x50px", None
+                        
+                        # Check maximum dimensions (optional)
+                        if width > 4096 or height > 4096:
+                            return False, f"{field_name}: Image dimensions too large. Maximum: 4096x4096px", None
+                        
+                        # Check aspect ratio (optional - prevent extremely wide/tall images)
+                        aspect_ratio = width / height
+                        if aspect_ratio > 10 or aspect_ratio < 0.1:
+                            return False, f"{field_name}: Image aspect ratio too extreme. Keep between 0.1 and 10", None
+                    
+                    return True, None, content
+                    
+                except Exception as img_error:
+                    return False, f"{field_name}: Invalid image file or corrupted data: {str(img_error)}", None
+                    
+            except Exception as e:
+                return False, f"{field_name}: Error processing file: {str(e)}", None
+        
+        # Handle image_1920 field (profile image)
+        image_1920_file = files.get('image_1920')
+        if image_1920_file:
+            is_valid, error_msg, image_content = _validate_image_file(image_1920_file, 'image_1920', max_size_mb=5)
+            if is_valid:
+                try:
+                    processed_fields['image_1920'] = base64.b64encode(image_content).decode('utf-8')
+                except Exception as e:
+                    # Log error but don't fail the entire operation
+                    print(f"Error encoding image_1920: {str(e)}")
+            else:
+                # For now, we'll log the validation error but continue processing
+                # In a production environment, you might want to return an error response
+                print(f"Image validation failed: {error_msg}")
         
         # Handle banner file upload (Image field expects base64 string)
         banner_file = files.get('shop_banner')
         if banner_file:
-            try:
-                content = banner_file.read()
-                if content:
-                    processed_fields['shop_banner'] = base64.b64encode(content).decode('utf-8')
-            except Exception:
-                # ignore banner if something goes wrong reading it
-                pass
+            is_valid, error_msg, banner_content = _validate_image_file(banner_file, 'shop_banner', max_size_mb=10)
+            if is_valid:
+                try:
+                    processed_fields['shop_banner'] = base64.b64encode(banner_content).decode('utf-8')
+                except Exception as e:
+                    # Log error but don't fail the entire operation
+                    print(f"Error encoding shop_banner: {str(e)}")
+            else:
+                print(f"Banner validation failed: {error_msg}")
 
         # Helper to parse possible JSON payload passed as string
         def _parse_json_field(val):
@@ -418,6 +497,79 @@ class ShopController(http.Controller):
                     processed_fields['shop_open_hour_ids'] = hour_commands
                     
         return processed_fields
+
+    def _create_json_response(self, data=None, status="success", message="", status_code="200", errors=None, http_status=200):
+        """
+        Helper method to create standardized JSON responses
+        
+        Args:
+            data: Response data
+            status: Response status ('success' or 'error')
+            message: Response message
+            status_code: Custom status code string
+            errors: List of error objects
+            http_status: HTTP status code
+            
+        Returns:
+            Response object with JSON content
+        """
+        import json
+        
+        response_data = {
+            "status": status,
+            "message": message,
+            "statusCode": status_code
+        }
+        
+        if data is not None:
+            response_data["data"] = data
+            
+        if errors:
+            response_data["errors"] = errors
+            
+        return Response(json.dumps(response_data), status=http_status, content_type='application/json')
+
+    def _create_error_response(self, message, status_code="400", errors=None, http_status=400):
+        """
+        Helper method to create standardized error responses
+        
+        Args:
+            message: Error message
+            status_code: Custom status code string
+            errors: List of error objects
+            http_status: HTTP status code
+            
+        Returns:
+            Response object with error JSON content
+        """
+        return self._create_json_response(
+            status="error",
+            message=message,
+            status_code=status_code,
+            errors=errors,
+            http_status=http_status
+        )
+
+    def _create_success_response(self, data=None, message="", status_code="200", http_status=200):
+        """
+        Helper method to create standardized success responses
+        
+        Args:
+            data: Response data
+            message: Success message
+            status_code: Custom status code string
+            http_status: HTTP status code
+            
+        Returns:
+            Response object with success JSON content
+        """
+        return self._create_json_response(
+            data=data,
+            status="success",
+            message=message,
+            status_code=status_code,
+            http_status=http_status
+        )
 
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
         """
@@ -1211,7 +1363,12 @@ class ShopController(http.Controller):
                     pass
 
             resp = {'id': shop.id, 'name': shop.name}
-            return Response(json.dumps(resp), status=201, content_type='application/json')
+            return Response(json.dumps({
+                "status": "success",
+                "message": "You've successfully created",
+                "statusCode": "201",
+                "data": resp
+            }), status=201, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -1367,31 +1524,34 @@ class ShopController(http.Controller):
             update_fields.update(shop_related_fields)
 
             if not update_fields:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch shop",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to patch shop",
+                    status_code="400",
+                    errors=[{"name": "fields", "message": "No valid fields to update"}],
+                    http_status=400
+                )
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch shop",
-                    "statusCode": "404",
-                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to patch shop",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}],
+                    http_status=404
+                )
 
             shop.write(update_fields)
-            return Response(json.dumps({'message': f'Shop with ID {shop_id} patched successfully'}), status=200, content_type='application/json')
+            return self._create_success_response(
+                message=f'Shop with ID {shop_id} patched successfully',
+                http_status=200
+            )
         except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to patch shop",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            return self._create_error_response(
+                message="Failed to patch shop",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='shop')
@@ -1412,21 +1572,21 @@ class ShopController(http.Controller):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to delete shop",
-                    "statusCode": "404",
-                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to delete shop",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}],
+                    http_status=404
+                )
             shop.unlink()
             return Response(status=204)
         except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to delete shop",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            return self._create_error_response(
+                message="Failed to delete shop",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -1460,22 +1620,22 @@ class ShopController(http.Controller):
                 if 'password' not in data:
                     errors.append({"name": "password", "message": "WiFi password is required"})
                 
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to create WiFi",
-                    "statusCode": "400",
-                    "errors": errors
-                }), status=400, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to create WiFi",
+                    status_code="400",
+                    errors=errors,
+                    http_status=400
+                )
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to create WiFi",
-                    "statusCode": "404",
-                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to create WiFi",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": "Shop not found"}],
+                    http_status=404
+                )
             
             # Prepare WiFi data
             wifi_data = {
@@ -1499,14 +1659,19 @@ class ShopController(http.Controller):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return Response(json.dumps(response_data), status=201, content_type='application/json')
+            return self._create_success_response(
+                data=response_data,
+                message="WiFi created successfully",
+                status_code="201",
+                http_status=201
+            )
         except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to create WiFi",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            return self._create_error_response(
+                message="Failed to create WiFi",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -1536,22 +1701,22 @@ class ShopController(http.Controller):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update WiFi",
-                    "statusCode": "404",
-                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to update WiFi",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": "Shop not found"}],
+                    http_status=404
+                )
             
             # Verify WiFi exists and belongs to shop
             wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
             if not wifi:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update WiFi",
-                    "statusCode": "404",
-                    "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
-                }), status=404, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to update WiFi",
+                    status_code="404",
+                    errors=[{"name": "wifi_id", "message": "WiFi not found"}],
+                    http_status=404
+                )
             
             # Prepare update data
             update_data = {}
@@ -1566,12 +1731,12 @@ class ShopController(http.Controller):
                 update_data['wifi_qr_code'] = base64.b64encode(image_data)
             
             if not update_data:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to update WiFi",
-                    "statusCode": "400",
-                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                return self._create_error_response(
+                    message="Failed to update WiFi",
+                    status_code="400",
+                    errors=[{"name": "fields", "message": "No valid fields to update"}],
+                    http_status=400
+                )
             
             # Update WiFi entry
             wifi.write(update_data)
@@ -1583,14 +1748,18 @@ class ShopController(http.Controller):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
+            return self._create_success_response(
+                data=response_data,
+                message="WiFi updated successfully",
+                http_status=200
+            )
         except Exception as e:
-            return Response(json.dumps({
-                "status": "error",
-                "message": "Failed to update WiFi",
-                "statusCode": "500",
-                "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            return self._create_error_response(
+                message="Failed to update WiFi",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -3090,7 +3259,10 @@ class ShopController(http.Controller):
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=201
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3171,7 +3343,10 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=200
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3250,7 +3425,10 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=200
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -4789,7 +4967,10 @@ class ShopController(http.Controller):
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=201
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -4870,7 +5051,10 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=200
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -4949,7 +5133,10 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+            return self._create_success_response(
+                data=self._attribute_to_dict(attribute,
+                http_status=200
+            ))
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",

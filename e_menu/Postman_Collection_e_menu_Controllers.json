@@ -1,0 +1,1428 @@
+{
+  "info": {
+    "name": "e_menu Controllers API Collection",
+    "description": "Complete API collection for all routes in e_menu/controllers module",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    },
+    {
+      "key": "api_version",
+      "value": "v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "{{access_token}}",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "{{refresh_token}}",
+      "type": "string"
+    },
+    {
+      "key": "shop_id",
+      "value": "{{shop_id}}",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "{{product_id}}",
+      "type": "string"
+    },
+    {
+      "key": "variant_id",
+      "value": "{{variant_id}}",
+      "type": "string"
+    },
+    {
+      "key": "value_id",
+      "value": "{{value_id}}",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "{{order_id}}",
+      "type": "string"
+    },
+    {
+      "key": "wifi_id",
+      "value": "{{wifi_id}}",
+      "type": "string"
+    },
+    {
+      "key": "hour_id",
+      "value": "{{hour_id}}",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/my/order?page=1&limit=20&search=&order_by=date_order&order_direction=desc",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "my", "order"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "order_by",
+                  "value": "date_order"
+                },
+                {
+                  "key": "order_direction",
+                  "value": "desc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/my/order/{{order_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "my", "order", "{{order_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Cart Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cart\": [\n    {\n      \"product_id\": {{product_id}},\n      \"quantity\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/cart/checkout",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "cart", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "Get Global Sale Orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/sale?page=1&limit=20&search=&sort=date_order&order=desc&filter_state=&filter_date_from=&filter_date_to=&filter_amount_min=&filter_amount_max=&filter_customer=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "sale"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "date_order"
+                },
+                {
+                  "key": "order",
+                  "value": "desc"
+                },
+                {
+                  "key": "filter_state",
+                  "value": ""
+                },
+                {
+                  "key": "filter_date_from",
+                  "value": ""
+                },
+                {
+                  "key": "filter_date_to",
+                  "value": ""
+                },
+                {
+                  "key": "filter_amount_min",
+                  "value": ""
+                },
+                {
+                  "key": "filter_amount_max",
+                  "value": ""
+                },
+                {
+                  "key": "filter_customer",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Global Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": 1,\n  \"order_lines\": [\n    {\n      \"product_id\": {{product_id}},\n      \"quantity\": 2,\n      \"price_unit\": 99.99\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/order",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "order"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shops",
+      "item": [
+        {
+          "name": "Get Shop List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop?page=1&limit=20&search=&sort=id&order=asc&filter_industry=&filter_has_wifi=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "id"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_industry",
+                  "value": ""
+                },
+                {
+                  "key": "filter_has_wifi",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Shop Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Shop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "My New Shop",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "123456789",
+                  "type": "text"
+                },
+                {
+                  "key": "customer_address",
+                  "value": "123 Main Street",
+                  "type": "text"
+                },
+                {
+                  "key": "wifi_name",
+                  "value": "ShopWiFi",
+                  "type": "text"
+                },
+                {
+                  "key": "shop_latitude",
+                  "value": "10.123",
+                  "type": "text"
+                },
+                {
+                  "key": "shop_longitude",
+                  "value": "20.456",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "shop@example.com",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop"]
+            }
+          }
+        },
+        {
+          "name": "Update Shop",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated Shop Name",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "987654321",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Patch Shop",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Patched Shop Name",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Shop",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Shop Alternative",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Alternative Shop",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "555555555",
+                  "type": "text"
+                },
+                {
+                  "key": "customer_address",
+                  "value": "456 Alternative Street",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/create",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop WiFi",
+      "item": [
+        {
+          "name": "Create WiFi",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "ShopWiFi",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "wifi123",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/wifi",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "wifi"]
+            }
+          }
+        },
+        {
+          "name": "Update WiFi",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "UpdatedWiFi",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "newpass456",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/wifi/{{wifi_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "wifi", "{{wifi_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete WiFi",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/wifi/{{wifi_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "wifi", "{{wifi_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop Open Hours",
+      "item": [
+        {
+          "name": "Create Open Hour",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "day",
+                  "value": "0",
+                  "type": "text"
+                },
+                {
+                  "key": "open",
+                  "value": "09:00",
+                  "type": "text"
+                },
+                {
+                  "key": "close",
+                  "value": "17:00",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/open-hours",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "open-hours"]
+            }
+          }
+        },
+        {
+          "name": "Update Open Hour",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "open",
+                  "value": "08:00",
+                  "type": "text"
+                },
+                {
+                  "key": "close",
+                  "value": "18:00",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/open-hours/{{hour_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "open-hours", "{{hour_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Open Hour",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/open-hours/{{hour_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "open-hours", "{{hour_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop Banner",
+      "item": [
+        {
+          "name": "Update Shop Banner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "shop_banner",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/banner",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "banner"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Get Shop Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product?page=1&limit=20&search=&sort=id&order=asc&filter_category=&filter_price_min=&filter_price_max=&filter_has_variants=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "id"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_category",
+                  "value": ""
+                },
+                {
+                  "key": "filter_price_min",
+                  "value": ""
+                },
+                {
+                  "key": "filter_price_max",
+                  "value": ""
+                },
+                {
+                  "key": "filter_has_variants",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Global Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/product?page=1&limit=20&search=&sort=name&order=asc&filter_category=&filter_price_min=&filter_price_max=&filter_has_variants=&filter_shop=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "product"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "name"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_category",
+                  "value": ""
+                },
+                {
+                  "key": "filter_price_min",
+                  "value": ""
+                },
+                {
+                  "key": "filter_price_max",
+                  "value": ""
+                },
+                {
+                  "key": "filter_has_variants",
+                  "value": ""
+                },
+                {
+                  "key": "filter_shop",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Product Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/product/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "product", "{{product_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Product Categories",
+      "item": [
+        {
+          "name": "Get Global Product Categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/product/category?page=1&limit=20&search=&sort=name&order=asc&filter_parent=&filter_has_children=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "product", "category"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "name"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_parent",
+                  "value": ""
+                },
+                {
+                  "key": "filter_has_children",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Product Variants",
+      "item": [
+        {
+          "name": "Get Global Product Variants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/product/variant?page=1&limit=20&search=&sort=name&order=asc&filter_create_variant=&filter_display_type=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "product", "variant"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "name"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_create_variant",
+                  "value": ""
+                },
+                {
+                  "key": "filter_display_type",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Shop Product Variants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant?search=&sort=id&order=asc&filter_create_variant=&filter_display_type=",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "id"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                },
+                {
+                  "key": "filter_create_variant",
+                  "value": ""
+                },
+                {
+                  "key": "filter_display_type",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Product Variant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Color",
+                  "type": "text"
+                },
+                {
+                  "key": "create_variant",
+                  "value": "always",
+                  "type": "text"
+                },
+                {
+                  "key": "display_type",
+                  "value": "radio",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant"]
+            }
+          }
+        },
+        {
+          "name": "Update Product Variant",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated Color",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "{{variant_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Patch Product Variant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "display_type",
+                  "value": "multi",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "{{variant_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Product Variant",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "{{variant_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Variant Values",
+      "item": [
+        {
+          "name": "Get Variant Values",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/{{variant_id}}/value?search=&sort=id&order=asc",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "{{variant_id}}", "value"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "id"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Variant Values",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "attribute_id",
+                  "value": "{{variant_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "values",
+                  "value": "[{\"name\": \"Red\", \"extra_price\": 5.0}, {\"name\": \"Blue\", \"extra_price\": 3.0}]",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/value",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "value"]
+            }
+          }
+        },
+        {
+          "name": "Update Variant Value",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated Red",
+                  "type": "text"
+                },
+                {
+                  "key": "price_extra",
+                  "value": "7.0",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/value/{{value_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "value", "{{value_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Patch Variant Value",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "price_extra",
+                  "value": "8.0",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/value/{{value_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "product", "variant", "value", "{{value_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Variant Value",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/shop/{{shop_id}}/product/variant/value/{{value_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "shop", "{{shop_id}}", "shop", "{{shop_id}}", "product", "variant", "value", "{{value_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Images",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "quality",
+                  "value": "80",
+                  "type": "text"
+                },
+                {
+                  "key": "width",
+                  "value": "800",
+                  "type": "text"
+                },
+                {
+                  "key": "height",
+                  "value": "600",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/image/add",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "image", "add"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partners",
+      "item": [
+        {
+          "name": "Get Partners",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/store?name=&order_by=name asc&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "store"],
+              "query": [
+                {
+                  "key": "name",
+                  "value": ""
+                },
+                {
+                  "key": "order_by",
+                  "value": "name asc"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "HR",
+      "item": [
+        {
+          "name": "Get Employee Skills",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/hr/employee/{{employee_id}}/skills",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "hr", "employee", "{{employee_id}}", "skills"]
+            }
+          }
+        },
+        {
+          "name": "Get Employee Resume",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/hr/employee/{{employee_id}}/resume",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "hr", "employee", "{{employee_id}}", "resume"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Telegram",
+      "item": [
+        {
+          "name": "Telegram Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"update_id\": 123456789,\n  \"message\": {\n    \"message_id\": 1,\n    \"from\": {\n      \"id\": 123456789,\n      \"first_name\": \"Test User\"\n    },\n    \"chat\": {\n      \"id\": 123456789,\n      \"type\": \"private\"\n    },\n    \"date\": 1234567890,\n    \"text\": \"Hello\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/telegram/webhook/{{telegram_token}}/{{chat_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "telegram", "webhook", "{{telegram_token}}", "{{chat_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Test",
+      "item": [
+        {
+          "name": "Test HTTP Endpoint",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/test",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "test"]
+            }
+          }
+        },
+        {
+          "name": "Test JSON Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"test\": \"data\",\n  \"message\": \"Hello World\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/angkort/api/{{api_version}}/test",
+              "host": ["{{base_url}}"],
+              "path": ["angkort", "api", "{{api_version}}", "test"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
