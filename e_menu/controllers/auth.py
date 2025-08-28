@@ -236,11 +236,13 @@ class Authentication(http.Controller):
                 access_expiry=datetime.utcnow() + timedelta(minutes=30),
                 refresh_expiry=datetime.utcnow() + timedelta(days=7)
             )
-            roles = [USER_ROLE_ENUM['normal']]
-            if request.env.user.has_group("e_menu.group_merchant"):
-                roles.append(USER_ROLE_ENUM['merchant'])
+
             if request.env.user.has_group("base.group_system"):
-                roles.append(USER_ROLE_ENUM['admin'])
+                role = "ADMIN"
+            elif request.env.user.has_group("e_menu.group_merchant"):
+                role = "MERCHANT"
+            else:
+                role = "NORMAL"
             # Prepare success response
             response_data = {
                 "status": True,
@@ -254,7 +256,7 @@ class Authentication(http.Controller):
                     "username": user.login,
                     "name": user.name,
                     "email": user.email,
-                    'roles': roles
+                    'roles': role
                 }
             }
             
