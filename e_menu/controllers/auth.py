@@ -13,6 +13,13 @@ from odoo.tools import config
 _logger = logging.getLogger(__name__)
 
 
+USER_ROLE_ENUM = {
+    'admin': 'ADMIN',
+    'merchant': 'MERCHANT',
+    'normal': 'NORMAL'
+}
+
+
 def validate_token(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -229,7 +236,11 @@ class Authentication(http.Controller):
                 access_expiry=datetime.utcnow() + timedelta(minutes=30),
                 refresh_expiry=datetime.utcnow() + timedelta(days=7)
             )
-            
+            roles = [USER_ROLE_ENUM['normal']]
+            if request.env.user.has_group("e_menu.group_merchant"):
+                roles.append(USER_ROLE_ENUM['merchant'])
+            if request.env.user.has_group("base.group_system"):
+                roles.append(USER_ROLE_ENUM['admin'])
             # Prepare success response
             response_data = {
                 "status": True,
@@ -243,8 +254,7 @@ class Authentication(http.Controller):
                     "username": user.login,
                     "name": user.name,
                     "email": user.email,
-                    'is_merchant': request.env.user.has_group("e_menu.group_merchant"),
-                    'is_admin': request.env.user.has_group("base.group_system"),
+                    'roles': roles
                 }
             }
             
