@@ -84,208 +84,160 @@ def verify_ownership(entity_type='shop'):
     Args:
         entity_type (str): Type of entity to check ('shop', 'product', 'category', 'variant', 'variant_value', 'wifi', 'open_hour')
     """
+    from functools import wraps
+    from odoo.http import request
+
+    def json_response(status, message, code):
+        return request.make_json_response({
+            "status": status,
+            "message": message,
+            "code": code
+        }, status=code)
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 current_user_id = request.env.user.id
-                
-                if entity_type == 'shop':
-                    shop_id = kwargs.get('shop_id')
-                    if not shop_id:
-                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
-                    
-                    shop = request.env['res.partner'].sudo().search([
-                        ('id', '=', shop_id),
-                        ('type', '=', 'store')
-                    ], limit=1)
-                    
-                    if not shop:
-                        return request.make_json_response({'error': 'Shop not found'}, status=404)
-                    
-                    if shop.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only modify shops you own'
-                        }, status=403)
-                
-                elif entity_type == 'product':
-                    shop_id = kwargs.get('shop_id')
-                    product_id = kwargs.get('product_id')
-                    
-                    if not shop_id or not product_id:
-                        return request.make_json_response({'error': 'Shop ID and Product ID are required'}, status=400)
-                    
-                    product = request.env['product.template'].sudo().search([
-                        ('id', '=', product_id),
-                        ('shop_id', '=', shop_id)
-                    ], limit=1)
-                    
-                    if not product:
-                        return request.make_json_response({'error': 'Product not found'}, status=404)
-                    
-                    if product.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only modify products you own'
-                        }, status=403)
-                
-                elif entity_type == 'category':
-                    shop_id = kwargs.get('shop_id')
-                    cate_id = kwargs.get('cate_id')
-                    
-                    if not shop_id or not cate_id:
-                        return request.make_json_response({'error': 'Shop ID and Category ID are required'}, status=400)
-                    
-                    category = request.env['product.category'].sudo().search([
-                        ('id', '=', cate_id),
-                        ('shop_id', '=', shop_id)
-                    ], limit=1)
-                    
-                    if not category:
-                        return request.make_json_response({'error': 'Category not found'}, status=404)
-                    
-                    if category.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only modify categories you own'
-                        }, status=403)
-                
-                elif entity_type == 'variant':
-                    shop_id = kwargs.get('shop_id')
-                    variant_id = kwargs.get('variant_id')
-                    
-                    if not shop_id or not variant_id:
-                        return request.make_json_response({'error': 'Shop ID and Variant ID are required'}, status=400)
-                    
-                    variant = request.env['product.attribute'].sudo().search([
-                        ('id', '=', variant_id),
-                        ('shop_id', '=', shop_id)
-                    ], limit=1)
-                    
-                    if not variant:
-                        return request.make_json_response({'error': 'Variant not found'}, status=404)
-                    
-                    if variant.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only modify variants you own'
-                        }, status=403)
-                
-                elif entity_type == 'variant_value':
-                    shop_id = kwargs.get('shop_id')
-                    value_id = kwargs.get('value_id')
-                    
-                    if not shop_id or not value_id:
-                        return request.make_json_response({'error': 'Shop ID and Value ID are required'}, status=400)
-                    
-                    variant_value = request.env['product.attribute.value'].sudo().search([
-                        ('id', '=', value_id)
-                    ], limit=1)
-                    
-                    if not variant_value:
-                        return request.make_json_response({'error': 'Variant value not found'}, status=404)
-                    
-                    if variant_value.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only modify variant values you own'
-                        }, status=403)
-                
-                elif entity_type == 'wifi':
-                    shop_id = kwargs.get('shop_id')
-                    wifi_id = kwargs.get('wifi_id')
-                    
-                    if not shop_id:
-                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
-                    
-                    # For wifi creation, check shop ownership
-                    if not wifi_id:
-                        shop = request.env['res.partner'].sudo().search([
-                            ('id', '=', shop_id),
-                            ('type', '=', 'store')
-                        ], limit=1)
-                        
-                        if not shop:
-                            return request.make_json_response({'error': 'Shop not found'}, status=404)
-                        
-                        if shop.create_uid.id != current_user_id:
-                            return request.make_json_response({
-                                'error': 'Unauthorized: You can only create wifi for shops you own'
-                            }, status=403)
-                    else:
-                        # For wifi update/delete, check wifi ownership
-                        wifi = request.env['shop.wifi'].sudo().search([
-                            ('id', '=', wifi_id),
-                            ('shop_id', '=', shop_id)
-                        ], limit=1)
-                        
-                        if not wifi:
-                            return request.make_json_response({'error': 'WiFi not found'}, status=404)
-                        
-                        if wifi.create_uid.id != current_user_id:
-                            return request.make_json_response({
-                                'error': 'Unauthorized: You can only modify wifi you own'
-                            }, status=403)
-                
-                elif entity_type == 'open_hour':
-                    shop_id = kwargs.get('shop_id')
-                    hour_id = kwargs.get('hour_id')
-                    
-                    if not shop_id:
-                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
-                    
-                    # For open hour creation, check shop ownership
-                    if not hour_id:
-                        shop = request.env['res.partner'].sudo().search([
-                            ('id', '=', shop_id),
-                            ('type', '=', 'store')
-                        ], limit=1)
-                        
-                        if not shop:
-                            return request.make_json_response({'error': 'Shop not found'}, status=404)
-                        
-                        if shop.create_uid.id != current_user_id:
-                            return request.make_json_response({
-                                'error': 'Unauthorized: You can only create open hours for shops you own'
-                            }, status=403)
-                    else:
-                        # For open hour update/delete, check open hour ownership
-                        open_hour = request.env['shop.open.hour'].sudo().search([
-                            ('id', '=', hour_id),
-                            ('shop_id', '=', shop_id)
-                        ], limit=1)
-                        
-                        if not open_hour:
-                            return request.make_json_response({'error': 'Open hour not found'}, status=404)
-                        
-                        if open_hour.create_uid.id != current_user_id:
-                            return request.make_json_response({
-                                'error': 'Unauthorized: You can only modify open hours you own'
-                            }, status=403)
-                
-                elif entity_type == 'banner':
-                    shop_id = kwargs.get('shop_id')
-                    
-                    if not shop_id:
-                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
-                    
-                    shop = request.env['res.partner'].sudo().search([
-                        ('id', '=', shop_id),
-                        ('type', '=', 'store')
-                    ], limit=1)
-                    
-                    if not shop:
-                        return request.make_json_response({'error': 'Shop not found'}, status=404)
-                    
-                    if shop.create_uid.id != current_user_id:
-                        return request.make_json_response({
-                            'error': 'Unauthorized: You can only update banners for shops you own'
-                        }, status=403)
-                
-                return func(*args, **kwargs)
-                
-            except Exception as e:
-                return request.make_json_response({'error': f'Authorization check failed: {str(e)}'}, status=500)
-        
-        return wrapper
-    return decorator
 
+                entity_map = {
+                    "shop": {
+                        "model": "res.partner",
+                        "required": ["shop_id"],
+                        "domain": lambda kw: [
+                            ('id', '=', kw.get('shop_id')),
+                            ('type', '=', 'store')
+                        ],
+                        "not_found": "Shop not found",
+                        "unauth": "Unauthorized: You can only modify/delete shops you own",
+                    },
+                    "product": {
+                        "model": "product.template",
+                        "required": ["shop_id", "product_id"],
+                        "domain": lambda kw: [
+                            ('id', '=', kw.get('product_id')),
+                            ('shop_id', '=', kw.get('shop_id'))
+                        ],
+                        "not_found": "Product not found",
+                        "unauth": "Unauthorized: You can only modify products you own",
+                    },
+                    "category": {
+                        "model": "product.category",
+                        "required": ["shop_id", "cate_id"],
+                        "domain": lambda kw: [
+                            ('id', '=', kw.get('cate_id')),
+                            ('shop_id', '=', kw.get('shop_id'))
+                        ],
+                        "not_found": "Category not found",
+                        "unauth": "Unauthorized: You can only modify categories you own",
+                    },
+                    "variant": {
+                        "model": "product.attribute",
+                        "required": ["shop_id", "variant_id"],
+                        "domain": lambda kw: [
+                            ('id', '=', kw.get('variant_id')),
+                            ('shop_id', '=', kw.get('shop_id'))
+                        ],
+                        "not_found": "Variant not found",
+                        "unauth": "Unauthorized: You can only modify variants you own",
+                    },
+                    "variant_value": {
+                        "model": "product.attribute.value",
+                        "required": ["shop_id", "value_id"],
+                        "domain": lambda kw: [('id', '=', kw.get('value_id'))],
+                        "not_found": "Variant value not found",
+                        "unauth": "Unauthorized: You can only modify variant values you own",
+                    },
+                    "wifi": {
+                        "model": "shop.wifi",
+                        "required": ["shop_id"],
+                        "special": "wifi"
+                    },
+                    "open_hour": {
+                        "model": "shop.open.hour",
+                        "required": ["shop_id"],
+                        "special": "open_hour"
+                    },
+                    "banner": {
+                        "model": "res.partner",
+                        "required": ["shop_id"],
+                        "domain": lambda kw: [
+                            ('id', '=', kw.get('shop_id')),
+                            ('type', '=', 'store')
+                        ],
+                        "not_found": "Shop not found",
+                        "unauth": "Unauthorized: You can only update banners for shops you own",
+                    }
+                }
+
+                cfg = entity_map.get(entity_type)
+                if not cfg:
+                    return json_response("error", "Unsupported entity type", 400)
+
+                # Check required params
+                for param in cfg.get("required", []):
+                    if not kwargs.get(param):
+                        return json_response("error", f"{param.replace('_', ' ').title()} is required", 400)
+
+                # Handle special wifi & open_hour logic
+                if cfg.get("special") == "wifi":
+                    shop_id, wifi_id = kwargs.get("shop_id"), kwargs.get("wifi_id")
+                    if not wifi_id:  # creating wifi
+                        shop = request.env['res.partner'].sudo().search([
+                            ('id', '=', shop_id), ('type', '=', 'store')
+                        ], limit=1)
+                        if not shop:
+                            return json_response("error", "Shop not found", 404)
+                        if shop.create_uid.id != current_user_id:
+                            return json_response("error",
+                                                 "Unauthorized: You can only create wifi for shops you own", 403)
+                    else:  # updating/deleting wifi
+                        wifi = request.env[cfg["model"]].sudo().search([
+                            ('id', '=', wifi_id), ('shop_id', '=', shop_id)
+                        ], limit=1)
+                        if not wifi:
+                            return json_response("error", "WiFi not found", 404)
+                        if wifi.create_uid.id != current_user_id:
+                            return json_response("error", "Unauthorized: You can only modify wifi you own", 403)
+
+                elif cfg.get("special") == "open_hour":
+                    shop_id, hour_id = kwargs.get("shop_id"), kwargs.get("hour_id")
+                    if not hour_id:  # creating open hour
+                        shop = request.env['res.partner'].sudo().search([
+                            ('id', '=', shop_id), ('type', '=', 'store')
+                        ], limit=1)
+                        if not shop:
+                            return json_response("error", "Shop not found", 404)
+                        if shop.create_uid.id != current_user_id:
+                            return json_response("error",
+                                                 "Unauthorized: You can only create open hours for shops you own",
+                                                 403)
+                    else:  # updating/deleting open hour
+                        hour = request.env[cfg["model"]].sudo().search([
+                            ('id', '=', hour_id), ('shop_id', '=', shop_id)
+                        ], limit=1)
+                        if not hour:
+                            return json_response("error", "Open hour not found", 404)
+                        if hour.create_uid.id != current_user_id:
+                            return json_response("error", "Unauthorized: You can only modify open hours you own",
+                                                 403)
+
+                else:
+                    # Generic flow
+                    record = request.env[cfg["model"]].sudo().search(cfg["domain"](kwargs), limit=1)
+                    if not record:
+                        return json_response("error", cfg["not_found"], 404)
+                    if record.create_uid.id != current_user_id:
+                        return json_response("error", cfg["unauth"], 403)
+
+                return func(*args, **kwargs)
+
+            except Exception as e:
+                return json_response("error", f"Authorization check failed: {str(e)}", 500)
+
+        return wrapper
+
+    return decorator
 
 BASE_URL = '/angkort/api/v1'
 
@@ -1363,13 +1315,16 @@ class ShopController(http.Controller):
                 }), status=400, content_type='application/json')
 
             # Create partner (shop). Use create_company context to mark as company/store.
-            shop = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
+            print(request.env.user)
+            print(create_data)
+            shop = request.env['res.partner'].with_context(create_company=True).create([create_data])
             if shop:
                 # set the current user's partner parent to the created shop
+                print(shop.name, shop.create_uid.name)
                 try:
-                    request.env.user.partner_id.update({'parent_id': shop.id})
-                except Exception:
-                    pass
+                    request.env.user.partner_id.sudo().update({'parent_id': shop.id})
+                except Exception as e:
+                    print(e)
 
             resp = {'id': shop.id, 'name': shop.name}
             return Response(json.dumps({
@@ -1379,6 +1334,7 @@ class ShopController(http.Controller):
                 "data": resp
             }), status=201, content_type='application/json')
         except Exception as e:
+            print(e)
             return Response(json.dumps({
                 "status": "error",
                 "message": "Failed to create shop",
@@ -1583,7 +1539,10 @@ class ShopController(http.Controller):
             500: On server error.
         """
         try:
-            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store')
+            ], limit=1)
             if not shop:
                 return self._create_error_response(
                     message="Failed to delete shop",
@@ -1592,7 +1551,15 @@ class ShopController(http.Controller):
                     http_status=404
                 )
             shop.unlink()
-            return Response(status=204)
+            data = {
+                "status": "success",
+                "message": "You've successfully deleted",
+                "code": 200
+            }
+            return request.make_json_response(
+                data=json.dumps(data),
+                status=204
+            )
         except Exception as e:
             return self._create_error_response(
                 message="Failed to delete shop",
