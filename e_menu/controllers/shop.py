@@ -1286,8 +1286,9 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             files = request.httprequest.files
 
-            # only allow base partner fields from PARTNER_FIELDS
-            create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
+            # only allow base partner fields from PARTNER_FIELDS, excluding One2many fields
+            one2many_fields = {'shop_wifi_ids', 'shop_open_hour_ids'}
+            create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS and k not in one2many_fields}
 
             # Handle shop related fields using helper method
             shop_related_fields = self._handle_shop_related_fields(data, files, 'create')
@@ -1560,6 +1561,317 @@ class ShopController(http.Controller):
                 data=json.dumps(data),
                 status=204
             )
+        except Exception as e:
+            return self._create_error_response(
+                message="Failed to delete shop",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
+
+    # =============================================================================
+    # SHOP OWNER ROUTES (Authenticated Shop Management)
+    # =============================================================================
+    
+    @http.route(f"{BASE_URL}/owner/shops", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
+    def owner_shop_list(self, **kw):
+        """
+        Get shops owned by the authenticated user.
+        
+        Route: GET /angkort/api/v1/owner/shops
+        
+        Returns:
+            200: List of shops owned by the user
+            401: If not authenticated
+        """
+        try:
+            user_id = request.env.user.id
+            
+            # Get shops owned by the user
+            shops = request.env['res.partner'].sudo().search([
+                ('type', '=', 'store'),
+                ('create_uid', '=', user_id)
+            ])
+            
+            shop_list = []
+            for shop in shops:
+                shop_data = {
+                    'id': shop.id,
+                    'name': shop.name,
+                    'phone': shop.phone,
+                    'email': shop.email,
+                    'customer_address': shop.customer_address,
+                    'website': shop.website,
+                    'comment': shop.comment,
+                    'industry_id': shop.industry_id.id if shop.industry_id else None,
+                    'is_active': shop.active,
+                    'create_date': shop.create_date.isoformat() if shop.create_date else None,
+                    'write_date': shop.write_date.isoformat() if shop.write_date else None,
+                }
+                shop_list.append(shop_data)
+            
+            return self._create_success_response(
+                data=shop_list,
+                message="Shops retrieved successfully"
+            )
+            
+        except Exception as e:
+            return self._create_error_response(
+                message="Failed to retrieve shops",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
+    
+    @http.route(f"{BASE_URL}/owner/shops", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    def owner_shop_create(self, **kw):
+        """
+        Create a new shop for the authenticated user.
+        
+        Route: POST /angkort/api/v1/owner/shops
+        
+        Returns:
+            201: Shop created successfully
+            400: Invalid data
+            401: If not authenticated
+        """
+        try:
+            data = request.httprequest.form
+            files = request.httprequest.files
+            
+            # Prepare shop data
+            create_data = {
+                'name': data.get('name'),
+                'phone': data.get('phone'),
+                'email': data.get('email'),
+                'customer_address': data.get('customer_address'),
+                'website': data.get('website'),
+                'comment': data.get('comment'),
+                'industry_id': int(data.get('industry_id')) if data.get('industry_id') else False,
+                'type': 'store',
+                'create_uid': request.env.user.id
+            }
+            
+            # Validate required fields
+            required_fields = ['name']
+            missing_fields = [field for field in required_fields if not create_data.get(field)]
+            if missing_fields:
+                return self._create_error_response(
+                    message="Missing required fields",
+                    status_code="400",
+                    errors=[{"name": field, "message": f"{field} is required"} for field in missing_fields],
+                    http_status=400
+                )
+            
+            # Create shop
+            shop = request.env['res.partner'].sudo().create(create_data)
+            
+            # Handle file uploads if any
+            if files and 'shop_banner' in files:
+                # Handle banner upload logic here
+                pass
+            
+            shop_data = {
+                'id': shop.id,
+                'name': shop.name,
+                'phone': shop.phone,
+                'email': shop.email,
+                'customer_address': shop.customer_address,
+                'website': shop.website,
+                'comment': shop.comment,
+                'industry_id': shop.industry_id.id if shop.industry_id else None,
+                'create_date': shop.create_date.isoformat() if shop.create_date else None
+            }
+            
+            return self._create_success_response(
+                data=shop_data,
+                message="Shop created successfully",
+                http_status=201
+            )
+            
+        except Exception as e:
+            return self._create_error_response(
+                message="Failed to create shop",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
+    
+    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
+    def owner_shop_detail(self, shop_id, **kw):
+        """
+        Get details of a shop owned by the authenticated user.
+        
+        Route: GET /angkort/api/v1/owner/shops/<shop_id>
+        
+        Returns:
+            200: Shop details
+            404: Shop not found or not owned by user
+            401: If not authenticated
+        """
+        try:
+            user_id = request.env.user.id
+            
+            # Find shop owned by user
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store'),
+                ('create_uid', '=', user_id)
+            ], limit=1)
+            
+            if not shop:
+                return self._create_error_response(
+                    message="Shop not found",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
+                    http_status=404
+                )
+            
+            shop_data = {
+                'id': shop.id,
+                'name': shop.name,
+                'phone': shop.phone,
+                'email': shop.email,
+                'customer_address': shop.customer_address,
+                'website': shop.website,
+                'comment': shop.comment,
+                'industry_id': shop.industry_id.id if shop.industry_id else None,
+                'is_active': shop.active,
+                'create_date': shop.create_date.isoformat() if shop.create_date else None,
+                'write_date': shop.write_date.isoformat() if shop.write_date else None,
+            }
+            return self._create_success_response(
+                data=shop_data,
+                message="Shop details retrieved successfully"
+            )
+            
+        except Exception as e:
+            return self._create_error_response(
+                message="Failed to retrieve shop details",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
+    
+    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    def owner_shop_update(self, shop_id, **kw):
+        """
+        Update a shop owned by the authenticated user.
+        
+        Route: PUT /angkort/api/v1/owner/shops/<shop_id>
+        
+        Returns:
+            200: Shop updated successfully
+            404: Shop not found or not owned by user
+            400: Invalid data
+            401: If not authenticated
+        """
+        try:
+            user_id = request.env.user.id
+            data = request.httprequest.form
+            
+            # Find shop owned by user
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store'),
+                ('create_uid', '=', user_id)
+            ], limit=1)
+            
+            if not shop:
+                return self._create_error_response(
+                    message="Shop not found",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
+                    http_status=404
+                )
+            
+            # Prepare update data
+            update_data = {}
+            if 'name' in data:
+                update_data['name'] = data.get('name')
+            if 'phone' in data:
+                update_data['phone'] = data.get('phone')
+            if 'email' in data:
+                update_data['email'] = data.get('email')
+            if 'customer_address' in data:
+                update_data['customer_address'] = data.get('customer_address')
+            if 'website' in data:
+                update_data['website'] = data.get('website')
+            if 'comment' in data:
+                update_data['comment'] = data.get('comment')
+            if 'industry_id' in data:
+                update_data['industry_id'] = int(data.get('industry_id')) if data.get('industry_id') else False
+            if 'is_active' in data:
+                update_data['active'] = data.get('is_active', 'true').lower() == 'true'
+            
+            # Update shop
+            shop.write(update_data)
+            
+            shop_data = {
+                'id': shop.id,
+                'name': shop.name,
+                'phone': shop.phone,
+                'email': shop.email,
+                'customer_address': shop.customer_address,
+                'website': shop.website,
+                'comment': shop.comment,
+                'industry_id': shop.industry_id.id if shop.industry_id else None,
+                'is_active': shop.active,
+                'create_date': shop.create_date.isoformat() if shop.create_date else None,
+                'write_date': shop.write_date.isoformat() if shop.write_date else None,
+            }
+            
+            return self._create_success_response(
+                data=shop_data,
+                message="Shop updated successfully"
+            )
+            
+        except Exception as e:
+            return self._create_error_response(
+                message="Failed to update shop",
+                status_code="500",
+                errors=[{"name": "general", "message": str(e)}],
+                http_status=500
+            )
+    
+    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    def owner_shop_delete(self, shop_id, **kw):
+        """
+        Delete a shop owned by the authenticated user.
+        
+        Route: DELETE /angkort/api/v1/owner/shops/<shop_id>
+        
+        Returns:
+            204: Shop deleted successfully
+            404: Shop not found or not owned by user
+            401: If not authenticated
+        """
+        try:
+            user_id = request.env.user.id
+            
+            # Find shop owned by user
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store'),
+                ('create_uid', '=', user_id)
+            ], limit=1)
+            
+            if not shop:
+                return self._create_error_response(
+                    message="Shop not found",
+                    status_code="404",
+                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
+                    http_status=404
+                )
+            
+            # Delete shop
+            shop.unlink()
+            
+            return self._create_success_response(
+                message="Shop deleted successfully",
+                http_status=204
+            )
+            
         except Exception as e:
             return self._create_error_response(
                 message="Failed to delete shop",

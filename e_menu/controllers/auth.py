@@ -38,7 +38,15 @@ def validate_token(func):
 
             # Check expiration
             if payload.get('exp') < int(datetime.utcnow().timestamp()):
-                return {"error": "Token has expired"}, 401
+                return Response(
+                    json.dumps({
+                        "status": False,
+                        "message": "Token has expired",
+                        "error": "Token has expired"
+                    }),
+                    status=401,
+                    content_type='application/json'
+                )
 
             # Fetch the user from the database
             user_id = payload.get('user_id')
@@ -61,71 +69,11 @@ def validate_token(func):
 
 class Authentication(http.Controller):
 
-    def _get_system_secret_key(self):
-        return request.env['ir.config_parameter'].sudo().get_param('database.secret')
-
-    @validate_token
-    @route("/api/test", type="json", auth="none", cors="http://localhost:8067", methods=["POST"])
-    def test(self, **kw):
-        return kw
-
-    @route('/api/test', type='http', cors="*", csrf=False, auth='none', methods=['GET', 'POST'])
-    def test_http(self, **kw):
-        """
-        Simple test endpoint for HTTP requests.
-        
-        Endpoint: GET/POST /angkort/api/v1/test
-        Auth: None (public endpoint)
-        
-        Returns:
-            HTTP Response with JSON content containing request information
-        """
-        try:
-            # Get request information
-            method = request.httprequest.method
-            headers = dict(request.httprequest.headers)
-            content_type = headers.get('Content-Type', '')
-            
-            # Parse request data
-            data = {}
-            if method == 'POST':
-                if 'application/json' in content_type and request.httprequest.data:
-                    try:
-                        data = json.loads(request.httprequest.data.decode('utf-8'))
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        data = {"error": "Invalid JSON"}
-                else:
-                    data = dict(request.httprequest.form)
-            
-            response_data = {
-                "status": True,
-                "message": "Test endpoint working",
-                "method": method,
-                "content_type": content_type,
-                "headers": headers,
-                "data": data,
-                "form_data": dict(request.httprequest.form),
-                "raw_data": request.httprequest.data.decode('utf-8') if request.httprequest.data else None
-            }
-            
-            return Response(
-                json.dumps(response_data, indent=2),
-                status=200,
-                content_type='application/json'
-            )
-            
-        except Exception as e:
-            _logger.error(f"Test endpoint error: {str(e)}")
-            
-            return Response(
-                json.dumps({
-                    "status": False,
-                    "message": "Test endpoint error",
-                    "error": str(e)
-                }),
-                status=500,
-                content_type='application/json'
-            )
+    @classmethod
+    def _get_system_secret_key(cls):
+        secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret')
+        print(f"Auth Controller - Secret key: {secret_key[:20] if secret_key else 'None'}...")
+        return secret_key
 
     @route('/angkort/api/v1/login', type='http', cors="*", csrf=False, auth='none', methods=['POST'])
     def login(self, **kw):
@@ -525,4 +473,7 @@ class Authentication(http.Controller):
             "exp": datetime.utcnow() + timedelta(minutes=minutes, days=days)
         }
         secret_key = self._get_system_secret_key()
-        return jwt.encode(payload, secret_key, algorithm="HS256")
+        print(f"Token Generation - Using secret key: {secret_key[:20] if secret_key else 'None'}...")
+        token = jwt.encode(payload, secret_key, algorithm="HS256")
+        print(f"Token Generation - Generated token: {token[:20]}...")
+        return token
