@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_angkot_recruitement_angkot_recruitement,angkot_recruitement.angkot_recruitement,model_angkot_recruitement_angkot_recruitement,base.group_user,1,1,1,1
+access_hr_job_category_user,hr.job.category.user,model_hr_job_category,base.group_user,1,0,0,0
+access_hr_job_category_manager,hr.job.category.manager,model_hr_job_category,hr_recruitment.group_hr_recruitment_manager,1,1,1,1
+access_hr_job_enhanced_user,hr.job.enhanced.user,model_hr_job,base.group_user,1,0,0,0
+access_hr_job_enhanced_manager,hr.job.enhanced.manager,model_hr_job,hr_recruitment.group_hr_recruitment_manager,1,1,1,1

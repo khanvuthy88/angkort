@@ -1092,32 +1092,77 @@ class ShopController(http.Controller):
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_detail(self, shop_id, **kw):
         """
-        Retrieve details for a specific shop.
+        Retrieve detailed information for a specific shop.
 
-        Route: GET /angkort/api/v1/shop/<shop_id>
+        **Route:**
+            GET /angkort/api/v1/shop/<shop_id>
 
-        Parameters:
-            shop_id (int): The ID of the shop.
+        **Parameters:**
+            shop_id (int): Unique ID of the shop to retrieve.
 
-        Returns:
-            200: Shop details as JSON object.
-            404: If the shop is not found.
-            500: On server error.
+        **Responses:**
+            - **200 OK:** Returns a JSON object containing the shop details.
+            - **404 Not Found:** If no shop exists with the given ID.
+            - **500 Internal Server Error:** If an unexpected error occurs on the server.
 
-        Example Response:
-            {
-                "data": {
-                    "id": 1,
-                    "name": "Shop A",
-                    "phoneNumber": ["123456789"],
-                    "address": ["123 Main St"],
-                    "wifi": ["ShopWiFi"],
-                    "banks": [...],
-                    "createdAt": "2024-03-06T13:42:05.098Z",
-                    "updatedAt": "2024-03-06T13:42:05.098Z",
-                    "publishedAt": "2024-03-06T13:42:05.103Z"
-                }
-            }
+        **Example Request:**
+            GET /angkort/api/v1/shop/42
+
+        **Example Successful Response (200):**
+        ```json
+        {
+          "data": {
+            "id": 42,
+            "name": "Angkor Coffee Shop",
+            "phoneNumber": ["+85512345678"],
+            "address": ["123 Riverside, Phnom Penh"],
+            "wifi": ["AngkorFreeWiFi"],
+            "banner": "https://example.com/web/image/res.partner/42/shop_banner",
+            "shop_wifi_ids": [
+              {
+                "id": 7,
+                "name": "ShopWifi1",
+                "password": "securepass",
+                "wifi_qr_code": "https://example.com/web/image/shop.wifi/7/wifi_qr_code"
+              }
+            ],
+            "shop_open_hour_ids": [
+              {
+                "id": 3,
+                "day": "mon",
+                "day_name": "Monday",
+                "open": "08:00",
+                "close": "17:00"
+              }
+            ],
+            "banks": [
+              {
+                "id": 5,
+                "bank_name": "ABA Bank",
+                "account_number": "123456789",
+                "account_name": "Angkor Coffee"
+              }
+            ],
+            "createdAt": "2025-09-11T09:45:32.000Z",
+            "updatedAt": "2025-09-11T11:15:20.000Z",
+            "publishedAt": "2025-09-11T09:45:32.000Z"
+          }
+        }
+        ```
+
+        **Example Error Response (404):**
+        ```json
+        {
+          "error": "Shop not found"
+        }
+        ```
+
+        **Example Error Response (500):**
+        ```json
+        {
+          "error": "Unexpected server error details here"
+        }
+        ```
         """
         try:
             shop = request.env['res.partner'].sudo().search([
