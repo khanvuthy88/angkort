@@ -6,7 +6,7 @@ from datetime import timedelta
 import requests
 from odoo import http, Command, fields, _
 from odoo.http import request, Response
-from odoo.tools import config
+from odoo.tools import config, html2plaintext
 from collections import defaultdict
 from werkzeug.exceptions import NotFound, BadRequest
 from functools import wraps
@@ -574,7 +574,8 @@ class ShopController(http.Controller):
     def _get_image_url(cls, model_name, record_id, field_name):
         """Generate image URL for Odoo image fields instead of returning base64 data."""
         if record_id and field_name:
-            return f'/web/image/{model_name}/{record_id}/{field_name}'
+            base_url = request.env['ir.config_parameter'].sudo().get_param('web.base.url')
+            return f'{base_url}/web/image/{model_name}/{record_id}/{field_name}'
         return ''
 
     @classmethod
@@ -583,7 +584,7 @@ class ShopController(http.Controller):
             'id': product.id,
             'name': product.name,
             'code': product.default_code or '',
-            'description': product.description or '',
+            'description': html2plaintext(product.description) if product.description else '',
             'sale_price': product.list_price,
             'image': cls._get_image_url('product.product', product.id, 'image_1920') if product.image_1920 else '',
             'category': {
@@ -2161,6 +2162,7 @@ class ShopController(http.Controller):
             filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
             filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
             filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            filter_shop = request.httprequest.args.get('filter_shop', '').strip()
             
             # Validate sort field
             valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
@@ -2195,14 +2197,14 @@ class ShopController(http.Controller):
             if filter_price_min:
                 try:
                     price_min = float(filter_price_min)
-                    domain.append(('list_price', '>=', price_min))
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
                 except ValueError:
                     pass
             
             if filter_price_max:
                 try:
                     price_max = float(filter_price_max)
-                    domain.append(('list_price', '<=', price_max))
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
                 except ValueError:
                     pass
             
@@ -3891,14 +3893,14 @@ class ShopController(http.Controller):
             if filter_price_min:
                 try:
                     price_min = float(filter_price_min)
-                    domain.append(('list_price', '>=', price_min))
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
                 except ValueError:
                     pass
             
             if filter_price_max:
                 try:
                     price_max = float(filter_price_max)
-                    domain.append(('list_price', '<=', price_max))
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
                 except ValueError:
                     pass
             
