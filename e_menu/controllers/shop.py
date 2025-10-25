@@ -1,8 +1,14 @@
 import base64
 import json
+import re
+import uuid
+from datetime import timedelta
+import requests
 from odoo import http, Command, fields, _
 from odoo.http import request, Response
-from odoo.tools import config
+from odoo.tools import config, html2plaintext
+from collections import defaultdict
+from werkzeug.exceptions import NotFound, BadRequest
 from functools import wraps
 from typing import List
 
@@ -84,166 +90,214 @@ def verify_ownership(entity_type='shop'):
     Args:
         entity_type (str): Type of entity to check ('shop', 'product', 'category', 'variant', 'variant_value', 'wifi', 'open_hour')
     """
-    from functools import wraps
-    from odoo.http import request
-
-    def json_response(status, message, code):
-        return request.make_json_response({
-            "status": status,
-            "message": message,
-            "code": code
-        }, status=code)
-
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 current_user_id = request.env.user.id
-
-                entity_map = {
-                    "shop": {
-                        "model": "res.partner",
-                        "required": ["shop_id"],
-                        "domain": lambda kw: [
-                            ('id', '=', kw.get('shop_id')),
-                            ('type', '=', 'store')
-                        ],
-                        "not_found": "Shop not found",
-                        "unauth": "Unauthorized: You can only modify/delete shops you own",
-                    },
-                    "product": {
-                        "model": "product.template",
-                        "required": ["shop_id", "product_id"],
-                        "domain": lambda kw: [
-                            ('id', '=', kw.get('product_id')),
-                            ('shop_id', '=', kw.get('shop_id'))
-                        ],
-                        "not_found": "Product not found",
-                        "unauth": "Unauthorized: You can only modify products you own",
-                    },
-                    "category": {
-                        "model": "product.category",
-                        "required": ["shop_id", "cate_id"],
-                        "domain": lambda kw: [
-                            ('id', '=', kw.get('cate_id')),
-                            ('shop_id', '=', kw.get('shop_id'))
-                        ],
-                        "not_found": "Category not found",
-                        "unauth": "Unauthorized: You can only modify categories you own",
-                    },
-                    "variant": {
-                        "model": "product.attribute",
-                        "required": ["shop_id", "variant_id"],
-                        "domain": lambda kw: [
-                            ('id', '=', kw.get('variant_id')),
-                            ('shop_id', '=', kw.get('shop_id'))
-                        ],
-                        "not_found": "Variant not found",
-                        "unauth": "Unauthorized: You can only modify variants you own",
-                    },
-                    "variant_value": {
-                        "model": "product.attribute.value",
-                        "required": ["shop_id", "value_id"],
-                        "domain": lambda kw: [('id', '=', kw.get('value_id'))],
-                        "not_found": "Variant value not found",
-                        "unauth": "Unauthorized: You can only modify variant values you own",
-                    },
-                    "wifi": {
-                        "model": "shop.wifi",
-                        "required": ["shop_id"],
-                        "special": "wifi"
-                    },
-                    "open_hour": {
-                        "model": "shop.open.hour",
-                        "required": ["shop_id"],
-                        "special": "open_hour"
-                    },
-                    "banner": {
-                        "model": "res.partner",
-                        "required": ["shop_id"],
-                        "domain": lambda kw: [
-                            ('id', '=', kw.get('shop_id')),
-                            ('type', '=', 'store')
-                        ],
-                        "not_found": "Shop not found",
-                        "unauth": "Unauthorized: You can only update banners for shops you own",
-                    }
-                }
-
-                cfg = entity_map.get(entity_type)
-                if not cfg:
-                    return json_response("error", "Unsupported entity type", 400)
-
-                # Check required params
-                for param in cfg.get("required", []):
-                    if not kwargs.get(param):
-                        return json_response("error", f"{param.replace('_', ' ').title()} is required", 400)
-
-                # Handle special wifi & open_hour logic
-                if cfg.get("special") == "wifi":
-                    shop_id, wifi_id = kwargs.get("shop_id"), kwargs.get("wifi_id")
-                    if not wifi_id:  # creating wifi
+                
+                if entity_type == 'shop':
+                    shop_id = kwargs.get('shop_id')
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    shop = request.env['res.partner'].sudo().search([
+                        ('id', '=', shop_id),
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    
+                    if not shop:
+                        return request.make_json_response({'error': 'Shop not found'}, status=404)
+                    
+                    if shop.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify shops you own'
+                        }, status=403)
+                
+                elif entity_type == 'product':
+                    shop_id = kwargs.get('shop_id')
+                    product_id = kwargs.get('product_id')
+                    
+                    if not shop_id or not product_id:
+                        return request.make_json_response({'error': 'Shop ID and Product ID are required'}, status=400)
+                    
+                    product = request.env['product.template'].sudo().search([
+                        ('id', '=', product_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not product:
+                        return request.make_json_response({'error': 'Product not found'}, status=404)
+                    
+                    if product.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify products you own'
+                        }, status=403)
+                
+                elif entity_type == 'category':
+                    shop_id = kwargs.get('shop_id')
+                    cate_id = kwargs.get('cate_id')
+                    
+                    if not shop_id or not cate_id:
+                        return request.make_json_response({'error': 'Shop ID and Category ID are required'}, status=400)
+                    
+                    category = request.env['product.category'].sudo().search([
+                        ('id', '=', cate_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not category:
+                        return request.make_json_response({'error': 'Category not found'}, status=404)
+                    
+                    if category.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify categories you own'
+                        }, status=403)
+                
+                elif entity_type == 'variant':
+                    shop_id = kwargs.get('shop_id')
+                    variant_id = kwargs.get('variant_id')
+                    
+                    if not shop_id or not variant_id:
+                        return request.make_json_response({'error': 'Shop ID and Variant ID are required'}, status=400)
+                    
+                    variant = request.env['product.attribute'].sudo().search([
+                        ('id', '=', variant_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not variant:
+                        return request.make_json_response({'error': 'Variant not found'}, status=404)
+                    
+                    if variant.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify variants you own'
+                        }, status=403)
+                
+                elif entity_type == 'variant_value':
+                    shop_id = kwargs.get('shop_id')
+                    value_id = kwargs.get('value_id')
+                    
+                    if not shop_id or not value_id:
+                        return request.make_json_response({'error': 'Shop ID and Value ID are required'}, status=400)
+                    
+                    variant_value = request.env['product.attribute.value'].sudo().search([
+                        ('id', '=', value_id)
+                    ], limit=1)
+                    
+                    if not variant_value:
+                        return request.make_json_response({'error': 'Variant value not found'}, status=404)
+                    
+                    if variant_value.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify variant values you own'
+                        }, status=403)
+                
+                elif entity_type == 'wifi':
+                    shop_id = kwargs.get('shop_id')
+                    wifi_id = kwargs.get('wifi_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    # For wifi creation, check shop ownership
+                    if not wifi_id:
                         shop = request.env['res.partner'].sudo().search([
-                            ('id', '=', shop_id), ('type', '=', 'store')
+                            ('id', '=', shop_id),
+                            ('type', '=', 'store')
                         ], limit=1)
+                        
                         if not shop:
-                            return json_response("error", "Shop not found", 404)
+                            return request.make_json_response({'error': 'Shop not found'}, status=404)
+                        
                         if shop.create_uid.id != current_user_id:
-                            return json_response("error",
-                                                 "Unauthorized: You can only create wifi for shops you own", 403)
-                    else:  # updating/deleting wifi
-                        wifi = request.env[cfg["model"]].sudo().search([
-                            ('id', '=', wifi_id), ('shop_id', '=', shop_id)
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only create wifi for shops you own'
+                            }, status=403)
+                    else:
+                        # For wifi update/delete, check wifi ownership
+                        wifi = request.env['shop.wifi'].sudo().search([
+                            ('id', '=', wifi_id),
+                            ('shop_id', '=', shop_id)
                         ], limit=1)
+                        
                         if not wifi:
-                            return json_response("error", "WiFi not found", 404)
+                            return request.make_json_response({'error': 'WiFi not found'}, status=404)
+                        
                         if wifi.create_uid.id != current_user_id:
-                            return json_response("error", "Unauthorized: You can only modify wifi you own", 403)
-
-                elif cfg.get("special") == "open_hour":
-                    shop_id, hour_id = kwargs.get("shop_id"), kwargs.get("hour_id")
-                    if not hour_id:  # creating open hour
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only modify wifi you own'
+                            }, status=403)
+                
+                elif entity_type == 'open_hour':
+                    shop_id = kwargs.get('shop_id')
+                    hour_id = kwargs.get('hour_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    # For open hour creation, check shop ownership
+                    if not hour_id:
                         shop = request.env['res.partner'].sudo().search([
-                            ('id', '=', shop_id), ('type', '=', 'store')
+                            ('id', '=', shop_id),
+                            ('type', '=', 'store')
                         ], limit=1)
+                        
                         if not shop:
-                            return json_response("error", "Shop not found", 404)
+                            return request.make_json_response({'error': 'Shop not found'}, status=404)
+                        
                         if shop.create_uid.id != current_user_id:
-                            return json_response("error",
-                                                 "Unauthorized: You can only create open hours for shops you own",
-                                                 403)
-                    else:  # updating/deleting open hour
-                        hour = request.env[cfg["model"]].sudo().search([
-                            ('id', '=', hour_id), ('shop_id', '=', shop_id)
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only create open hours for shops you own'
+                            }, status=403)
+                    else:
+                        # For open hour update/delete, check open hour ownership
+                        open_hour = request.env['shop.open.hour'].sudo().search([
+                            ('id', '=', hour_id),
+                            ('shop_id', '=', shop_id)
                         ], limit=1)
-                        if not hour:
-                            return json_response("error", "Open hour not found", 404)
-                        if hour.create_uid.id != current_user_id:
-                            return json_response("error", "Unauthorized: You can only modify open hours you own",
-                                                 403)
-
-                else:
-                    # Generic flow
-                    record = request.env[cfg["model"]].sudo().search(cfg["domain"](kwargs), limit=1)
-                    if not record:
-                        return json_response("error", cfg["not_found"], 404)
-                    if record.create_uid.id != current_user_id:
-                        return json_response("error", cfg["unauth"], 403)
-
+                        
+                        if not open_hour:
+                            return request.make_json_response({'error': 'Open hour not found'}, status=404)
+                        
+                        if open_hour.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only modify open hours you own'
+                            }, status=403)
+                
+                elif entity_type == 'banner':
+                    shop_id = kwargs.get('shop_id')
+                    
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+                    
+                    shop = request.env['res.partner'].sudo().search([
+                        ('id', '=', shop_id),
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    
+                    if not shop:
+                        return request.make_json_response({'error': 'Shop not found'}, status=404)
+                    
+                    if shop.create_uid.id != current_user_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only update banners for shops you own'
+                        }, status=403)
+                
                 return func(*args, **kwargs)
-
+                
             except Exception as e:
-                return json_response("error", f"Authorization check failed: {str(e)}", 500)
-
+                return request.make_json_response({'error': f'Authorization check failed: {str(e)}'}, status=500)
+        
         return wrapper
-
     return decorator
+
 
 BASE_URL = '/angkort/api/v1'
 
 PARTNER_FIELDS = [
     'name', 'wifi_name', 'phone', 'customer_address', 'shop_latitude', 'shop_longitude', 'email',
-    'shop_banner', 'shop_wifi_ids', 'shop_open_hour_ids', 'image_1920'
+    'shop_banner', 'shop_wifi_ids', 'shop_open_hour_ids'
 ]
 
 ORDER_STATE = {
@@ -282,7 +336,7 @@ class ShopController(http.Controller):
 
     def _handle_shop_related_fields(self, data, files, operation='create'):
         """
-        Helper method to handle shop related fields (shop_banner, shop_wifi_ids, shop_open_hour_ids, image_1920)
+        Helper method to handle shop related fields (shop_banner, shop_wifi_ids, shop_open_hour_ids)
         
         Args:
             data: form data
@@ -294,104 +348,19 @@ class ShopController(http.Controller):
         """
         import json
         import base64
-        import os
-        from PIL import Image
-        import io
         
         processed_fields = {}
-        
-        def _validate_image_file(image_file, field_name, max_size_mb=10):
-            """
-            Validate image file for size, format, and dimensions
-            
-            Args:
-                image_file: FileStorage object
-                field_name: Name of the field for error reporting
-                max_size_mb: Maximum file size in MB
-                
-            Returns:
-                tuple: (is_valid, error_message, processed_data)
-            """
-            try:
-                # Check if file exists and has content
-                if not image_file or not image_file.filename:
-                    return False, f"{field_name}: No file provided", None
-                
-                # Check file size
-                image_file.seek(0, os.SEEK_END)
-                file_size = image_file.tell()
-                image_file.seek(0)
-                
-                max_size_bytes = max_size_mb * 1024 * 1024
-                if file_size > max_size_bytes:
-                    return False, f"{field_name}: File size exceeds {max_size_mb}MB limit", None
-                
-                # Check file extension
-                allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
-                file_ext = os.path.splitext(image_file.filename.lower())[1]
-                if file_ext not in allowed_extensions:
-                    return False, f"{field_name}: Invalid file format. Allowed: {', '.join(allowed_extensions)}", None
-                
-                # Validate image content and get dimensions
-                try:
-                    content = image_file.read()
-                    image_file.seek(0)  # Reset file pointer
-                    
-                    if not content:
-                        return False, f"{field_name}: Empty file", None
-                    
-                    # Try to open image with PIL to validate format and get dimensions
-                    with Image.open(io.BytesIO(content)) as img:
-                        width, height = img.size
-                        
-                        # Check minimum dimensions (optional)
-                        if width < 50 or height < 50:
-                            return False, f"{field_name}: Image dimensions too small. Minimum: 50x50px", None
-                        
-                        # Check maximum dimensions (optional)
-                        if width > 4096 or height > 4096:
-                            return False, f"{field_name}: Image dimensions too large. Maximum: 4096x4096px", None
-                        
-                        # Check aspect ratio (optional - prevent extremely wide/tall images)
-                        aspect_ratio = width / height
-                        if aspect_ratio > 10 or aspect_ratio < 0.1:
-                            return False, f"{field_name}: Image aspect ratio too extreme. Keep between 0.1 and 10", None
-                    
-                    return True, None, content
-                    
-                except Exception as img_error:
-                    return False, f"{field_name}: Invalid image file or corrupted data: {str(img_error)}", None
-                    
-            except Exception as e:
-                return False, f"{field_name}: Error processing file: {str(e)}", None
-        
-        # Handle image_1920 field (profile image)
-        image_1920_file = files.get('image_1920')
-        if image_1920_file:
-            is_valid, error_msg, image_content = _validate_image_file(image_1920_file, 'image_1920', max_size_mb=5)
-            if is_valid:
-                try:
-                    processed_fields['image_1920'] = base64.b64encode(image_content).decode('utf-8')
-                except Exception as e:
-                    # Log error but don't fail the entire operation
-                    print(f"Error encoding image_1920: {str(e)}")
-            else:
-                # For now, we'll log the validation error but continue processing
-                # In a production environment, you might want to return an error response
-                print(f"Image validation failed: {error_msg}")
         
         # Handle banner file upload (Image field expects base64 string)
         banner_file = files.get('shop_banner')
         if banner_file:
-            is_valid, error_msg, banner_content = _validate_image_file(banner_file, 'shop_banner', max_size_mb=10)
-            if is_valid:
-                try:
-                    processed_fields['shop_banner'] = base64.b64encode(banner_content).decode('utf-8')
-                except Exception as e:
-                    # Log error but don't fail the entire operation
-                    print(f"Error encoding shop_banner: {str(e)}")
-            else:
-                print(f"Banner validation failed: {error_msg}")
+            try:
+                content = banner_file.read()
+                if content:
+                    processed_fields['shop_banner'] = base64.b64encode(content).decode('utf-8')
+            except Exception:
+                # ignore banner if something goes wrong reading it
+                pass
 
         # Helper to parse possible JSON payload passed as string
         def _parse_json_field(val):
@@ -449,79 +418,6 @@ class ShopController(http.Controller):
                     processed_fields['shop_open_hour_ids'] = hour_commands
                     
         return processed_fields
-
-    def _create_json_response(self, data=None, status="success", message="", status_code="200", errors=None, http_status=200):
-        """
-        Helper method to create standardized JSON responses
-        
-        Args:
-            data: Response data
-            status: Response status ('success' or 'error')
-            message: Response message
-            status_code: Custom status code string
-            errors: List of error objects
-            http_status: HTTP status code
-            
-        Returns:
-            Response object with JSON content
-        """
-        import json
-        
-        response_data = {
-            "status": status,
-            "message": message,
-            "statusCode": status_code
-        }
-        
-        if data is not None:
-            response_data["data"] = data
-            
-        if errors:
-            response_data["errors"] = errors
-            
-        return Response(json.dumps(response_data), status=http_status, content_type='application/json')
-
-    def _create_error_response(self, message, status_code="400", errors=None, http_status=400):
-        """
-        Helper method to create standardized error responses
-        
-        Args:
-            message: Error message
-            status_code: Custom status code string
-            errors: List of error objects
-            http_status: HTTP status code
-            
-        Returns:
-            Response object with error JSON content
-        """
-        return self._create_json_response(
-            status="error",
-            message=message,
-            status_code=status_code,
-            errors=errors,
-            http_status=http_status
-        )
-
-    def _create_success_response(self, data=None, message="", status_code="200", http_status=200):
-        """
-        Helper method to create standardized success responses
-        
-        Args:
-            data: Response data
-            message: Success message
-            status_code: Custom status code string
-            http_status: HTTP status code
-            
-        Returns:
-            Response object with success JSON content
-        """
-        return self._create_json_response(
-            data=data,
-            status="success",
-            message=message,
-            status_code=status_code,
-            http_status=http_status
-        )
 
     def _generate_token(self, user_id, token_type, minutes=0, days=0):
         """
@@ -678,7 +574,8 @@ class ShopController(http.Controller):
     def _get_image_url(cls, model_name, record_id, field_name):
         """Generate image URL for Odoo image fields instead of returning base64 data."""
         if record_id and field_name:
-            return f'/web/image/{model_name}/{record_id}/{field_name}'
+            base_url = request.env['ir.config_parameter'].sudo().get_param('web.base.url')
+            return f'{base_url}/web/image/{model_name}/{record_id}/{field_name}'
         return ''
 
     @classmethod
@@ -687,7 +584,7 @@ class ShopController(http.Controller):
             'id': product.id,
             'name': product.name,
             'code': product.default_code or '',
-            'description': product.description or '',
+            'description': html2plaintext(product.description) if product.description else '',
             'sale_price': product.list_price,
             'image': cls._get_image_url('product.product', product.id, 'image_1920') if product.image_1920 else '',
             'category': {
@@ -1191,42 +1088,82 @@ class ShopController(http.Controller):
             }
             return Response(json.dumps(response), status=200, content_type='application/json')
         except Exception as e:
-            return self._create_error_response(
-                message="An error occurred",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_detail(self, shop_id, **kw):
         """
-        Retrieve details for a specific shop.
+        Retrieve detailed information for a specific shop.
 
-        Route: GET /angkort/api/v1/shop/<shop_id>
+        **Route:**
+            GET /angkort/api/v1/shop/<shop_id>
 
-        Parameters:
-            shop_id (int): The ID of the shop.
+        **Parameters:**
+            shop_id (int): Unique ID of the shop to retrieve.
 
-        Returns:
-            200: Shop details as JSON object.
-            404: If the shop is not found.
-            500: On server error.
+        **Responses:**
+            - **200 OK:** Returns a JSON object containing the shop details.
+            - **404 Not Found:** If no shop exists with the given ID.
+            - **500 Internal Server Error:** If an unexpected error occurs on the server.
 
-        Example Response:
-            {
-                "data": {
-                    "id": 1,
-                    "name": "Shop A",
-                    "phoneNumber": ["123456789"],
-                    "address": ["123 Main St"],
-                    "wifi": ["ShopWiFi"],
-                    "banks": [...],
-                    "createdAt": "2024-03-06T13:42:05.098Z",
-                    "updatedAt": "2024-03-06T13:42:05.098Z",
-                    "publishedAt": "2024-03-06T13:42:05.103Z"
-                }
-            }
+        **Example Request:**
+            GET /angkort/api/v1/shop/42
+
+        **Example Successful Response (200):**
+        ```json
+        {
+          "data": {
+            "id": 42,
+            "name": "Angkor Coffee Shop",
+            "phoneNumber": ["+85512345678"],
+            "address": ["123 Riverside, Phnom Penh"],
+            "wifi": ["AngkorFreeWiFi"],
+            "banner": "https://example.com/web/image/res.partner/42/shop_banner",
+            "shop_wifi_ids": [
+              {
+                "id": 7,
+                "name": "ShopWifi1",
+                "password": "securepass",
+                "wifi_qr_code": "https://example.com/web/image/shop.wifi/7/wifi_qr_code"
+              }
+            ],
+            "shop_open_hour_ids": [
+              {
+                "id": 3,
+                "day": "mon",
+                "day_name": "Monday",
+                "open": "08:00",
+                "close": "17:00"
+              }
+            ],
+            "banks": [
+              {
+                "id": 5,
+                "bank_name": "ABA Bank",
+                "account_number": "123456789",
+                "account_name": "Angkor Coffee"
+              }
+            ],
+            "createdAt": "2025-09-11T09:45:32.000Z",
+            "updatedAt": "2025-09-11T11:15:20.000Z",
+            "publishedAt": "2025-09-11T09:45:32.000Z"
+          }
+        }
+        ```
+
+        **Example Error Response (404):**
+        ```json
+        {
+          "error": "Shop not found"
+        }
+        ```
+
+        **Example Error Response (500):**
+        ```json
+        {
+          "error": "Unexpected server error details here"
+        }
+        ```
         """
         try:
             shop = request.env['res.partner'].sudo().search([
@@ -1234,11 +1171,7 @@ class ShopController(http.Controller):
                 ('type', '=', 'store')
             ], limit=1)
             if not shop:
-                return self._create_error_response(
-                    message="Shop not found",
-                    status_code="404",
-                    http_status=404
-                )
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
             response = {
                 'data': {
                     'id': shop.id,
@@ -1286,9 +1219,8 @@ class ShopController(http.Controller):
             data = request.httprequest.form
             files = request.httprequest.files
 
-            # only allow base partner fields from PARTNER_FIELDS, excluding One2many fields
-            one2many_fields = {'shop_wifi_ids', 'shop_open_hour_ids'}
-            create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS and k not in one2many_fields}
+            # only allow base partner fields from PARTNER_FIELDS
+            create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
 
             # Handle shop related fields using helper method
             shop_related_fields = self._handle_shop_related_fields(data, files, 'create')
@@ -1316,26 +1248,17 @@ class ShopController(http.Controller):
                 }), status=400, content_type='application/json')
 
             # Create partner (shop). Use create_company context to mark as company/store.
-            print(request.env.user)
-            print(create_data)
-            shop = request.env['res.partner'].with_context(create_company=True).create([create_data])
+            shop = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
             if shop:
                 # set the current user's partner parent to the created shop
-                print(shop.name, shop.create_uid.name)
                 try:
-                    request.env.user.partner_id.sudo().update({'parent_id': shop.id})
-                except Exception as e:
-                    print(e)
+                    request.env.user.partner_id.update({'parent_id': shop.id})
+                except Exception:
+                    pass
 
             resp = {'id': shop.id, 'name': shop.name}
-            return Response(json.dumps({
-                "status": "success",
-                "message": "You've successfully created",
-                "statusCode": "201",
-                "data": resp
-            }), status=201, content_type='application/json')
+            return Response(json.dumps(resp), status=201, content_type='application/json')
         except Exception as e:
-            print(e)
             return Response(json.dumps({
                 "status": "error",
                 "message": "Failed to create shop",
@@ -1448,11 +1371,7 @@ class ShopController(http.Controller):
                 }), status=404, content_type='application/json')
 
             shop.write(update_fields)
-            return Response(json.dumps({
-                "status": "success",
-                "message": f"Shop with ID {shop_id} updated successfully",
-                "statusCode": "200"
-            }), status=200, content_type='application/json')
+            return Response(json.dumps({'message': f'Shop with ID {shop_id} updated successfully'}), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -1494,34 +1413,31 @@ class ShopController(http.Controller):
             update_fields.update(shop_related_fields)
 
             if not update_fields:
-                return self._create_error_response(
-                    message="Failed to patch shop",
-                    status_code="400",
-                    errors=[{"name": "fields", "message": "No valid fields to update"}],
-                    http_status=400
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch shop",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return self._create_error_response(
-                    message="Failed to patch shop",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}],
-                    http_status=404
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch shop",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
 
             shop.write(update_fields)
-            return self._create_success_response(
-                message=f'Shop with ID {shop_id} patched successfully',
-                http_status=200
-            )
+            return Response(json.dumps({'message': f'Shop with ID {shop_id} patched successfully'}), status=200, content_type='application/json')
         except Exception as e:
-            return self._create_error_response(
-                message="Failed to patch shop",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='shop')
@@ -1540,345 +1456,23 @@ class ShopController(http.Controller):
             500: On server error.
         """
         try:
-            shop = request.env['res.partner'].sudo().search([
-                ('id', '=', shop_id),
-                ('type', '=', 'store')
-            ], limit=1)
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return self._create_error_response(
-                    message="Failed to delete shop",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}],
-                    http_status=404
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete shop",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
+                }), status=404, content_type='application/json')
             shop.unlink()
-            data = {
-                "status": "success",
-                "message": "You've successfully deleted",
-                "code": 200
-            }
-            return request.make_json_response(
-                data=json.dumps(data),
-                status=204
-            )
+            return Response(status=204)
         except Exception as e:
-            return self._create_error_response(
-                message="Failed to delete shop",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
-
-    # =============================================================================
-    # SHOP OWNER ROUTES (Authenticated Shop Management)
-    # =============================================================================
-    
-    @http.route(f"{BASE_URL}/owner/shops", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
-    def owner_shop_list(self, **kw):
-        """
-        Get shops owned by the authenticated user.
-        
-        Route: GET /angkort/api/v1/owner/shops
-        
-        Returns:
-            200: List of shops owned by the user
-            401: If not authenticated
-        """
-        try:
-            user_id = request.env.user.id
-            
-            # Get shops owned by the user
-            shops = request.env['res.partner'].sudo().search([
-                ('type', '=', 'store'),
-                ('create_uid', '=', user_id)
-            ])
-            
-            shop_list = []
-            for shop in shops:
-                shop_data = {
-                    'id': shop.id,
-                    'name': shop.name,
-                    'phone': shop.phone,
-                    'email': shop.email,
-                    'customer_address': shop.customer_address,
-                    'website': shop.website,
-                    'comment': shop.comment,
-                    'industry_id': shop.industry_id.id if shop.industry_id else None,
-                    'is_active': shop.active,
-                    'create_date': shop.create_date.isoformat() if shop.create_date else None,
-                    'write_date': shop.write_date.isoformat() if shop.write_date else None,
-                }
-                shop_list.append(shop_data)
-            
-            return self._create_success_response(
-                data=shop_list,
-                message="Shops retrieved successfully"
-            )
-            
-        except Exception as e:
-            return self._create_error_response(
-                message="Failed to retrieve shops",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
-    
-    @http.route(f"{BASE_URL}/owner/shops", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
-    def owner_shop_create(self, **kw):
-        """
-        Create a new shop for the authenticated user.
-        
-        Route: POST /angkort/api/v1/owner/shops
-        
-        Returns:
-            201: Shop created successfully
-            400: Invalid data
-            401: If not authenticated
-        """
-        try:
-            data = request.httprequest.form
-            files = request.httprequest.files
-            
-            # Prepare shop data
-            create_data = {
-                'name': data.get('name'),
-                'phone': data.get('phone'),
-                'email': data.get('email'),
-                'customer_address': data.get('customer_address'),
-                'website': data.get('website'),
-                'comment': data.get('comment'),
-                'industry_id': int(data.get('industry_id')) if data.get('industry_id') else False,
-                'type': 'store',
-                'create_uid': request.env.user.id
-            }
-            
-            # Validate required fields
-            required_fields = ['name']
-            missing_fields = [field for field in required_fields if not create_data.get(field)]
-            if missing_fields:
-                return self._create_error_response(
-                    message="Missing required fields",
-                    status_code="400",
-                    errors=[{"name": field, "message": f"{field} is required"} for field in missing_fields],
-                    http_status=400
-                )
-            
-            # Create shop
-            shop = request.env['res.partner'].sudo().create(create_data)
-            
-            # Handle file uploads if any
-            if files and 'shop_banner' in files:
-                # Handle banner upload logic here
-                pass
-            
-            shop_data = {
-                'id': shop.id,
-                'name': shop.name,
-                'phone': shop.phone,
-                'email': shop.email,
-                'customer_address': shop.customer_address,
-                'website': shop.website,
-                'comment': shop.comment,
-                'industry_id': shop.industry_id.id if shop.industry_id else None,
-                'create_date': shop.create_date.isoformat() if shop.create_date else None
-            }
-            
-            return self._create_success_response(
-                data=shop_data,
-                message="Shop created successfully",
-                http_status=201
-            )
-            
-        except Exception as e:
-            return self._create_error_response(
-                message="Failed to create shop",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
-    
-    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
-    def owner_shop_detail(self, shop_id, **kw):
-        """
-        Get details of a shop owned by the authenticated user.
-        
-        Route: GET /angkort/api/v1/owner/shops/<shop_id>
-        
-        Returns:
-            200: Shop details
-            404: Shop not found or not owned by user
-            401: If not authenticated
-        """
-        try:
-            user_id = request.env.user.id
-            
-            # Find shop owned by user
-            shop = request.env['res.partner'].sudo().search([
-                ('id', '=', shop_id),
-                ('type', '=', 'store'),
-                ('create_uid', '=', user_id)
-            ], limit=1)
-            
-            if not shop:
-                return self._create_error_response(
-                    message="Shop not found",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
-                    http_status=404
-                )
-            
-            shop_data = {
-                'id': shop.id,
-                'name': shop.name,
-                'phone': shop.phone,
-                'email': shop.email,
-                'customer_address': shop.customer_address,
-                'website': shop.website,
-                'comment': shop.comment,
-                'industry_id': shop.industry_id.id if shop.industry_id else None,
-                'is_active': shop.active,
-                'create_date': shop.create_date.isoformat() if shop.create_date else None,
-                'write_date': shop.write_date.isoformat() if shop.write_date else None,
-            }
-            return self._create_success_response(
-                data=shop_data,
-                message="Shop details retrieved successfully"
-            )
-            
-        except Exception as e:
-            return self._create_error_response(
-                message="Failed to retrieve shop details",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
-    
-    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
-    def owner_shop_update(self, shop_id, **kw):
-        """
-        Update a shop owned by the authenticated user.
-        
-        Route: PUT /angkort/api/v1/owner/shops/<shop_id>
-        
-        Returns:
-            200: Shop updated successfully
-            404: Shop not found or not owned by user
-            400: Invalid data
-            401: If not authenticated
-        """
-        try:
-            user_id = request.env.user.id
-            data = request.httprequest.form
-            
-            # Find shop owned by user
-            shop = request.env['res.partner'].sudo().search([
-                ('id', '=', shop_id),
-                ('type', '=', 'store'),
-                ('create_uid', '=', user_id)
-            ], limit=1)
-            
-            if not shop:
-                return self._create_error_response(
-                    message="Shop not found",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
-                    http_status=404
-                )
-            
-            # Prepare update data
-            update_data = {}
-            if 'name' in data:
-                update_data['name'] = data.get('name')
-            if 'phone' in data:
-                update_data['phone'] = data.get('phone')
-            if 'email' in data:
-                update_data['email'] = data.get('email')
-            if 'customer_address' in data:
-                update_data['customer_address'] = data.get('customer_address')
-            if 'website' in data:
-                update_data['website'] = data.get('website')
-            if 'comment' in data:
-                update_data['comment'] = data.get('comment')
-            if 'industry_id' in data:
-                update_data['industry_id'] = int(data.get('industry_id')) if data.get('industry_id') else False
-            if 'is_active' in data:
-                update_data['active'] = data.get('is_active', 'true').lower() == 'true'
-            
-            # Update shop
-            shop.write(update_data)
-            
-            shop_data = {
-                'id': shop.id,
-                'name': shop.name,
-                'phone': shop.phone,
-                'email': shop.email,
-                'customer_address': shop.customer_address,
-                'website': shop.website,
-                'comment': shop.comment,
-                'industry_id': shop.industry_id.id if shop.industry_id else None,
-                'is_active': shop.active,
-                'create_date': shop.create_date.isoformat() if shop.create_date else None,
-                'write_date': shop.write_date.isoformat() if shop.write_date else None,
-            }
-            
-            return self._create_success_response(
-                data=shop_data,
-                message="Shop updated successfully"
-            )
-            
-        except Exception as e:
-            return self._create_error_response(
-                message="Failed to update shop",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
-    
-    @http.route(f"{BASE_URL}/owner/shops/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
-    def owner_shop_delete(self, shop_id, **kw):
-        """
-        Delete a shop owned by the authenticated user.
-        
-        Route: DELETE /angkort/api/v1/owner/shops/<shop_id>
-        
-        Returns:
-            204: Shop deleted successfully
-            404: Shop not found or not owned by user
-            401: If not authenticated
-        """
-        try:
-            user_id = request.env.user.id
-            
-            # Find shop owned by user
-            shop = request.env['res.partner'].sudo().search([
-                ('id', '=', shop_id),
-                ('type', '=', 'store'),
-                ('create_uid', '=', user_id)
-            ], limit=1)
-            
-            if not shop:
-                return self._create_error_response(
-                    message="Shop not found",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": f"Shop with ID {shop_id} not found or not owned by you"}],
-                    http_status=404
-                )
-            
-            # Delete shop
-            shop.unlink()
-            
-            return self._create_success_response(
-                message="Shop deleted successfully",
-                http_status=204
-            )
-            
-        except Exception as e:
-            return self._create_error_response(
-                message="Failed to delete shop",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete shop",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -1912,22 +1506,22 @@ class ShopController(http.Controller):
                 if 'password' not in data:
                     errors.append({"name": "password", "message": "WiFi password is required"})
                 
-                return self._create_error_response(
-                    message="Failed to create WiFi",
-                    status_code="400",
-                    errors=errors,
-                    http_status=400
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create WiFi",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return self._create_error_response(
-                    message="Failed to create WiFi",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": "Shop not found"}],
-                    http_status=404
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
             
             # Prepare WiFi data
             wifi_data = {
@@ -1951,19 +1545,14 @@ class ShopController(http.Controller):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return self._create_success_response(
-                data=response_data,
-                message="WiFi created successfully",
-                status_code="201",
-                http_status=201
-            )
+            return Response(json.dumps(response_data), status=201, content_type='application/json')
         except Exception as e:
-            return self._create_error_response(
-                message="Failed to create WiFi",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create WiFi",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -1993,22 +1582,22 @@ class ShopController(http.Controller):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return self._create_error_response(
-                    message="Failed to update WiFi",
-                    status_code="404",
-                    errors=[{"name": "shop_id", "message": "Shop not found"}],
-                    http_status=404
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
             
             # Verify WiFi exists and belongs to shop
             wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
             if not wifi:
-                return self._create_error_response(
-                    message="Failed to update WiFi",
-                    status_code="404",
-                    errors=[{"name": "wifi_id", "message": "WiFi not found"}],
-                    http_status=404
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "404",
+                    "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
+                }), status=404, content_type='application/json')
             
             # Prepare update data
             update_data = {}
@@ -2023,12 +1612,12 @@ class ShopController(http.Controller):
                 update_data['wifi_qr_code'] = base64.b64encode(image_data)
             
             if not update_data:
-                return self._create_error_response(
-                    message="Failed to update WiFi",
-                    status_code="400",
-                    errors=[{"name": "fields", "message": "No valid fields to update"}],
-                    http_status=400
-                )
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update WiFi",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
             
             # Update WiFi entry
             wifi.write(update_data)
@@ -2040,18 +1629,14 @@ class ShopController(http.Controller):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return self._create_success_response(
-                data=response_data,
-                message="WiFi updated successfully",
-                http_status=200
-            )
+            return Response(json.dumps(response_data), status=200, content_type='application/json')
         except Exception as e:
-            return self._create_error_response(
-                message="Failed to update WiFi",
-                status_code="500",
-                errors=[{"name": "general", "message": str(e)}],
-                http_status=500
-            )
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update WiFi",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -2577,6 +2162,7 @@ class ShopController(http.Controller):
             filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
             filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
             filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            filter_shop = request.httprequest.args.get('filter_shop', '').strip()
             
             # Validate sort field
             valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
@@ -2611,14 +2197,14 @@ class ShopController(http.Controller):
             if filter_price_min:
                 try:
                     price_min = float(filter_price_min)
-                    domain.append(('list_price', '>=', price_min))
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
                 except ValueError:
                     pass
             
             if filter_price_max:
                 try:
                     price_max = float(filter_price_max)
-                    domain.append(('list_price', '<=', price_max))
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
                 except ValueError:
                     pass
             
@@ -2673,7 +2259,8 @@ class ShopController(http.Controller):
                 keyword_meta["filter"]["price_max"] = float(filter_price_max)
             if filter_has_variants:
                 keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
-
+            if filter_shop:
+                keyword_meta["filter"]["shop"] = int(filter_shop)
             
             response = {
                 'data': products_data,
@@ -3182,12 +2769,7 @@ class ShopController(http.Controller):
                     'attribute_id': attribute.id,
                 } for value in values_data if 'name' in value]
                 request.env['product.attribute.value'].sudo().create(values_to_create)
-
-                return Response(json.dumps({
-                    "status": "success",
-                    "message": "Attribute values created successfully",
-                    "statusCode": "201"
-                }), status=201, content_type='application/json')
+                return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
             except json.JSONDecodeError:
                 return Response(json.dumps({
                     "status": "error",
@@ -3555,10 +3137,7 @@ class ShopController(http.Controller):
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=201
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3639,10 +3218,7 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=200
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -3721,10 +3297,7 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=200
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -4320,14 +3893,14 @@ class ShopController(http.Controller):
             if filter_price_min:
                 try:
                     price_min = float(filter_price_min)
-                    domain.append(('list_price', '>=', price_min))
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
                 except ValueError:
                     pass
             
             if filter_price_max:
                 try:
                     price_max = float(filter_price_max)
-                    domain.append(('list_price', '<=', price_max))
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
                 except ValueError:
                     pass
             
@@ -5263,10 +4836,7 @@ class ShopController(http.Controller):
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=201
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -5347,10 +4917,7 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=200
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",
@@ -5429,10 +4996,7 @@ class ShopController(http.Controller):
             if data.get('display_type') == 'multi':
                 data['create_variant'] = 'no_variant'
             attribute.write(data)
-            return self._create_success_response(
-                data=self._attribute_to_dict(attribute),
-                http_status=200
-            )
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
                 "status": "error",

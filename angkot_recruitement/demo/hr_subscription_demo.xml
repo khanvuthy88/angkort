@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Demo Subscriptions -->
+        <record id="demo_subscription_1" model="hr.subscription">
+            <field name="name">SUB0001</field>
+            <field name="user_id" ref="base.user_admin"/>
+            <field name="plan_id">premium</field>
+            <field name="status">active</field>
+            <field name="billing_cycle">yearly</field>
+            <field name="start_date">2024-01-01</field>
+            <field name="end_date">2024-12-31</field>
+            <field name="auto_renew">True</field>
+            <field name="price">299.00</field>
+            <field name="currency_id" ref="base.USD"/>
+            <field name="payment_method">card</field>
+            <field name="payment_status">paid</field>
+            <field name="payment_date">2024-01-01 10:00:00</field>
+            <field name="payment_reference">PAY_2024_001</field>
+            <field name="is_trial">False</field>
+            <field name="notes">Premium subscription for job portal admin user</field>
+        </record>
+
+        <record id="demo_subscription_2" model="hr.subscription">
+            <field name="name">SUB0002</field>
+            <field name="user_id" ref="base.user_demo"/>
+            <field name="plan_id">basic</field>
+            <field name="status">trial</field>
+            <field name="billing_cycle">monthly</field>
+            <field name="start_date">2024-01-15</field>
+            <field name="end_date">2024-02-15</field>
+            <field name="auto_renew">True</field>
+            <field name="price">99.00</field>
+            <field name="currency_id" ref="base.USD"/>
+            <field name="payment_method">card</field>
+            <field name="payment_status">pending</field>
+            <field name="is_trial">True</field>
+            <field name="trial_end_date">2024-01-29</field>
+            <field name="notes">Trial subscription for demo user</field>
+        </record>
+
+        <record id="demo_subscription_3" model="hr.subscription">
+            <field name="name">SUB0003</field>
+            <field name="user_id" ref="base.user_admin"/>
+            <field name="plan_id">enterprise</field>
+            <field name="status">active</field>
+            <field name="billing_cycle">yearly</field>
+            <field name="start_date">2024-02-01</field>
+            <field name="end_date">2025-01-31</field>
+            <field name="auto_renew">True</field>
+            <field name="price">599.00</field>
+            <field name="currency_id" ref="base.USD"/>
+            <field name="discount_percentage">10.0</field>
+            <field name="payment_method">paypal</field>
+            <field name="payment_status">paid</field>
+            <field name="payment_date">2024-02-01 14:30:00</field>
+            <field name="payment_reference">PAYPAL_2024_002</field>
+            <field name="is_trial">False</field>
+            <field name="notes">Enterprise subscription with 10% discount</field>
+        </record>
+    </data>
+</odoo>

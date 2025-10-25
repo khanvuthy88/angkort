@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Enhanced Job Form View -->
+    <record id="view_hr_job_form_enhanced" model="ir.ui.view">
+        <field name="name">hr.job.form.enhanced</field>
+        <field name="model">hr.job</field>
+        <field name="inherit_id" ref="hr.view_hr_job_form"/>
+        <field name="arch" type="xml">
+            
+            <!-- Add job portal fields after the name field -->
+            <xpath expr="//form/sheet/div[hasclass('oe_title')]" position="after">
+                <group>
+                    <group>
+                        <field name="is_featured"/>
+                        <field name="is_urgent"/>
+                        <field name="job_type"/>
+                    </group>
+                    <group>
+                        <field name="experience_level"/>
+                        <field name="education_level"/>
+                        <field name="job_category_id"/>
+                    </group>
+                </group>
+            </xpath>
+
+            <!-- Add salary fields after department -->
+            <xpath expr="//form/sheet/notebook/page[last()]" position="after">
+                <page string="Salary Information">
+                    <group>
+                        <group>
+                            <field name="salary_type"/>
+                            <field name="currency_id"/>
+                        </group>
+                        <group>
+                            <field name="min_salary" invisible="salary_type != 'range'" required="salary_type == 'range'"/>
+                            <field name="max_salary" invisible="salary_type != 'range'" required="salary_type == 'range'"/>
+                            <field name="fixed_salary" invisible="salary_type != 'fixed'" required="salary_type == 'fixed'"/>
+                        </group>
+                    </group>
+                </page>
+                <page string="Job Portal Settings">
+                    <group>
+                        <group>
+                            <field name="is_remote"/>
+                            <field name="application_deadline"/>
+                            <field name="job_tags" placeholder="e.g., React, JavaScript, Remote, Full-stack"/>
+                        </group>
+                        <group>
+                            <field name="application_email"/>
+                            <field name="application_url"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+            <!-- Add job content fields after description -->
+            <field name="description" position="after">
+                <group string="Job Content">
+                    <field name="responsibilities" widget="text" placeholder="List the main responsibilities and duties for this role..."/>
+                    <field name="requirements" widget="text" placeholder="List the required skills, experience, and qualifications..."/>
+                    <field name="benefits" widget="text" placeholder="Describe the benefits, perks, and compensation package..."/>
+                </group>
+            </field>
+            <!-- Add computed fields for display -->
+            <field name="no_of_recruitment" position="after">
+                <field name="salary_display" readonly="1"/>
+                <field name="job_tags_list" readonly="1"/>
+            </field>
+
+        </field>
+    </record>
+
+    <!-- Enhanced Job Tree View -->
+    <record id="view_hr_job_tree_enhanced" model="ir.ui.view">
+        <field name="name">hr.job.tree.enhanced</field>
+        <field name="model">hr.job</field>
+        <field name="inherit_id" ref="hr.view_hr_job_tree"/>
+        <field name="arch" type="xml">
+            
+            <!-- Add job portal columns -->
+            <field name="name" position="after">
+                <field name="job_type"/>
+                <field name="job_category_id"/>
+                <field name="is_featured" widget="boolean_toggle"/>
+                <field name="is_urgent" widget="boolean_toggle"/>
+            </field>
+
+            <field name="application_count" position="after">
+                <field name="salary_display"/>
+            </field>
+
+        </field>
+    </record>
+
+    <!-- Enhanced Job Search View -->
+    <record id="view_hr_job_search_enhanced" model="ir.ui.view">
+        <field name="name">hr.job.search.enhanced</field>
+        <field name="model">hr.job</field>
+        <field name="inherit_id" ref="hr.view_job_filter"/>
+        <field name="arch" type="xml">
+
+            <!-- Add search fields -->
+            <field name="name" position="after">
+                <field name="job_category_id"/>
+                <field name="job_type"/>
+                <field name="experience_level"/>
+                <field name="education_level"/>
+                <field name="is_featured"/>
+                <field name="is_urgent"/>
+                <field name="is_remote"/>
+                <field name="job_tags"/>
+            </field>
+
+            <!-- Add filters after existing filters -->
+            <filter name="archived" position="after">
+                <filter string="Featured Jobs" name="featured" domain="[('is_featured', '=', True)]"/>
+                <filter string="Urgent Jobs" name="urgent" domain="[('is_urgent', '=', True)]"/>
+                <filter string="Remote Jobs" name="remote" domain="[('is_remote', '=', True)]"/>
+            </filter>
+
+            <!-- Add group by options -->
+            <xpath expr="//search/group" position="inside">
+                <filter string="Job Category" name="group_category" context="{'group_by': 'job_category_id'}"/>
+                <filter string="Job Type" name="group_type" context="{'group_by': 'job_type'}"/>
+                <filter string="Experience Level" name="group_experience" context="{'group_by': 'experience_level'}"/>
+                <filter string="Education Level" name="group_education" context="{'group_by': 'education_level'}"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- Job Portal API Action -->
+    <record id="action_hr_job_portal_api" model="ir.actions.server">
+        <field name="name">Get Job Portal Data</field>
+        <field name="model_id" ref="hr.model_hr_job"/>
+        <field name="state">code</field>
+        <field name="code">
+# Get job portal data
+jobs = env['hr.job'].get_job_portal_data()
+log("Retrieved %d jobs for portal" % len(jobs))
+        </field>
+    </record>
+
+</odoo>
