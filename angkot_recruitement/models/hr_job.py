@@ -193,53 +193,104 @@ class HrJob(models.Model):
         
         result = []
         for job in jobs:
-            job_data = {
-                'id': job.id,
-                'title': job.name,
-                'company': job.company_id.name if job.company_id else '',
-                'location': job.address_id.name if job.address_id else '',
-                'type': dict(job._fields['job_type'].selection)[job.job_type],
-                'salary': job.salary_display,
-                'postedTime': self._get_time_ago(job.create_date),
-                'description': job.description or '',
-                'tags': [tag.strip() for tag in job.job_tags.split(',')] if job.job_tags else [],
-                'isUrgent': job.is_urgent,
-                'isFeatured': job.is_featured,
-                'logo': job.company_id.name[0].upper() if job.company_id else 'C',
-                'deadline': job.application_deadline.isoformat() if job.application_deadline else None,
-                'experience': dict(job._fields['experience_level'].selection)[job.experience_level],
-                'education': dict(job._fields['education_level'].selection)[job.education_level],
-                'responsibilities': job.responsibilities or '',
-                'requirements': job.requirements or '',
-                'benefits': job.benefits or '',
-                'category': job.job_category_id.name if job.job_category_id else '',
-                'isRemote': job.is_remote,
-                'applicationEmail': job.application_email or '',
-                'applicationUrl': job.application_url or '',
-                'companyWebsite': job.company_website or '',
-                'companyPhone': job.company_phone or '',
-                'companyDescription': job.company_description or '',
-            }
-            result.append(job_data)
+            try:
+                # Get selection values safely
+                job_type_display = job.job_type
+                if hasattr(job._fields.get('job_type'), 'selection') and job._fields['job_type'].selection:
+                    job_type_dict = dict(job._fields['job_type'].selection)
+                    job_type_display = job_type_dict.get(job.job_type, job.job_type)
+                
+                experience_display = job.experience_level
+                if hasattr(job._fields.get('experience_level'), 'selection') and job._fields['experience_level'].selection:
+                    experience_dict = dict(job._fields['experience_level'].selection)
+                    experience_display = experience_dict.get(job.experience_level, job.experience_level)
+                
+                education_display = job.education_level
+                if hasattr(job._fields.get('education_level'), 'selection') and job._fields['education_level'].selection:
+                    education_dict = dict(job._fields['education_level'].selection)
+                    education_display = education_dict.get(job.education_level, job.education_level)
+                
+                job_data = {
+                    'id': job.id,
+                    'title': job.name or '',
+                    'company': job.company_id.name if job.company_id else '',
+                    'location': job.address_id.name if job.address_id else '',
+                    'type': job_type_display,
+                    'salary': job.salary_display or '',
+                    'postedTime': self._get_time_ago(job.create_date),
+                    'description': self._strip_html_tags(job.description or ''),
+                    'tags': [tag.strip() for tag in job.job_tags.split(',')] if job.job_tags else [],
+                    'isUrgent': job.is_urgent,
+                    'isFeatured': job.is_featured,
+                    'logo': job.company_id.name[0].upper() if job.company_id and job.company_id.name else 'C',
+                    'deadline': job.application_deadline.isoformat() if job.application_deadline else None,
+                    'experience': experience_display,
+                    'education': education_display,
+                    'responsibilities': self._strip_html_tags(job.responsibilities or ''),
+                    'requirements': self._strip_html_tags(job.requirements or ''),
+                    'benefits': self._strip_html_tags(job.benefits or ''),
+                    'category': job.job_category_id.name if job.job_category_id else '',
+                    'isRemote': job.is_remote,
+                    'applicationEmail': job.application_email or '',
+                    'applicationUrl': job.application_url or '',
+                    'companyWebsite': job.company_website or '',
+                    'companyPhone': job.company_phone or '',
+                    'companyDescription': self._strip_html_tags(job.company_description or ''),
+                }
+                result.append(job_data)
+            except Exception as e:
+                # Log error and continue with next job
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.error(f"Error processing job {job.id}: {str(e)}")
+                continue
         
         return result
+
+    def _strip_html_tags(self, html_text):
+        """Strip HTML tags from text using Odoo's built-in helper"""
+        if not html_text:
+            return ''
+        
+        # Use Odoo's built-in HTML stripping method
+        from odoo.tools import html2plaintext
+        return html2plaintext(html_text).strip()
 
     def _get_time_ago(self, date):
         """Convert date to 'time ago' format"""
         if not date:
             return 'Unknown'
         
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        diff = now - date
-        
-        if diff.days > 0:
-            return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
-        elif diff.seconds > 3600:
-            hours = diff.seconds // 3600
-            return f"{hours} hour{'s' if hours > 1 else ''} ago"
-        elif diff.seconds > 60:
-            minutes = diff.seconds // 60
-            return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
-        else:
-            return "Just now"
+        try:
+            from datetime import datetime, timezone
+            
+            # Get current time in UTC
+            now = datetime.now(timezone.utc)
+            
+            # Handle timezone-aware and timezone-naive dates
+            if date.tzinfo is None:
+                # If date is timezone-naive, assume it's in UTC
+                date = date.replace(tzinfo=timezone.utc)
+            else:
+                # If date is timezone-aware, convert to UTC
+                date = date.astimezone(timezone.utc)
+            
+            diff = now - date
+            
+            if diff.days > 0:
+                return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+            elif diff.seconds > 3600:
+                hours = diff.seconds // 3600
+                return f"{hours} hour{'s' if hours > 1 else ''} ago"
+            elif diff.seconds > 60:
+                minutes = diff.seconds // 60
+                return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+            else:
+                return "Just now"
+                
+        except Exception as e:
+            # If there's any error with date calculation, return a fallback
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning(f"Error calculating time ago for date {date}: {str(e)}")
+            return "Recently"

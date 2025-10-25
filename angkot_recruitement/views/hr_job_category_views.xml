@@ -5,14 +5,23 @@
         <field name="name">hr.job.category.tree</field>
         <field name="model">hr.job.category</field>
         <field name="arch" type="xml">
-            <tree string="Job Categories">
+            <list string="Job Categories">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="active_job_count"/>
                 <field name="job_count"/>
                 <field name="active"/>
-            </tree>
+            </list>
         </field>
+    </record>
+
+    <!-- Action to show jobs in a category -->
+    <record id="action_hr_job_category_jobs" model="ir.actions.act_window">
+        <field name="name">Jobs in Category</field>
+        <field name="res_model">hr.job</field>
+        <field name="view_mode">list,form,kanban</field>
+        <field name="domain">[('job_category_id', '=', active_id)]</field>
+        <field name="context">{'default_job_category_id': active_id}</field>
     </record>
 
     <!-- Job Category Form View -->
@@ -23,7 +32,7 @@
             <form string="Job Category">
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <button name="%(action_hr_job_category_jobs)d" type="action" 
+                        <button name="%(action_hr_job_category_jobs)d" type="action"
                                 class="oe_stat_button" icon="fa-briefcase">
                             <field name="active_job_count" widget="statinfo" string="Active Jobs"/>
                         </button>
@@ -106,7 +115,7 @@
     <record id="action_hr_job_category" model="ir.actions.act_window">
         <field name="name">Job Categories</field>
         <field name="res_model">hr.job.category</field>
-        <field name="view_mode">tree,form,kanban</field>
+        <field name="view_mode">list,form,kanban</field>
         <field name="search_view_id" ref="view_hr_job_category_search"/>
         <field name="context">{'search_default_active': 1}</field>
         <field name="help" type="html">
@@ -118,15 +127,6 @@
                 This makes it easier for candidates to find relevant positions.
             </p>
         </field>
-    </record>
-
-    <!-- Action to show jobs in a category -->
-    <record id="action_hr_job_category_jobs" model="ir.actions.act_window">
-        <field name="name">Jobs in Category</field>
-        <field name="res_model">hr.job</field>
-        <field name="view_mode">tree,form,kanban</field>
-        <field name="domain">[('job_category_id', '=', active_id)]</field>
-        <field name="context">{'default_job_category_id': active_id}</field>
     </record>
 
     <!-- Menu Items -->

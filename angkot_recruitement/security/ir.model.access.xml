@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        
+        <!-- Job Category Model Access Rights -->
+        <record id="access_hr_job_category_public" model="ir.model.access">
+            <field name="name">hr.job.category.public</field>
+            <field name="model_id" ref="model_hr_job_category"/>
+            <field name="group_id" ref="base.group_public"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_category_user" model="ir.model.access">
+            <field name="name">hr.job.category.user</field>
+            <field name="model_id" ref="model_hr_job_category"/>
+            <field name="group_id" ref="base.group_user"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_category_manager" model="ir.model.access">
+            <field name="name">hr.job.category.manager</field>
+            <field name="model_id" ref="model_hr_job_category"/>
+            <field name="group_id" ref="hr_recruitment.group_hr_recruitment_manager"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Enhanced Job Model Access Rights -->
+        <record id="access_hr_job_enhanced_public" model="ir.model.access">
+            <field name="name">hr.job.enhanced.public</field>
+            <field name="model_id" ref="hr.model_hr_job"/>
+            <field name="group_id" ref="base.group_public"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_enhanced_user" model="ir.model.access">
+            <field name="name">hr.job.enhanced.user</field>
+            <field name="model_id" ref="hr.model_hr_job"/>
+            <field name="group_id" ref="base.group_user"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_enhanced_manager" model="ir.model.access">
+            <field name="name">hr.job.enhanced.manager</field>
+            <field name="model_id" ref="hr.model_hr_job"/>
+            <field name="group_id" ref="hr_recruitment.group_hr_recruitment_manager"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Officer Group Access Rights -->
+        <record id="access_hr_job_category_officer" model="ir.model.access">
+            <field name="name">hr.job.category.officer</field>
+            <field name="model_id" ref="model_hr_job_category"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_officer"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_enhanced_officer" model="ir.model.access">
+            <field name="name">hr.job.enhanced.officer</field>
+            <field name="model_id" ref="hr.model_hr_job"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_officer"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_applicant_officer" model="ir.model.access">
+            <field name="name">hr.applicant.officer</field>
+            <field name="model_id" ref="hr_recruitment.model_hr_applicant"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_officer"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- Applicant Group Access Rights -->
+        <record id="access_hr_job_category_applicant" model="ir.model.access">
+            <field name="name">hr.job.category.applicant</field>
+            <field name="model_id" ref="model_hr_job_category"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_applicant"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_job_enhanced_applicant" model="ir.model.access">
+            <field name="name">hr.job.enhanced.applicant</field>
+            <field name="model_id" ref="hr.model_hr_job"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_applicant"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_hr_applicant_applicant" model="ir.model.access">
+            <field name="name">hr.applicant.applicant</field>
+            <field name="model_id" ref="hr_recruitment.model_hr_applicant"/>
+            <field name="group_id" ref="angkot_recruitement.group_hr_recruitment_applicant"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

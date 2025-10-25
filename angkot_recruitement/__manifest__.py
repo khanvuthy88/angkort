@@ -6,7 +6,7 @@
 
     'description': """
 Angkot Recruitment Enhancement
-=============================
+==============================
 
 This module extends the standard Odoo hr_recruitment functionality to provide enhanced features
 suitable for modern job portal integration, particularly with Next.js frontend applications.
@@ -45,20 +45,44 @@ providing all necessary fields and functionality for a comprehensive job board e
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'hr_recruitment'],
+    'depends': ['base', 'hr', 'hr_recruitment', 'account', 'l10n_kh', 'account_qr_code_emv'],
+
+    # External Python dependencies
+    'external_dependencies': {
+        'python': [
+            'PyPDF2',
+            'pdfplumber',
+            'pdf2image',
+            'pytesseract',
+            'docx2txt',
+            'phonenumbers',
+            'PIL',  # Pillow
+        ],
+    },
 
     # always loaded
     'data': [
+        'security/hr_recruitment_security.xml',
+        'security/ir.model.access.xml',
         'security/ir.model.access.csv',
+        'data/default_users_data.xml',
         'data/hr_job_category_data.xml',
+        'data/hr_subscription_data.xml',
+        'wizard/khqr_payment_wizard_views.xml',
         'views/hr_job_category_views.xml',
         'views/hr_job_views.xml',
+        'views/hr_subscription_views.xml',
+        'views/hr_candidate_profile_views.xml',
+        'views/hr_candidate_views.xml',
+        'views/res_users_views.xml',
+        'views/res_partner_views.xml',
         'views/views.xml',
         'views/templates.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
         'demo/demo.xml',
+        'demo/hr_subscription_demo.xml',
     ],
 }
 

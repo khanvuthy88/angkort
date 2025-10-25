@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        
+        <!-- Default Candidate User Template (Inactive) -->
+        <record id="default_candidate_user" model="res.users">
+            <field name="name">Default Candidate Template</field>
+            <field name="login">default_candidate@template.local</field>
+            <field name="email">default_candidate@template.local</field>
+            <field name="active" eval="False"/>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="groups_id" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('angkot_recruitement.group_hr_recruitment_applicant'))
+            ]"/>
+            <field name="email_verified" eval="False"/>
+            <field name="notification_type">email</field>
+        </record>
+
+        <!-- Default Employer/Officer User Template (Inactive) -->
+        <record id="default_employer_user" model="res.users">
+            <field name="name">Default Employer Template</field>
+            <field name="login">default_employer@template.local</field>
+            <field name="email">default_employer@template.local</field>
+            <field name="active" eval="False"/>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="groups_id" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('angkot_recruitement.group_hr_recruitment_officer'))
+            ]"/>
+            <field name="email_verified" eval="False"/>
+            <field name="notification_type">email</field>
+        </record>
+
+    </data>
+</odoo>
+

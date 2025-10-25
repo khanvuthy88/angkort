@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Inherit hr.candidate form view to add auto-extraction fields -->
+        <record id="hr_candidate_view_form_inherit" model="ir.ui.view">
+            <field name="name">hr.candidate.form.inherit</field>
+            <field name="model">hr.candidate</field>
+            <field name="inherit_id" ref="hr_recruitment.hr_candidate_view_form"/>
+            <field name="arch" type="xml">
+                
+                <!-- Add extraction button in header -->
+                <xpath expr="//header" position="inside">
+                    <button name="action_extract_contact_info" 
+                            type="object" 
+                            string="Extract Contact Info" 
+                            class="oe_highlight"
+                            invisible="attachment_count == 0"
+                            help="Manually extract email and phone from attachments"/>
+                    <button name="action_archive_with_applicants" 
+                            type="object" 
+                            string="Archive Candidate" 
+                            confirm="This will archive the candidate and all related job applications. Continue?"
+                            help="Archive this candidate and all related job applications"/>
+                </xpath>
+                
+                <!-- Add auto-extract toggle and fields after partner_phone -->
+                <xpath expr="//field[@name='partner_phone']" position="after">
+                    <field name="auto_extract_enabled" 
+                           widget="boolean_toggle"
+                           help="Automatically extract contact information from uploaded documents"/>
+                    <field name="last_extraction_date" 
+                           invisible="not last_extraction_date"/>
+                </xpath>
+                
+                <!-- Add smart buttons for profile sections -->
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="%(action_hr_candidate_education)d" 
+                            type="action" 
+                            class="oe_stat_button" 
+                            icon="fa-graduation-cap"
+                            context="{'default_candidate_id': id}">
+                        <field name="education_count" widget="statinfo" string="Education"/>
+                    </button>
+                    <button name="%(action_hr_candidate_experience)d" 
+                            type="action" 
+                            class="oe_stat_button" 
+                            icon="fa-briefcase"
+                            context="{'default_candidate_id': id}">
+                        <field name="experience_count" widget="statinfo" string="Experience"/>
+                    </button>
+                    <button name="%(action_hr_candidate_certification)d" 
+                            type="action" 
+                            class="oe_stat_button" 
+                            icon="fa-certificate"
+                            context="{'default_candidate_id': id}">
+                        <field name="certification_count" widget="statinfo" string="Certifications"/>
+                    </button>
+                    <button name="%(action_hr_candidate_portfolio)d" 
+                            type="action" 
+                            class="oe_stat_button" 
+                            icon="fa-code"
+                            context="{'default_candidate_id': id}">
+                        <field name="portfolio_count" widget="statinfo" string="Portfolio"/>
+                    </button>
+                </xpath>
+                
+                <!-- Add profile sections in notebook -->
+                <xpath expr="//notebook" position="inside">
+                    <!-- Education Tab -->
+                    <page string="Education" name="education">
+                        <field name="education_ids" context="{'default_candidate_id': id}">
+                            <list>
+                                <field name="school"/>
+                                <field name="degree"/>
+                                <field name="field_of_study"/>
+                                <field name="duration_display"/>
+                                <field name="is_current"/>
+                            </list>
+                            <form>
+                                <group>
+                                    <group>
+                                        <field name="school"/>
+                                        <field name="degree"/>
+                                        <field name="field_of_study"/>
+                                    </group>
+                                    <group>
+                                        <field name="start_date"/>
+                                        <field name="end_date" invisible="is_current"/>
+                                        <field name="is_current"/>
+                                        <field name="gpa"/>
+                                    </group>
+                                </group>
+                                <group>
+                                    <field name="description"/>
+                                </group>
+                            </form>
+                        </field>
+                    </page>
+                    
+                    <!-- Experience Tab -->
+                    <page string="Experience" name="experience">
+                        <group>
+                            <field name="total_experience_months" widget="integer"/>
+                        </group>
+                        <field name="experience_ids" context="{'default_candidate_id': id}">
+                            <list>
+                                <field name="position"/>
+                                <field name="company"/>
+                                <field name="employment_type"/>
+                                <field name="duration_display"/>
+                                <field name="duration_months"/>
+                                <field name="is_current"/>
+                            </list>
+                            <form>
+                                <group>
+                                    <group>
+                                        <field name="company"/>
+                                        <field name="position"/>
+                                        <field name="location"/>
+                                        <field name="employment_type"/>
+                                    </group>
+                                    <group>
+                                        <field name="start_date"/>
+                                        <field name="end_date" invisible="is_current"/>
+                                        <field name="is_current"/>
+                                        <field name="duration_display"/>
+                                        <field name="duration_months"/>
+                                    </group>
+                                </group>
+                                <group>
+                                    <field name="description"/>
+                                </group>
+                                <group>
+                                    <field name="achievements"/>
+                                </group>
+                            </form>
+                        </field>
+                    </page>
+                    
+                    <!-- Certifications Tab -->
+                    <page string="Certifications" name="certifications">
+                        <field name="certification_ids" context="{'default_candidate_id': id}">
+                            <list decoration-danger="is_expired" decoration-warning="is_expiring_soon">
+                                <field name="name"/>
+                                <field name="issuer"/>
+                                <field name="issue_date"/>
+                                <field name="expiry_date"/>
+                                <field name="status_display"/>
+                                <field name="is_expired" column_invisible="1"/>
+                                <field name="is_expiring_soon" column_invisible="1"/>
+                            </list>
+                            <form>
+                                <sheet>
+                                    <div class="oe_button_box" name="button_box">
+                                        <button name="action_open_credential_url" type="object" 
+                                                class="oe_stat_button" icon="fa-external-link"
+                                                invisible="not credential_url">
+                                            <div class="o_field_widget o_stat_info">
+                                                <span class="o_stat_text">Verify</span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                    <group>
+                                        <group>
+                                            <field name="name"/>
+                                            <field name="issuer"/>
+                                            <field name="credential_id"/>
+                                        </group>
+                                        <group>
+                                            <field name="issue_date"/>
+                                            <field name="expiry_date"/>
+                                            <field name="status_display"/>
+                                        </group>
+                                    </group>
+                                    <group>
+                                        <field name="credential_url" widget="url"/>
+                                    </group>
+                                </sheet>
+                            </form>
+                        </field>
+                    </page>
+                    
+                    <!-- Portfolio Tab -->
+                    <page string="Portfolio" name="portfolio">
+                        <field name="portfolio_ids" context="{'default_candidate_id': id}">
+                            <list default_order="sequence">
+                                <field name="sequence" widget="handle"/>
+                                <field name="title"/>
+                                <field name="project_type"/>
+                                <field name="status"/>
+                                <field name="tags_display"/>
+                                <field name="url_domain"/>
+                            </list>
+                            <form>
+                                <sheet>
+                                    <div class="oe_button_box" name="button_box">
+                                        <button name="action_open_project_url" type="object" 
+                                                class="oe_stat_button" icon="fa-external-link">
+                                            <div class="o_field_widget o_stat_info">
+                                                <span class="o_stat_text">View Project</span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                    <field name="image" widget="image" class="oe_avatar"/>
+                                    <group>
+                                        <group>
+                                            <field name="sequence"/>
+                                            <field name="title"/>
+                                            <field name="project_type"/>
+                                            <field name="status"/>
+                                        </group>
+                                        <group>
+                                            <field name="start_date"/>
+                                            <field name="end_date"/>
+                                            <field name="url" widget="url"/>
+                                            <field name="url_domain"/>
+                                        </group>
+                                    </group>
+                                    <group>
+                                        <field name="description"/>
+                                    </group>
+                                    <group>
+                                        <field name="image_url" widget="url"/>
+                                    </group>
+                                    <group>
+                                        <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                                    </group>
+                                </sheet>
+                            </form>
+                        </field>
+                    </page>
+                    
+                    <!-- Extraction Log Tab -->
+                    <page string="Extraction Log" 
+                          invisible="not extraction_log">
+                        <group>
+                            <field name="extraction_log" 
+                                   nolabel="1" 
+                                   widget="text" 
+                                   readonly="1"
+                                   placeholder="No extraction attempts yet..."/>
+                        </group>
+                        <div class="alert alert-info" role="alert">
+                            <p><strong>About Auto-Extraction:</strong></p>
+                            <ul>
+                                <li>Automatically extracts email addresses and phone numbers from PDF, DOCX, DOC, and TXT files</li>
+                                <li>Supports both text-based and scanned (OCR) documents</li>
+                                <li>Prioritizes multiple detection methods for best results</li>
+                                <li>Only fills empty fields - won't overwrite existing contact information</li>
+                            </ul>
+                        </div>
+                    </page>
+                </xpath>
+                
+            </field>
+        </record>
+
+        <!-- Add auto_extract_enabled to tree view for quick access -->
+        <record id="hr_candidate_view_tree_inherit" model="ir.ui.view">
+            <field name="name">hr.candidate.tree.inherit</field>
+            <field name="model">hr.candidate</field>
+            <field name="inherit_id" ref="hr_recruitment.hr_candidate_view_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_phone']" position="after">
+                    <field name="auto_extract_enabled" widget="boolean_toggle" optional="hide"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>
+

@@ -4,19 +4,19 @@
         <!-- Job Categories for Job Portal -->
         
         <record id="category_technology" model="hr.job.category">
-            <field name="name">Technology & IT</field>
+            <field name="name">Technology &amp; IT</field>
             <field name="sequence">10</field>
             <field name="description">Software development, IT support, system administration, and technology-related positions</field>
         </record>
 
         <record id="category_design" model="hr.job.category">
-            <field name="name">Design & Creative</field>
+            <field name="name">Design &amp; Creative</field>
             <field name="sequence">20</field>
             <field name="description">Graphic design, UI/UX design, creative writing, and artistic positions</field>
         </record>
 
         <record id="category_marketing" model="hr.job.category">
-            <field name="name">Marketing & Sales</field>
+            <field name="name">Marketing &amp; Sales</field>
             <field name="sequence">30</field>
             <field name="description">Digital marketing, sales, advertising, and business development positions</field>
         </record>
@@ -28,7 +28,7 @@
         </record>
 
         <record id="category_finance" model="hr.job.category">
-            <field name="name">Finance & Accounting</field>
+            <field name="name">Finance &amp; Accounting</field>
             <field name="sequence">50</field>
             <field name="description">Financial analysis, accounting, auditing, and financial management positions</field>
         </record>
