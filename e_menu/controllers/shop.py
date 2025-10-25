@@ -843,6 +843,196 @@ class ShopController(http.Controller):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
+    @http.route(f"{BASE_URL}/my/order", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
+    def create_my_order(self):
+        """
+        Create a new sale order for the authenticated user.
+
+        Route: POST /angkort/api/v1/my/order
+
+        Parameters (JSON body):
+            order_lines (list): List of order line items, each containing:
+                - product_id (int): Product ID (required).
+                - quantity (float): Quantity (required).
+                - price_unit (float, optional): Unit price. If not provided, uses product's list price.
+            note (str, optional): Order note or comment.
+            
+        Returns:
+            201: Created order details.
+            400: If required fields are missing or invalid.
+            401: If user is not authenticated.
+            500: On server error.
+
+        Example Request:
+            {
+                "order_lines": [
+                    {
+                        "product_id": 1,
+                        "quantity": 2,
+                        "price_unit": 10.0
+                    },
+                    {
+                        "product_id": 2,
+                        "quantity": 1
+                    }
+                ],
+                "note": "Please deliver in the morning"
+            }
+
+        Example Response:
+            {
+                "status": true,
+                "message": "Order created successfully",
+                "data": {
+                    "order_id": 1,
+                    "order_name": "SO001",
+                    "partner_id": 5,
+                    "partner_name": "John Doe",
+                    "date_order": "2024-03-06",
+                    "amount_total": 30.0,
+                    "state": "draft"
+                }
+            }
+        """
+        try:
+            # Get authenticated user
+            current_user = request.env.user
+            if not current_user or current_user.id == request.env.ref('base.public_user').id:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication required',
+                    'error': 'User not authenticated'
+                }, status=401)
+
+            # Get JSON data
+            data = request.get_json_data()
+            if not data:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'No data provided',
+                    'error': 'Missing request body'
+                }, status=400)
+
+            # Validate order_lines
+            if 'order_lines' not in data or not isinstance(data['order_lines'], list):
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Missing or invalid order_lines',
+                    'error': 'order_lines must be a list of order line items'
+                }, status=400)
+
+            if not data['order_lines']:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Empty order_lines',
+                    'error': 'At least one order line is required'
+                }, status=400)
+
+            # Create order lines
+            order_lines = []
+            product_env = request.env['product.product'].sudo()
+            
+            for line in data['order_lines']:
+                if not isinstance(line, dict):
+                    continue
+                    
+                if 'product_id' not in line or 'quantity' not in line:
+                    return request.make_json_response({
+                        'status': False,
+                        'message': 'Invalid order line',
+                        'error': 'Each order line must contain product_id and quantity'
+                    }, status=400)
+
+                product_id = line['product_id']
+                quantity = line['quantity']
+                
+                # Validate product exists
+                product = product_env.browse(product_id)
+                if not product.exists():
+                    return request.make_json_response({
+                        'status': False,
+                        'message': f'Product not found',
+                        'error': f'Product with ID {product_id} does not exist'
+                    }, status=400)
+
+                # Validate quantity
+                try:
+                    quantity = float(quantity)
+                    if quantity <= 0:
+                        return request.make_json_response({
+                            'status': False,
+                            'message': 'Invalid quantity',
+                            'error': 'Quantity must be greater than 0'
+                        }, status=400)
+                except (ValueError, TypeError):
+                    return request.make_json_response({
+                        'status': False,
+                        'message': 'Invalid quantity',
+                        'error': 'Quantity must be a valid number'
+                    }, status=400)
+
+                # Get price_unit (use provided price or product's list price)
+                price_unit = line.get('price_unit')
+                if price_unit is None:
+                    price_unit = product.list_price
+                else:
+                    try:
+                        price_unit = float(price_unit)
+                    except (ValueError, TypeError):
+                        return request.make_json_response({
+                            'status': False,
+                            'message': 'Invalid price_unit',
+                            'error': 'price_unit must be a valid number'
+                        }, status=400)
+
+                order_line = Command.create({
+                    'product_id': product_id,
+                    'product_uom_qty': quantity,
+                    'price_unit': price_unit
+                })
+                order_lines.append(order_line)
+
+            if not order_lines:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'No valid order lines',
+                    'error': 'At least one valid order line is required'
+                }, status=400)
+
+            # Prepare order values
+            order_values = {
+                'partner_id': current_user.partner_id.id,
+                'order_line': order_lines
+            }
+            
+            # Add optional note if provided
+            if 'note' in data and data['note']:
+                order_values['note'] = data['note']
+
+            # Create sale order
+            order = request.env['sale.order'].sudo().create(order_values)
+
+            return request.make_json_response({
+                'status': True,
+                'message': 'Order created successfully',
+                'data': {
+                    'order_id': order.id,
+                    'order_name': order.name,
+                    'partner_id': order.partner_id.id,
+                    'partner_name': order.partner_id.name,
+                    'date_order': order.date_order.strftime('%Y-%m-%d'),
+                    'amount_total': order.amount_total,
+                    'state': order.state
+                }
+            }, status=201)
+            
+        except Exception as e:
+            return request.make_json_response({
+                'status': False,
+                'message': 'Error creating order',
+                'error': str(e)
+            }, status=500)
+
     @http.route(f"{BASE_URL}/cart/checkout", auth="angkit", type="json", methods=["POST"], cors="*", csrf=False)
     def cart_checkout(self):
         """
