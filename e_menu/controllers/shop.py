@@ -4169,7 +4169,6 @@ class ShopController(http.Controller):
                 'error': 'Error retrieving products',
                 'message': str(e)
             }, status=500)
-
     @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http", cors="*")
     def global_sale_order(self, **kw):
         """
@@ -5244,3 +5243,4 @@ class ShopController(http.Controller):
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
+
