@@ -480,6 +480,10 @@ class APIUtilsMixin:
                     continue
                 # ensure day is stored as string (model expects selection string values like '0','1',...)
                 hour_commands.append((0, 0, {'day': str(day), 'open': open_time, 'close': close_time}))
+            if hour_commands:
+                if operation == 'update':
+                    # For updates, replace all existing records
+                    processed_fields['shop_open_hour_ids'] = [(5, 0, 0)] + hour_commands
                 else:
                     # For create, just add new records
                     processed_fields['shop_open_hour_ids'] = hour_commands
