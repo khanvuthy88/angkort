@@ -1,0 +1,1147 @@
+from odoo import http, Response
+from odoo.http import request
+import json
+import base64
+from .utils import (
+    validate_auth, validate_input_data, paginate_results, verify_ownership,
+    APIUtilsMixin, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, BASE_URL
+)
+from .auth import AuthMixin
+
+class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
+
+    def _attribute_to_dict(self, attribute):
+        try:
+            return {
+                'id': attribute.id,
+                'name': attribute.name,
+                'create_variant': attribute.create_variant,
+                'display_type': attribute.display_type,
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error converting attribute to dictionary: {str(e)}',
+            }
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
+    def product_list(self, shop_id, **kw):
+        """
+        Retrieve all products for a given shop with search, filter, and sort capabilities.
+        """
+        try:
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_category = request.httprequest.args.get('filter_category', '').strip()
+            filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
+            filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
+            filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('shop_id', '=', shop_id)]
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search),
+                    ('default_code', 'ilike', search),
+                    ('description', 'ilike', search)
+                ]
+                domain = ['&'] + domain + search_domain
+            
+            # Add filters
+            if filter_category:
+                try:
+                    category_id = int(filter_category)
+                    domain.append(('categ_id', '=', category_id))
+                except ValueError:
+                    pass
+            
+            if filter_price_min:
+                try:
+                    price_min = float(filter_price_min)
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
+                except ValueError:
+                    pass
+            
+            if filter_price_max:
+                try:
+                    price_max = float(filter_price_max)
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
+                except ValueError:
+                    pass
+            
+            if filter_has_variants:
+                if filter_has_variants.lower() == 'true':
+                    domain.append(('attribute_line_ids', '!=', False))
+                elif filter_has_variants.lower() == 'false':
+                    domain.append(('attribute_line_ids', '=', False))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total = request.env['product.template'].sudo().search_count(domain)
+            page_count = (total + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch products
+            products = request.env['product.template'].sudo().search(
+                domain,
+                offset=offset,
+                limit=limit,
+                order=order_clause
+            )
+            
+            products_data = []
+            for product in products:
+                product_data = self._product_to_dict(product)
+                product_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(
+                    lambda x: x.attribute_id.display_type == 'radio')]
+                product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
+                    lambda x: x.attribute_id.display_type == 'multi')]
+                product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+                product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+                product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+                products_data.append(product_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_category:
+                keyword_meta["filter"]["category"] = int(filter_category)
+            if filter_price_min:
+                keyword_meta["filter"]["price_min"] = float(filter_price_min)
+            if filter_price_max:
+                keyword_meta["filter"]["price_max"] = float(filter_price_max)
+            if filter_has_variants:
+                keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
+            
+            response = {
+                'data': products_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                'error': 'Error retrieving products',
+                'message': str(e)
+            }, status=500)
+
+    @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="*")
+    def global_product_list(self, **kw):
+        """
+        Retrieve a paginated list of all products (global, not shop-specific) with search, filter, and sort capabilities.
+        """
+        try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_category = request.httprequest.args.get('filter_category', '').strip()
+            filter_price_min = request.httprequest.args.get('filter_price_min', '').strip()
+            filter_price_max = request.httprequest.args.get('filter_price_max', '').strip()
+            filter_has_variants = request.httprequest.args.get('filter_has_variants', '').strip()
+            filter_shop = request.httprequest.args.get('filter_shop', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'list_price', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                search_domain = [
+                    '|', '|',
+                    ('name', 'ilike', search),
+                    ('default_code', 'ilike', search),
+                    ('description', 'ilike', search)
+                ]
+                domain = search_domain
+            
+            # Add filters
+            if filter_category:
+                try:
+                    category_id = int(filter_category)
+                    domain.append(('categ_id', '=', category_id))
+                except ValueError:
+                    pass
+            
+            if filter_price_min:
+                try:
+                    price_min = float(filter_price_min)
+                    domain.append(('list_price', '>=', price_min))  # type: ignore
+                except ValueError:
+                    pass
+            
+            if filter_price_max:
+                try:
+                    price_max = float(filter_price_max)
+                    domain.append(('list_price', '<=', price_max))  # type: ignore
+                except ValueError:
+                    pass
+            
+            if filter_has_variants:
+                if filter_has_variants.lower() == 'true':
+                    domain.append(('attribute_line_ids', '!=', False))
+                elif filter_has_variants.lower() == 'false':
+                    domain.append(('attribute_line_ids', '=', False))
+            
+            if filter_shop:
+                try:
+                    shop_id = int(filter_shop)
+                    domain.append(('shop_id', '=', shop_id))
+                except ValueError:
+                    pass
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.template'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch products
+            products = request.env['product.template'].sudo().search(
+                domain,
+                limit=limit,
+                offset=offset,
+                order=order_clause
+            )
+            
+            products_data = []
+            for product in products:
+                product_data = self._product_to_dict(product)
+                product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+                product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+                product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+                products_data.append(product_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_category:
+                keyword_meta["filter"]["category"] = int(filter_category)
+            if filter_price_min:
+                keyword_meta["filter"]["price_min"] = float(filter_price_min)
+            if filter_price_max:
+                keyword_meta["filter"]["price_max"] = float(filter_price_max)
+            if filter_has_variants:
+                keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
+            if filter_shop:
+                keyword_meta["filter"]["shop"] = int(filter_shop)
+            
+            response = {
+                'data': products_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                'error': 'Error retrieving products',
+                'message': str(e)
+            }, status=500)
+
+    @http.route(f"{BASE_URL}/product/<int:product_id>", methods=['GET'], auth="public", type="http", cors="*")
+    def global_product_detail(self, product_id):
+        """
+        Retrieve details for a specific product (global, not shop-specific).
+        """
+        try:
+            product = request.env['product.template'].sudo().search([('id', '=', product_id)], limit=1)
+            if not product:
+                return Response(json.dumps({'error': 'Product not found'}), status=404, content_type='application/json')
+            product_data = self._get_product_details(product)
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+            response = {
+                'data': product_data
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="*")
+    def global_product_category(self, **kw):
+        """
+        Retrieve a paginated list of all product categories (global, not shop-specific) with search, filter, and sort capabilities.
+        """
+        try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_parent = request.httprequest.args.get('filter_parent', '').strip()
+            filter_has_children = request.httprequest.args.get('filter_has_children', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_parent:
+                if filter_parent.lower() == 'null':
+                    domain.append(('parent_id', '=', False))
+                else:
+                    try:
+                        parent_id = int(filter_parent)
+                        domain.append(('parent_id', '=', parent_id))
+                    except ValueError:
+                        pass
+            
+            if filter_has_children:
+                if filter_has_children.lower() == 'true':
+                    domain.append(('child_id', '!=', False))
+                elif filter_has_children.lower() == 'false':
+                    domain.append(('child_id', '=', False))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.category'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch categories
+            categories = request.env['product.category'].sudo().search(
+                domain,
+                limit=limit,
+                offset=offset,
+                order=order_clause
+            )
+            
+            categories_data = []
+            for category in categories:
+                category_data = {
+                    'id': category.id,
+                    'name': category.name,
+                    'parent_id': category.parent_id.id if category.parent_id else None,
+                    'parent_name': category.parent_id.name if category.parent_id else None,
+                    'createdAt': category.create_date.isoformat() if category.create_date else None,
+                    'updatedAt': category.write_date.isoformat() if category.write_date else None,
+                    'publishedAt': category.create_date.isoformat() if category.create_date else None
+                }
+                categories_data.append(category_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_parent:
+                if filter_parent.lower() == 'null':
+                    keyword_meta["filter"]["parent"] = None
+                else:
+                    keyword_meta["filter"]["parent"] = int(filter_parent)
+            if filter_has_children:
+                keyword_meta["filter"]["has_children"] = filter_has_children.lower() == 'true'
+            
+            response = {
+                'data': categories_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                'error': 'Error retrieving product categories',
+                'message': str(e)
+            }, status=500)
+
+    @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="*")
+    def global_product_variant(self, **kw):
+        """
+        Retrieve a paginated list of all product attributes (global, not shop-specific) with search, filter, and sort capabilities.
+        """
+        try:
+            # Parse query parameters
+            page = int(request.httprequest.args.get('page', 1))
+            limit = min(int(request.httprequest.args.get('limit', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'name')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_create_variant = request.httprequest.args.get('filter_create_variant', '').strip()
+            filter_display_type = request.httprequest.args.get('filter_display_type', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'name'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = []
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_create_variant:
+                if filter_create_variant in ['no_variant', 'always']:
+                    domain.append(('create_variant', '=', filter_create_variant))
+            
+            if filter_display_type:
+                if filter_display_type in ['multi', 'radio']:
+                    domain.append(('display_type', '=', filter_display_type))
+            
+            # Calculate pagination
+            offset = (page - 1) * limit
+            total_count = request.env['product.attribute'].sudo().search_count(domain)
+            page_count = (total_count + limit - 1) // limit
+            page = min(max(1, page), page_count) if page_count > 0 else 1
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch attributes
+            attributes = request.env['product.attribute'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            attributes_data = []
+            for attribute in attributes:
+                attribute_data = self._attribute_to_dict(attribute)
+                attribute_data['createdAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
+                attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attributes_data.append(attribute_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_create_variant:
+                keyword_meta["filter"]["create_variant"] = filter_create_variant
+            if filter_display_type:
+                keyword_meta["filter"]["display_type"] = filter_display_type
+            
+            response = {
+                'data': attributes_data,
+                'meta': {
+                    'pagination': {
+                        'page': page,
+                        'pageSize': limit,
+                        'pageCount': page_count,
+                        'total': total_count
+                    },
+                    'keyword': keyword_meta
+                }
+            }
+            return request.make_json_response(response, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                'error': 'Error retrieving product variants',
+                'message': str(e)
+            }, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def variant_list(self, shop_id, **kw):
+        """
+        Retrieve all product variants for a specific shop with search, filter, and sort capabilities.
+        """
+        try:
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            filter_create_variant = request.httprequest.args.get('filter_create_variant', '').strip()
+            filter_display_type = request.httprequest.args.get('filter_display_type', '').strip()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [
+                ('create_uid', '=', request.env.user.id),
+                ('shop_id', '=', shop_id)
+            ]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Add filters
+            if filter_create_variant:
+                if filter_create_variant in ['no_variant', 'always']:
+                    domain.append(('create_variant', '=', filter_create_variant))
+            
+            if filter_display_type:
+                if filter_display_type in ['multi', 'radio']:
+                    domain.append(('display_type', '=', filter_display_type))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch attributes
+            attributes = request.env['product.attribute'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            data = []
+            for attribute in attributes:
+                attribute_data = self._attribute_to_dict(attribute)
+                attribute_data['createdAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
+                attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
+                data.append(attribute_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order,
+                "filter": {}
+            }
+            
+            if filter_create_variant:
+                keyword_meta["filter"]["create_variant"] = filter_create_variant
+            if filter_display_type:
+                keyword_meta["filter"]["display_type"] = filter_display_type
+            
+            response = {
+                'data': data,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def variant_create(self, shop_id, **kw):
+        """
+        Create a new product variant for a specific shop.
+        """
+        try:
+            data = request.httprequest.form
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            REQUIRED_FIELDS = {'create_variant', 'display_type', 'name'}
+            missing_fields = REQUIRED_FIELDS - set(data.keys())
+            
+            if missing_fields:
+                errors = []
+                for field in missing_fields:
+                    if field == 'name':
+                        errors.append({"name": "name", "message": "Variant name is required"})
+                    elif field == 'create_variant':
+                        errors.append({"name": "create_variant", "message": "Create variant type is required"})
+                    elif field == 'display_type':
+                        errors.append({"name": "display_type", "message": "Display type is required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
+            if data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
+            if data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if request.env['product.attribute'].sudo().search_count([('name', '=', data['name']), ('shop_id', '=', shop_id)], limit=1):
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                }), status=400, content_type='application/json')
+            
+            variant_create_data = {
+                'name': data['name'],
+                'create_variant': data['create_variant'],
+                'display_type': data['display_type'],
+                'shop_id': shop_id
+            }
+            if variant_create_data.get('display_type') == 'multi':
+                variant_create_data['create_variant'] = 'no_variant'
+            attribute = request.env['product.attribute'].sudo().create(variant_create_data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_update(self, shop_id, variant_id, **kw):
+        """
+        Update an existing product variant for a specific shop.
+        """
+        try:
+            data = request.httprequest.form
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
+            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'name' in data and data['name'] != attribute.name:
+                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
+            if data.get('display_type') == 'multi':
+                data['create_variant'] = 'no_variant'
+            attribute.write(data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_patch(self, shop_id, variant_id, **kw):
+        """
+        Partially update an existing product variant for a specific shop.
+        """
+        try:
+            data = request.httprequest.form
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            VALID_CREATE_VARIANTS = {'no_variant', 'always'}
+            VALID_DISPLAY_TYPES = {'multi', 'radio'}
+            
+            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                }), status=400, content_type='application/json')
+            
+            if 'name' in data and data['name'] != attribute.name:
+                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to patch variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                    }), status=400, content_type='application/json')
+            
+            if data.get('display_type') == 'multi':
+                data['create_variant'] = 'no_variant'
+            attribute.write(data)
+            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant')
+    def variant_delete(self, shop_id, variant_id, **kw):
+        """
+        Delete a product variant from a specific shop.
+        """
+        try:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            attribute = request.env['product.attribute'].sudo().search([
+                ('id', '=', variant_id),
+                ('shop_id', '=', shop_id),
+                ('create_uid', '=', request.env.user.id)
+            ], limit=1)
+            if not attribute:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant",
+                    "statusCode": "404",
+                    "errors": [{"name": "variant_id", "message": "Attribute not found"}]
+                }), status=404, content_type='application/json')
+            
+            attribute.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete variant",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def variant_value_list(self, shop_id, variant_id, **kw):
+        """
+        Retrieve all values for a specific product variant in a shop.
+        """
+        try:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+            attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
+            if not attribute:
+                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+            
+            # Parse query parameters
+            search = request.httprequest.args.get('search', '').strip()
+            sort = request.httprequest.args.get('sort', 'id')
+            order = request.httprequest.args.get('order', 'asc').lower()
+            
+            # Validate sort field
+            valid_sort_fields = {'id', 'name', 'price_extra', 'create_date'}
+            if sort not in valid_sort_fields:
+                sort = 'id'
+            
+            # Validate order
+            if order not in {'asc', 'desc'}:
+                order = 'asc'
+            
+            # Build domain
+            domain = [('attribute_id', '=', variant_id)]
+            
+            # Add search functionality
+            if search:
+                domain.append(('name', 'ilike', search))
+            
+            # Build order clause
+            order_clause = f"{sort} {order}"
+            
+            # Fetch values
+            values = request.env['product.attribute.value'].sudo().search(
+                domain,
+                order=order_clause
+            )
+            
+            value_list = []
+            for value in values:
+                value_data = {
+                    'id': value.id,
+                    'name': value.name,
+                    'extra_price': value.price_extra,
+                    'createdAt': value.create_date.isoformat() if value.create_date else None,
+                    'updatedAt': value.write_date.isoformat() if value.write_date else None,
+                    'publishedAt': value.create_date.isoformat() if value.create_date else None
+                }
+                value_list.append(value_data)
+            
+            # Build keyword metadata
+            keyword_meta = {
+                "search": search if search else None,
+                "sort": sort,
+                "order": order
+            }
+            
+            response = {
+                'data': value_list,
+                'meta': {
+                    'keyword': keyword_meta
+                }
+            }
+            return Response(json.dumps(response), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def variant_value_create(self, shop_id, **kw):
+        """
+        Create new variant values for a product attribute.
+        """
+        try:
+            data = request.httprequest.form
+            if 'attribute_id' not in data or 'values' not in data:
+                errors = []
+                if 'attribute_id' not in data:
+                    errors.append({"name": "attribute_id", "message": "Attribute ID is required"})
+                if 'values' not in data:
+                    errors.append({"name": "values", "message": "Values are required"})
+                
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+            
+            attribute = request.env['product.attribute'].sudo().browse(int(data['attribute_id']))
+            if not attribute.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "404",
+                    "errors": [{"name": "attribute_id", "message": f"Attribute with ID {data['attribute_id']} not found"}]
+                }), status=404, content_type='application/json')
+            
+            if attribute.shop_id.id != shop_id:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "attribute_id", "message": "Attribute doesn't belong to this shop"}]
+                }), status=400, content_type='application/json')
+            
+            try:
+                values_data = json.loads(data['values'])
+                if not isinstance(values_data, list):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to create variant values",
+                        "statusCode": "400",
+                        "errors": [{"name": "values", "message": "Values must be a list"}]
+                    }), status=400, content_type='application/json')
+                
+                values_to_create = [{
+                    'default_extra_price': value.get('extra_price', 0.0),
+                    'name': value['name'],
+                    'attribute_id': attribute.id,
+                } for value in values_data if 'name' in value]
+                request.env['product.attribute.value'].sudo().create(values_to_create)
+                return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
+            except json.JSONDecodeError:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create variant values",
+                    "statusCode": "400",
+                    "errors": [{"name": "values", "message": "Invalid JSON format for values"}]
+                }), status=400, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create variant values",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_update(self, shop_id, value_id, **kw):
+        """
+        Update an existing variant value.
+        """
+        try:
+            data = request.httprequest.form
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            variant_value.write(update_fields)
+            return Response(json.dumps({'message': 'Variant value updated successfully'}), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_patch(self, shop_id, value_id, **kw):
+        """
+        Partially update an existing variant value.
+        """
+        try:
+            data = request.httprequest.form
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            if not update_fields:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant value",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+            
+            variant_value.write(update_fields)
+            return Response(json.dumps({'message': 'Variant value patched successfully'}), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to patch variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='variant_value')
+    def variant_value_delete(self, shop_id, value_id, **kw):
+        """
+        Delete a variant value.
+        """
+        try:
+            variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not variant_value.exists():
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete variant value",
+                    "statusCode": "404",
+                    "errors": [{"name": "value_id", "message": "Variant value not found"}]
+                }), status=404, content_type='application/json')
+            
+            variant_value.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete variant value",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/image/add", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
+    def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
+        """
+        Upload, validate, process, and store an image with automatic WebP conversion.
+        """
+        try:
+            if 'image' not in request.httprequest.files:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'No image file provided',
+                    'error': 'Missing required file'
+                }, status=400)
+
+            image_file = request.httprequest.files['image']
+            if not image_file.filename:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Invalid image file',
+                    'error': 'Empty file'
+                }, status=400)
+
+            # Read and encode image
+            image_data = base64.b64encode(image_file.read()).decode('utf-8')
+            data = base64.b64decode(image_data)
+
+            # Create attachment
+            attachment = request.env['ir.attachment'].sudo().create({
+                'name': image_file.filename,
+                'datas': data,
+                'res_model': res_model,
+                'res_id': res_id if res_id else 0,
+                'mimetype': image_file.content_type
+            })
+
+            return request.make_json_response({
+                'status': True,
+                'message': 'Image uploaded successfully',
+                'data': {
+                    'image': f'/web/image/{attachment.id}',
+                    'image_id': attachment.id
+                }
+            }, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                'status': False,
+                'message': 'Error uploading image',
+                'error': str(e)
+            }, status=500)
