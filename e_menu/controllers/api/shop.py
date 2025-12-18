@@ -1,5 +1,5 @@
-from odoo import http, Response
-from odoo.http import request
+from odoo import http
+from odoo.http import request, Response
 import json
 import base64
 from .utils import (
