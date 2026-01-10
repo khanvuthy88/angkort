@@ -905,9 +905,6 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'id': value.id,
                     'name': value.name,
                     'extra_price': value.default_extra_price,
-                    'createdAt': value.create_date.isoformat() if value.create_date else None,
-                    'updatedAt': value.write_date.isoformat() if value.write_date else None,
-                    'publishedAt': value.create_date.isoformat() if value.create_date else None
                 }
                 value_list.append(value_data)
             
