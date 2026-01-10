@@ -7,3 +7,4 @@ from . import shop_bank
 from . import ir_http
 from . import res_user_token
 from . import product_attribute
+from . import sale_order

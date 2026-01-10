@@ -864,10 +864,10 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Shop not found'}, status=404)
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
-                return Response(json.dumps({'error': 'Attribute not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Attribute not found'}, status=404)
             
             # Parse query parameters
             search = request.httprequest.args.get('search', '').strip()
@@ -875,7 +875,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             order = request.httprequest.args.get('order', 'asc').lower()
             
             # Validate sort field
-            valid_sort_fields = {'id', 'name', 'price_extra', 'create_date'}
+            valid_sort_fields = {'id', 'name', 'default_extra_price', 'create_date'}
             if sort not in valid_sort_fields:
                 sort = 'id'
             
@@ -904,7 +904,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 value_data = {
                     'id': value.id,
                     'name': value.name,
-                    'extra_price': value.price_extra,
+                    'extra_price': value.default_extra_price,
                     'createdAt': value.create_date.isoformat() if value.create_date else None,
                     'updatedAt': value.write_date.isoformat() if value.write_date else None,
                     'publishedAt': value.create_date.isoformat() if value.create_date else None
@@ -924,9 +924,9 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'keyword': keyword_meta
                 }
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({'error': str(e)}, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
@@ -1009,31 +1009,36 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             data = request.httprequest.form
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant value",
                     "statusCode": "404",
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
-            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            update_fields = {}
+            if 'name' in data:
+                update_fields['name'] = data['name']
+            if 'price_extra' in data:
+                update_fields['default_extra_price'] = data['price_extra']
+
             if not update_fields:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant value",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             variant_value.write(update_fields)
-            return Response(json.dumps({'message': 'Variant value updated successfully'}), status=200, content_type='application/json')
+            return request.make_json_response({'message': 'Variant value updated successfully'}, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update variant value",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant_value')
@@ -1045,31 +1050,36 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             data = request.httprequest.form
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch variant value",
                     "statusCode": "404",
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
-            update_fields = {k: v for k, v in data.items() if k in ['name', 'price_extra']}
+            update_fields = {}
+            if 'name' in data:
+                update_fields['name'] = data['name']
+            if 'price_extra' in data:
+                update_fields['default_extra_price'] = data['price_extra']
+
             if not update_fields:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch variant value",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             variant_value.write(update_fields)
-            return Response(json.dumps({'message': 'Variant value patched successfully'}), status=200, content_type='application/json')
+            return request.make_json_response({'message': 'Variant value patched successfully'}, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to patch variant value",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant_value')

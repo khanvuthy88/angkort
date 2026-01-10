@@ -1,10 +1,15 @@
 from odoo import http, Command, fields, _
-from odoo.http import request
+from odoo.http import request, Response
+from odoo.exceptions import UserError
 from .utils import (
     validate_auth, validate_input_data, paginate_results, 
     APIUtilsMixin, ORDER_STATE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, BASE_URL
 )
 from .auth import AuthMixin
+import logging
+import requests
+
+_logger = logging.getLogger(__name__)
 
 class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
@@ -572,35 +577,35 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
     def telegram_create_order(self):
         """
         Create a new sale order via Telegram Mini App (public endpoint acting as User ID 2).
-        Requires X-Telegram-Init-Data header for validation.
+        
+        Expected JSON structure:
+        {
+            "partner_id": <integer>,  # Required: Customer/partner ID
+            "shop_id": <integer>,     # Optional: Store/shop partner ID
+            "telegram_id": <integer>, # Optional: Client Telegram ID for notifications
+            "order_date": <string>,   # Optional: ISO format date string (e.g., "2025-12-28T10:00:00Z")
+            "notes": <string>,        # Optional: Order-level note
+            "lines": [                # Required: Array of order line items
+                {
+                    "template_id": <integer>,           # Required: Product template ID
+                    "qty": <float>,                     # Required: Quantity
+                    "variant_value_ids": [<int>],       # Optional: Attribute value IDs (Size + Extra Options)
+                    "price_unit": <float>,              # Optional: Price override per unit
+                    "note": <string>,                   # Optional: Line-level note
+                    "addons": [                         # Optional: Separate products (e.g., drinks)
+                        {
+                            "product_id": <integer>,    # Required: Product variant ID
+                            "qty": <float>,             # Required: Quantity
+                            "price_unit": <float>,      # Optional: Price override
+                            "note": <string>            # Optional: Addon note
+                        }
+                    ]
+                }
+            ]
+        }
         """
         try:
-            # 1. Security Check
-            init_data = request.httprequest.headers.get('X-Telegram-Init-Data')
-            if not init_data:
-                 return request.make_json_response({
-                    'status': False,
-                    'message': 'Unauthorized',
-                    'error': 'Missing X-Telegram-Init-Data header'
-                }, status=401)
-                
-            bot_token = request.env['ir.config_parameter'].sudo().get_param('angkort.telegram_bot_token')
-            if not bot_token:
-                 return request.make_json_response({
-                    'status': False,
-                    'message': 'Server Configuration Error',
-                    'error': 'Telegram Bot Token not configured'
-                }, status=500)
-
-            is_valid, msg = self.verify_telegram_init_data(init_data, bot_token)
-            if not is_valid:
-                 return request.make_json_response({
-                    'status': False,
-                    'message': 'Unauthorized',
-                    'error': f'Invalid Telegram data: {msg}'
-                }, status=401)
-
-            # 2. Process Order
+            # Parse request data
             data = request.get_json_data()
             if not data:
                 return request.make_json_response({
@@ -609,44 +614,290 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'error': 'Missing request body'
                 }, status=400)
 
-            if 'partner_id' not in data or 'order_lines' not in data:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Missing required fields',
-                    'error': 'partner_id and order_lines are required'
-                }, status=400)
-
-            # Switch to User ID 2 context (ensure integer)
-            uid = 2
+            # Validate required fields
+            partner_id = data.get('partner_id')
+            lines_data = data.get('lines') or data.get('order_lines')  # Support both for backward compatibility
             
-            # Create order lines
-            order_lines = []
-            for line in data['order_lines']:
-                if 'product_id' not in line or 'quantity' not in line:
-                    continue
-                # Use sudo(2) or with_user(2) context for product lookup if needed, 
-                # but standard sudo() is safer for reading.
-                # Here we prepare command list.
-                order_line = Command.create({
-                    'product_id': line['product_id'],
-                    'product_uom_qty': line['quantity'],
-                    'price_unit': line.get('price_unit', 0.0)
-                })
-                order_lines.append(order_line)
-
-            if not order_lines:
+            if not partner_id:
                 return request.make_json_response({
                     'status': False,
-                    'message': 'No valid order lines',
-                    'error': 'At least one valid order line is required'
+                    'message': 'Missing required field',
+                    'error': 'partner_id is required'
+                }, status=400)
+            
+            if not lines_data or not isinstance(lines_data, list):
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Missing required field',
+                    'error': 'lines (array) is required'
                 }, status=400)
 
-            # Create sale order as User ID 2
-            # We use with_user(2) to switch the environment user
-            order = request.env['sale.order'].with_user(uid).create({
-                'partner_id': data['partner_id'],
-                'order_line': order_lines
-            })
+            if not lines_data:  # Empty list check
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Invalid lines data',
+                    'error': 'lines array cannot be empty'
+                }, status=400)
+
+            # Switch to User ID 2 context with sudo
+            uid = 2
+            sudo_req = request.env(user=uid, su=True)
+            
+            # Validate and get partner
+            try:
+                partner_id = int(partner_id)
+            except (ValueError, TypeError):
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Invalid partner_id',
+                    'error': 'partner_id must be a valid integer'
+                }, status=400)
+            
+            partner = sudo_req['res.partner'].browse(partner_id).exists()
+            if not partner:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Partner not found',
+                    'error': f'Partner with ID {partner_id} does not exist'
+                }, status=400)
+
+            # Prepare order header values
+            order_vals = {
+                'partner_id': partner.id,
+                'company_id': partner.company_id.id or sudo_req.company.id,
+                'note': data.get('notes') or data.get('note') or '',
+            }
+            
+            # Handle optional order_date (ISO format: "2025-12-28T10:00:00Z" or "2025-12-28T10:00:00")
+            order_date = data.get('order_date')
+            if order_date:
+                try:
+                    from datetime import datetime
+                    # Parse ISO format date string
+                    if isinstance(order_date, str):
+                        # Try parsing with ISO format (handles timezone)
+                        try:
+                            # Replace Z with +00:00 for proper timezone handling
+                            date_str = order_date.replace('Z', '+00:00')
+                            dt = datetime.fromisoformat(date_str)
+                            order_vals['date_order'] = dt
+                        except ValueError:
+                            # Fallback: try just the date part (YYYY-MM-DD)
+                            try:
+                                date_only = order_date.split('T')[0]
+                                dt = datetime.strptime(date_only, '%Y-%m-%d')
+                                order_vals['date_order'] = dt
+                            except ValueError:
+                                # Invalid date format - skip, use current date
+                                pass
+                except (ValueError, TypeError):
+                    # Invalid date format - skip, use current date
+                    pass
+            
+            # Handle optional shop_id
+            shop_id = data.get('shop_id')
+            if shop_id:
+                try:
+                    shop_id = int(shop_id)
+                    shop = sudo_req['res.partner'].search([
+                        ('id', '=', shop_id), 
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    if shop:
+                        order_vals['shop_id'] = shop.id
+                except (ValueError, TypeError):
+                    pass  # Invalid shop_id - skip silently
+
+            # Create order header
+            order = sudo_req['sale.order'].create(order_vals)
+
+            # Prepare model environments
+            template_env = sudo_req['product.template']
+            variant_env = sudo_req['product.product']
+            line_env = sudo_req['sale.order.line']
+
+            # Process each line item
+            lines_processed = 0
+            for line_idx, line in enumerate(lines_data):
+                if not isinstance(line, dict):
+                    continue
+                    
+                # Validate quantity (support both 'qty' and 'quantity')
+                quantity = line.get('qty') or line.get('quantity')
+                if quantity is None:
+                    continue
+                
+                try:
+                    quantity = float(quantity)
+                    if quantity <= 0:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+
+                # Identify product (template_id preferred, product_id/variant_id as fallback)
+                template_id = line.get('template_id')
+                product_id = line.get('product_id') or line.get('variant_id')
+
+                if not (template_id or product_id):
+                    continue
+
+                # Resolve main product variant
+                resolved_product_id = False
+                
+                if template_id:
+                    try:
+                        template_id = int(template_id)
+                        template = template_env.browse(template_id).exists()
+                        if template:
+                            # Get variant value IDs (for Size + Extra Options)
+                            variant_value_ids = line.get('variant_value_ids') or []
+                            if variant_value_ids:
+                                # Convert to list of integers
+                                try:
+                                    variant_value_ids = [int(vid) for vid in variant_value_ids if vid]
+                                    combination = sudo_req['product.template.attribute.value'].browse(variant_value_ids)
+                                    variant = template._get_variant_for_combination(combination)
+                                    if variant:
+                                        resolved_product_id = variant.id
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # Fallback to default variant if combination doesn't map to a specific variant
+                            # (e.g., when using no-variant attributes like Size + Extra Options)
+                            if not resolved_product_id:
+                                resolved_product_id = template.product_variant_id.id
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Fallback: use product_id/variant_id directly
+                if not resolved_product_id and product_id:
+                    try:
+                        product_id = int(product_id)
+                        variant = variant_env.browse(product_id).exists()
+                        if variant:
+                            resolved_product_id = variant.id
+                    except (ValueError, TypeError):
+                        pass
+
+                if not resolved_product_id:
+                    continue
+
+                # Add main item to cart with attributes
+                try:
+                    variant_value_ids = line.get('variant_value_ids') or []
+                    # Ensure variant_value_ids is a list of integers
+                    if variant_value_ids:
+                        variant_value_ids = [int(vid) for vid in variant_value_ids if vid]
+                    else:
+                        variant_value_ids = []
+                    
+                    update_result = order._cart_update(
+                        product_id=resolved_product_id,
+                        add_qty=quantity,
+                        no_variant_attribute_value_ids=variant_value_ids,
+                    )
+                    
+                    if update_result.get('line_id'):
+                        sol = line_env.browse(update_result['line_id'])
+                        line_updates = {}
+                        
+                        # Apply price override if provided
+                        if line.get('price_unit') is not None:
+                            try:
+                                line_updates['price_unit'] = float(line['price_unit'])
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        # Apply custom note if provided
+                        if line.get('note'):
+                            note_text = str(line['note']).strip()
+                            if note_text:
+                                # Append note to existing name or create new
+                                existing_name = sol.name or sol.product_id.display_name
+                                line_updates['name'] = f"{existing_name}\n{note_text}" if existing_name != note_text else existing_name
+                        
+                        if line_updates:
+                            sol.write(line_updates)
+                        
+                        lines_processed += 1
+
+                    # Process addons (separate products like drinks)
+                    addons = line.get('addons') or []
+                    if isinstance(addons, list):
+                        for addon in addons:
+                            if not isinstance(addon, dict):
+                                continue
+                            
+                            addon_product_id = addon.get('product_id')
+                            addon_qty = addon.get('qty') or addon.get('quantity')
+                            
+                            if not addon_product_id or addon_qty is None:
+                                continue
+                            
+                            try:
+                                addon_product_id = int(addon_product_id)
+                                addon_qty = float(addon_qty)
+                                if addon_qty <= 0:
+                                    continue
+                                
+                                addon_result = order._cart_update(
+                                    product_id=addon_product_id,
+                                    add_qty=addon_qty,
+                                )
+                                
+                                if addon_result.get('line_id'):
+                                    addon_sol = line_env.browse(addon_result['line_id'])
+                                    addon_updates = {}
+                                    
+                                    # Apply price override if provided
+                                    if addon.get('price_unit') is not None:
+                                        try:
+                                            addon_updates['price_unit'] = float(addon['price_unit'])
+                                        except (ValueError, TypeError):
+                                            pass
+                                    
+                                    # Apply custom note if provided
+                                    if addon.get('note'):
+                                        note_text = str(addon['note']).strip()
+                                        if note_text:
+                                            existing_name = addon_sol.name or addon_sol.product_id.display_name
+                                            addon_updates['name'] = f"{existing_name}\n{note_text}" if existing_name != note_text else existing_name
+                                    
+                                    if addon_updates:
+                                        addon_sol.write(addon_updates)
+                            except (ValueError, TypeError, UserError):
+                                continue  # Skip invalid addons
+                                
+                except UserError:
+                    continue  # Skip problematic lines but continue processing
+
+            # Validate that at least one line was processed
+            if lines_processed == 0 or not order.order_line:
+                order.unlink()
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'No valid order lines created',
+                    'error': 'Ensure product IDs and quantities are valid'
+                }, status=400)
+
+            # Send Telegram Notification to Shop Owner
+            try:
+                if order.shop_id and order.shop_id.telegram_chat_id:
+                    self._send_telegram_notification(sudo_req, order, shop_partner=order.shop_id)
+                
+                # Send Telegram Notification to Client (if provided in request)
+                client_telegram_id = data.get('telegram_id') or data.get('telegram_chat_id')
+                if client_telegram_id:
+                     self._send_telegram_notification(
+                        sudo_req, 
+                        order, 
+                        chat_id=client_telegram_id, 
+                        title="✅ Order Confirmation"
+                    )
+
+            except Exception as e:
+                # Log error but don't fail the request
+                _logger.error(f"Failed to send Telegram notification: {str(e)}")
 
             return request.make_json_response({
                 'status': True,
@@ -662,3 +913,67 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'message': 'Error creating order',
                 'error': str(e)
             }, status=500)
+
+    def _send_telegram_notification(self, env, order, shop_partner=None, chat_id=None, title=None):
+        """
+        Send a Telegram notification to the shop owner or client.
+        """
+        _logger.info(f"Start sending telegram notification for order: {order.name}")
+        try:
+            # Get bot token from system parameters
+            bot_token = env['ir.config_parameter'].sudo().get_param('telegram.bot.token')
+            if not bot_token:
+                _logger.warning("Telegram bot token not found")
+                return
+
+            if not chat_id and shop_partner:
+                chat_id = shop_partner.telegram_chat_id
+            
+            if not chat_id:
+                _logger.warning(f"No telegram chat id found for order {order.name}")
+                return
+
+            target_name = shop_partner.name if shop_partner else f"Chat ID {chat_id}"
+            _logger.info(f"Sending telegram notification to {target_name}")
+
+            # Format message
+            currency_symbol = order.currency_id.symbol or '$'
+            total_amount = f"{order.amount_total:.2f} {currency_symbol}"
+            
+            header = title or "🆕 *New Order Received!*"
+            
+            message = [
+                f"{header}",
+                f"🆔 *Order:* {order.name}",
+                f"👤 *Customer:* {order.partner_id.name}",
+                f"💰 *Total:* {total_amount}",
+                f"📝 *Note:* {order.note or 'N/A'}",
+                "",
+                "*Items:*"
+            ]
+
+            for line in order.order_line:
+                qty = int(line.product_uom_qty) if line.product_uom_qty.is_integer() else f"{line.product_uom_qty:.2f}"
+                line_text = f"• {qty}x {line.name}"
+                message.append(line_text)
+
+            message_text = "\n".join(message)
+
+            _logger.info(f"Telegram message log: {message}")
+
+            # Send request to Telegram API
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            payload = {
+                'chat_id': chat_id,
+                'text': message_text,
+                'parse_mode': 'Markdown'
+            }
+            
+            # Use a short timeout to not block the response too long
+            response = requests.post(url, json=payload, timeout=5)
+            _logger.info(f"Telegram response: {response.status_code} - {response.text}")
+            
+        except Exception as e:
+            _logger.error(f"Failed to send telegram notification: {str(e)}")
+            # Re-raise to be caught by caller if needed, or just log
+            raise e
