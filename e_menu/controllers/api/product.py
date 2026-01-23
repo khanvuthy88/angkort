@@ -758,7 +758,25 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         Partially update an existing product variant for a specific shop.
         """
         try:
-            data = request.httprequest.form
+            # Get request data - try JSON first, fallback to form data
+            content_type = request.httprequest.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    # Try to get JSON data using get_json_data if available
+                    if hasattr(request, 'get_json_data'):
+                        data = request.get_json_data() or {}
+                    else:
+                        # Fallback: parse JSON from request body
+                        if request.httprequest.data:
+                            data = json.loads(request.httprequest.data.decode('utf-8'))
+                        else:
+                            data = {}
+                except (ValueError, TypeError, AttributeError, UnicodeDecodeError):
+                    data = {}
+            else:
+                data = dict(request.httprequest.form)
+            
+            # Validate shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
                 return Response(json.dumps({
@@ -768,6 +786,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
                 }), status=404, content_type='application/json')
             
+            # Validate attribute exists
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
                 return Response(json.dumps({
@@ -777,37 +796,78 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "errors": [{"name": "variant_id", "message": "Attribute not found"}]
                 }), status=404, content_type='application/json')
             
+            # Define valid fields that can be updated
+            VALID_FIELDS = {'name', 'create_variant', 'display_type'}
             VALID_CREATE_VARIANTS = {'no_variant', 'always'}
             VALID_DISPLAY_TYPES = {'multi', 'radio'}
             
-            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch variant",
-                    "statusCode": "400",
-                    "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
-                }), status=400, content_type='application/json')
+            # Filter only valid fields and prepare update dict
+            update_vals = {}
             
-            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({
-                    "status": "error",
-                    "message": "Failed to patch variant",
-                    "statusCode": "400",
-                    "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
-                }), status=400, content_type='application/json')
+            # Validate and process name
+            if 'name' in data:
+                name = data['name']
+                if isinstance(name, str):
+                    name = name.strip()
+                    if name and name != attribute.name:
+                        # Check for duplicate names
+                        if request.env['product.attribute'].sudo().search_count([
+                            ('shop_id', '=', shop_id), 
+                            ('name', '=', name),
+                            ('id', '!=', attribute.id)
+                        ]):
+                            return Response(json.dumps({
+                                "status": "error",
+                                "message": "Failed to patch variant",
+                                "statusCode": "400",
+                                "errors": [{"name": "name", "message": f"Attribute with name '{name}' already exists"}]
+                            }), status=400, content_type='application/json')
+                        update_vals['name'] = name
             
-            if 'name' in data and data['name'] != attribute.name:
-                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
+            # Validate and process create_variant
+            if 'create_variant' in data:
+                create_variant = data['create_variant']
+                if isinstance(create_variant, str):
+                    create_variant = create_variant.strip()
+                if create_variant not in VALID_CREATE_VARIANTS:
                     return Response(json.dumps({
                         "status": "error",
                         "message": "Failed to patch variant",
                         "statusCode": "400",
-                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
+                        "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
                     }), status=400, content_type='application/json')
+                update_vals['create_variant'] = create_variant
             
-            if data.get('display_type') == 'multi':
-                data['create_variant'] = 'no_variant'
-            attribute.write(data)
+            # Validate and process display_type
+            if 'display_type' in data:
+                display_type = data['display_type']
+                if isinstance(display_type, str):
+                    display_type = display_type.strip()
+                if display_type not in VALID_DISPLAY_TYPES:
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to patch variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
+                    }), status=400, content_type='application/json')
+                update_vals['display_type'] = display_type
+                
+                # Auto-set create_variant for multi display type
+                if display_type == 'multi':
+                    update_vals['create_variant'] = 'no_variant'
+            
+            # If no valid fields to update, return error
+            if not update_vals:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to patch variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "general", "message": "No valid fields provided for update"}]
+                }), status=400, content_type='application/json')
+            
+            # Write only validated fields
+            attribute.write(update_vals)
+            
             return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
         except Exception as e:
             return Response(json.dumps({
