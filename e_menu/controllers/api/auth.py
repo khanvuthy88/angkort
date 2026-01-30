@@ -235,6 +235,18 @@ class Authentication(http.Controller, AuthMixin):
                 role = "MERCHANT"
             else:
                 role = "NORMAL"
+
+            # Shops owned by the current user (created by this user)
+            shops = request.env['res.partner'].sudo().search([
+                ('type', '=', 'store'),
+                ('create_uid', '=', user.id)
+            ], order='id')
+            shops_data = [{
+                'id': shop.id,
+                'name': shop.name or '',
+                'phone': shop.phone or '',
+                'customer_address': shop.customer_address or '',
+            } for shop in shops]
             
             # Prepare success response
             response_data = {
@@ -249,7 +261,8 @@ class Authentication(http.Controller, AuthMixin):
                     "username": user.login,
                     "name": user.name,
                     "email": user.email,
-                    'roles': role
+                    "roles": role,
+                    "shops": shops_data
                 }
             }
             
