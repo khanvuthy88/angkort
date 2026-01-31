@@ -18,6 +18,12 @@
             <field name="inherit_id" ref="base.view_partner_form" />
             <field name="arch" type="xml">
                 <div name="button_box" position="inside">
+                    <button name="action_open_shop_products" type="object" class="oe_stat_button" icon="fa-cube" invisible="type != 'store'">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_value"><field name="product_count"/></span>
+                            <span class="o_stat_text">Products</span>
+                        </div>
+                    </button>
                     <button name="generate_telegram_token" type="object" class="oe_stat_button" string="Generate Token"/>
                 </div>
                 <field name="vat" position="after">

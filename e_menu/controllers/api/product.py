@@ -161,6 +161,192 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'message': str(e)
             }, status=500)
 
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def product_create(self, shop_id, **kw):
+        """
+        Create a new product for a specific shop. Only the shop owner can create products for their shop.
+        Expects JSON or form body with: name (required); code, description, sale_price, category_id, image (optional).
+        Optional variant/attribute: variant_ids (list of attribute IDs), or attribute_lines (list of { attribute_id, value_ids }).
+        """
+        try:
+            # Parse request data: JSON or form (with optional file for image)
+            content_type = request.httprequest.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    if hasattr(request, 'get_json_data'):
+                        data = request.get_json_data() or {}
+                    elif request.httprequest.data:
+                        data = json.loads(request.httprequest.data.decode('utf-8'))
+                    else:
+                        data = {}
+                except (ValueError, TypeError, AttributeError, UnicodeDecodeError):
+                    data = {}
+                files = {}
+            else:
+                data = dict(request.httprequest.form)
+                files = request.httprequest.files or {}
+
+            # Validate shop exists (verify_ownership already ensured user owns it)
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to create product",
+                    "statusCode": 404,
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }, status=404)
+
+            # Required field: name
+            name = (data.get('name') or '').strip()
+            if not name:
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to create product",
+                    "statusCode": 400,
+                    "errors": [{"name": "name", "message": "Product name is required"}]
+                }, status=400)
+
+            # Build product values
+            create_vals = {
+                'name': name,
+                'shop_id': shop_id,
+                'type': data.get('type', 'consu').strip() or 'consu',
+            }
+            if create_vals['type'] not in ('consu', 'service'):
+                create_vals['type'] = 'consu'
+
+            if data.get('code') is not None or data.get('default_code') is not None:
+                create_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
+            if data.get('description') is not None:
+                create_vals['description'] = data.get('description') or ''
+            if data.get('sale_price') is not None or data.get('list_price') is not None:
+                try:
+                    create_vals['list_price'] = float(data.get('sale_price') or data.get('list_price') or 0)
+                except (TypeError, ValueError):
+                    create_vals['list_price'] = 0.0
+            if data.get('category_id') is not None or data.get('categ_id') is not None:
+                try:
+                    categ_id = int(data.get('category_id') or data.get('categ_id') or 0)
+                    if categ_id and request.env['product.category'].sudo().browse(categ_id).exists():
+                        create_vals['categ_id'] = categ_id
+                except (TypeError, ValueError):
+                    pass
+
+            # Image: from file upload or base64 in JSON
+            image_file = files.get('image')
+            if image_file:
+                try:
+                    content = image_file.read()
+                    if content:
+                        create_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
+                except Exception:
+                    pass
+            elif data.get('image'):
+                try:
+                    raw = data.get('image')
+                    if isinstance(raw, str) and raw.startswith('data:'):
+                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
+                    create_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                except Exception:
+                    pass
+
+            product = request.env['product.template'].sudo().create(create_vals)
+
+            # Optional: attach variants (attributes) to the product
+            AttributeLine = request.env['product.template.attribute.line'].sudo()
+            attribute_lines_to_create = []  # list of (attribute_id, value_ids)
+
+            def _parse_ids(val):
+                if val is None:
+                    return []
+                if isinstance(val, (int, float)):
+                    return [int(val)]
+                if isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except (ValueError, TypeError):
+                        return []
+                try:
+                    return [int(x) for x in val if x is not None]
+                except (TypeError, ValueError):
+                    return []
+
+            # variant_ids: list of attribute IDs — use all values for each attribute
+            variant_ids_raw = data.get('variant_ids') or data.get('variant_id')
+            seen_attr_ids = set()
+            if variant_ids_raw is not None:
+                variant_ids_raw = _parse_ids(variant_ids_raw)
+                for attr_id in variant_ids_raw:
+                    if attr_id in seen_attr_ids:
+                        continue
+                    attr = request.env['product.attribute'].sudo().browse(attr_id)
+                    if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                        continue
+                    values = request.env['product.attribute.value'].sudo().search([
+                        ('attribute_id', '=', attr_id)
+                    ])
+                    if values:
+                        seen_attr_ids.add(attr_id)
+                        attribute_lines_to_create.append((attr_id, values.ids))
+
+            # attribute_lines: list of { attribute_id, value_ids } — explicit values per attribute
+            attr_lines_raw = data.get('attribute_lines') or data.get('attribute_line_ids') or []
+            if isinstance(attr_lines_raw, str):
+                try:
+                    attr_lines_raw = json.loads(attr_lines_raw)
+                except (ValueError, TypeError):
+                    attr_lines_raw = []
+            if not isinstance(attr_lines_raw, list):
+                attr_lines_raw = []
+            for raw in attr_lines_raw:
+                if not isinstance(raw, dict):
+                    continue
+                try:
+                    attr_id = int(raw.get('attribute_id', 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if not attr_id:
+                    continue
+                attr = request.env['product.attribute'].sudo().browse(attr_id)
+                if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                    continue
+                val_ids = _parse_ids(raw.get('value_ids'))
+                if not val_ids:
+                    continue
+                # Ensure values belong to this attribute
+                valid = request.env['product.attribute.value'].sudo().search([
+                    ('id', 'in', val_ids), ('attribute_id', '=', attr_id)
+                ]).ids
+                if valid:
+                    # Merge with existing line for same attribute from variant_ids
+                    existing = next((x for x in attribute_lines_to_create if x[0] == attr_id), None)
+                    if existing:
+                        merged = list(set(existing[1]) | set(valid))
+                        attribute_lines_to_create = [(a, v) for a, v in attribute_lines_to_create if a != attr_id]
+                        attribute_lines_to_create.append((attr_id, merged))
+                    else:
+                        attribute_lines_to_create.append((attr_id, valid))
+            for attr_id, value_ids in attribute_lines_to_create:
+                AttributeLine.create({
+                    'product_tmpl_id': product.id,
+                    'attribute_id': attr_id,
+                    'value_ids': [(6, 0, value_ids)],
+                })
+
+            product_data = self._get_product_details(product)
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+            return request.make_json_response({'data': product_data}, status=201)
+        except Exception as e:
+            return request.make_json_response({
+                "status": "error",
+                "message": "Failed to create product",
+                "statusCode": 500,
+                "errors": [{"name": "general", "message": str(e)}]
+            }, status=500)
+
     @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="*")
     def global_product_list(self, **kw):
         """
@@ -1212,3 +1398,4 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'message': 'Error uploading image',
                 'error': str(e)
             }, status=500)
+

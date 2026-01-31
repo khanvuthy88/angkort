@@ -1,0 +1,676 @@
+{
+  "info": {
+    "name": "Angkort Shop API",
+    "description": "Postman collection for Angkort e_menu API (Base URL: /angkort/api/v1). Includes Auth, Shop, Product, Order endpoints with sample request payloads.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8069" },
+    { "key": "api_prefix", "value": "/angkort/api/v1" },
+    { "key": "access_token", "value": "" },
+    { "key": "shop_id", "value": "1" },
+    { "key": "variant_id", "value": "1" },
+    { "key": "value_id", "value": "1" },
+    { "key": "wifi_id", "value": "1" },
+    { "key": "hour_id", "value": "1" },
+    { "key": "category_id", "value": "1" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [ { "key": "token", "value": "{{access_token}}" } ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/login",
+            "description": "**Auth:** Public\n\n**Request body (JSON):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| username | string | Yes | User login |\n| password | string | Yes | User password |\n\n**Response:** `access_token`, `refresh_token`, expiry info."
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"username\": \"johndoe\",\n  \"password\": \"securePassword123\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/register",
+            "description": "**Auth:** Public\n\n**Request body (JSON):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| name | string | Yes | Display name |\n| username | string | Yes | Login (must be unique) |\n| password | string | Yes | Password |\n\n**Response:** `access_token`, `refresh_token`, user info."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"YOUR_REFRESH_TOKEN_HERE\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/refresh",
+            "description": "**Auth:** Public\n\n**Request body (JSON):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| refresh_token | string | Yes | Refresh token from login/register |\n\n**Response:** New `access_token` and optionally new `refresh_token`."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/logout",
+            "description": "**Auth:** Bearer token required\n\n**Request:** No body. Header `Authorization: Bearer <access_token>` invalidates the current token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "item": [
+        {
+          "name": "Shop List (GET)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/shop?page=1&limit=20&search=&sort=id&order=asc&filter_industry=&filter_has_wifi=",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_prefix}}", "shop"],
+              "query": [
+                { "key": "page", "value": "1", "description": "Page number (default 1)" },
+                { "key": "limit", "value": "20", "description": "Items per page (default 20, max 100)" },
+                { "key": "search", "value": "", "description": "Search in name, phone, customer_address" },
+                { "key": "sort", "value": "id", "description": "Sort field: id | name | create_date" },
+                { "key": "order", "value": "asc", "description": "Sort order: asc | desc" },
+                { "key": "filter_industry", "value": "", "description": "Filter by industry name (ilike)" },
+                { "key": "filter_has_wifi", "value": "", "description": "Filter shops with WiFi: true | false" }
+              ]
+            },
+            "description": "**Auth:** Public\n\n**Query params:**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| page | int | No | Page number (default 1) |\n| limit | int | No | Per page (default 20, max 100) |\n| search | string | No | Search name, phone, address |\n| sort | string | No | id \\| name \\| create_date |\n| order | string | No | asc \\| desc |\n| filter_industry | string | No | Industry name filter |\n| filter_has_wifi | string | No | true \\| false |\n\n**Response:** `data` (shops), `meta.pagination`, `meta.keyword`."
+          }
+        },
+        {
+          "name": "Shop Detail (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}",
+            "description": "**Auth:** Public\n\n**Path params:**\n\n| Param | Type | Description |\n|-------|------|-------------|\n| shop_id | int | Shop (res.partner type=store) ID |\n\n**Response:** Single shop object with banner, wifi, open hours, banks."
+          }
+        },
+        {
+          "name": "Shop Create (POST) - Form",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "My Coffee Shop", "description": "Required. Shop name." },
+                { "key": "phone", "value": "+85512345678", "description": "Required. Phone number." },
+                { "key": "customer_address", "value": "123 Street, Phnom Penh", "description": "Required. Shop address." },
+                { "key": "wifi_name", "value": "CoffeeWifi", "description": "Optional. WiFi name(s)." },
+                { "key": "email", "value": "shop@example.com", "description": "Optional. Email." },
+                { "key": "shop_latitude", "value": "11.55", "description": "Optional. Latitude (number)." },
+                { "key": "shop_longitude", "value": "104.92", "description": "Optional. Longitude (number)." },
+                { "key": "shop_wifi_ids", "value": "", "description": "Optional. JSON array: [{\"name\":\"...\",\"password\":\"...\"}]" },
+                { "key": "shop_open_hour_ids", "value": "", "description": "Optional. JSON array: [{\"day\":\"0\"-\"6\",\"open\":\"08:00\",\"close\":\"22:00\"}]" },
+                { "key": "shop_banner", "type": "file", "src": "", "description": "Optional. Banner image file." }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop",
+            "description": "**Auth:** Bearer (angkit)\n\n**Body (form-data):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| name | string | Yes | Shop name |\n| phone | string | Yes | Phone number |\n| customer_address | string | Yes | Shop address |\n| wifi_name | string | No | WiFi name(s) |\n| email | string | No | Email |\n| shop_latitude | number | No | Latitude |\n| shop_longitude | number | No | Longitude |\n| shop_wifi_ids | string | No | JSON array of {name, password} |\n| shop_open_hour_ids | string | No | JSON array of {day, open, close}; day 0=Mon..6=Sun |\n| shop_banner | file | No | Banner image |"
+          }
+        },
+        {
+          "name": "Shop Create (JSON) - /shop/create",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Coffee Shop\",\n  \"phone\": \"+85512345678\",\n  \"customer_address\": \"123 Street, Phnom Penh\",\n  \"wifi_name\": \"\",\n  \"shop_latitude\": 0.0,\n  \"shop_longitude\": 0.0,\n  \"email\": \"shop@example.com\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/create",
+            "description": "**Auth:** Bearer (angkit)\n\n**Request body (JSON):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| name | string | Yes | Shop name |\n| phone | string | Yes | Phone number |\n| customer_address | string | Yes | Shop address |\n| wifi_name | string | No | Default \"\" |\n| shop_latitude | number | No | Default 0.0 |\n| shop_longitude | number | No | Default 0.0 |\n| email | string | No | Default \"\" |\n\nBody may be wrapped in `params` for JSON-RPC."
+          }
+        },
+        {
+          "name": "Shop Update (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Updated Shop Name", "description": "Shop name" },
+                { "key": "phone", "value": "+85598765432", "description": "Phone number" },
+                { "key": "customer_address", "value": "New Address", "description": "Address" },
+                { "key": "shop_wifi_ids", "value": "[{\"name\":\"Wifi1\",\"password\":\"pass1\"}]", "description": "JSON array; replaces all WiFi. {name, password} per item." },
+                { "key": "shop_open_hour_ids", "value": "[{\"day\":\"0\",\"open\":\"08:00\",\"close\":\"22:00\"}]", "description": "JSON array; replaces all hours. day 0-6, open/close HH:MM." },
+                { "key": "shop_banner", "type": "file", "description": "Optional. New banner image (replaces existing)." }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int)\n\n**Body (form-data):** Same fields as shop create. Only provided fields updated. shop_wifi_ids / shop_open_hour_ids replace existing lists."
+          }
+        },
+        {
+          "name": "Shop Patch (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Patched Name Only", "description": "Any subset of PARTNER_FIELDS + shop_wifi_ids, shop_open_hour_ids, shop_banner" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int)\n\n**Body (form-data):** Any subset of name, phone, customer_address, email, shop_latitude, shop_longitude, shop_wifi_ids (JSON), shop_open_hour_ids (JSON), shop_banner (file). Only sent fields are updated."
+          }
+        },
+        {
+          "name": "Shop Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}",
+            "description": "Delete shop. Returns 204. Ownership required."
+          }
+        },
+        {
+          "name": "Shop WiFi Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "GuestWifi", "description": "Required" },
+                { "key": "password", "value": "wifi123", "description": "Required" },
+                { "key": "wifi_qr_code", "type": "file", "description": "Optional image" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/wifi",
+            "description": "Add WiFi for shop. Required: name, password."
+          }
+        },
+        {
+          "name": "Shop WiFi Update (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "NewWifiName" },
+                { "key": "password", "value": "newpass" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/wifi/{{wifi_id}}",
+            "description": "Update WiFi. At least one of name, password, or wifi_qr_code file."
+          }
+        },
+        {
+          "name": "Shop WiFi Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/wifi/{{wifi_id}}"
+          }
+        },
+        {
+          "name": "Shop Banner Update (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "shop_banner", "type": "file", "description": "Required - image file" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/banner",
+            "description": "Update shop banner image. Form-data: shop_banner (file)."
+          }
+        },
+        {
+          "name": "Shop Open Hours Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "day", "value": "0", "description": "Required. 0=Mon .. 6=Sun" },
+                { "key": "open", "value": "08:00", "description": "Required" },
+                { "key": "close", "value": "22:00", "description": "Required" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/open-hours",
+            "description": "Add open hour for one day. One entry per day."
+          }
+        },
+        {
+          "name": "Shop Open Hours Update (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "day", "value": "1" },
+                { "key": "open", "value": "09:00" },
+                { "key": "close", "value": "21:00" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/open-hours/{{hour_id}}"
+          }
+        },
+        {
+          "name": "Shop Open Hours Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/open-hours/{{hour_id}}"
+          }
+        },
+        {
+          "name": "Shop Category Create (POST) - JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Beverages\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/category",
+            "description": "Create a product category attached to a shop. Auth: angkit + ownership. Required: name. Optional: parent_id (for subcategories). Category is automatically linked to the shop."
+          }
+        },
+        {
+          "name": "Shop Category Create (POST) - Form",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Food", "description": "Required - Category name" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/category",
+            "description": "Create category using form data. Same as JSON endpoint but with form-data content type."
+          }
+        },
+        {
+          "name": "Shop Subcategory Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hot Beverages\",\n  \"parent_id\": {{category_id}}\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/category",
+            "description": "Create a subcategory with parent. parent_id must be an existing category that belongs to the same shop. Returns complete_name showing full hierarchy path."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Product",
+      "item": [
+        {
+          "name": "Product List by Shop (GET)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product?page=1&limit=20&search=&sort=id&order=asc&filter_category=&filter_price_min=&filter_price_max=&filter_has_variants=",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_prefix}}", "shop", "{{shop_id}}", "product"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "" },
+                { "key": "sort", "value": "id" },
+                { "key": "order", "value": "asc" },
+                { "key": "filter_category", "value": "" },
+                { "key": "filter_price_min", "value": "" },
+                { "key": "filter_price_max", "value": "" },
+                { "key": "filter_has_variants", "value": "" }
+              ]
+            },
+            "description": "Products for a shop. Public."
+          }
+        },
+        {
+          "name": "Product Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cappuccino\",\n  \"code\": \"CAP-001\",\n  \"description\": \"Espresso with steamed milk and foam\",\n  \"sale_price\": 2.50,\n  \"category_id\": 1,\n  \"type\": \"consu\",\n  \"variant_ids\": [1, 2],\n  \"attribute_lines\": [\n    { \"attribute_id\": 1, \"value_ids\": [1, 2, 3] },\n    { \"attribute_id\": 2, \"value_ids\": [4, 5] }\n  ]\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product",
+            "description": "Create a product for a specific shop. Only the shop owner can create products (auth: angkit + ownership). Required: name. Optional: code, description, sale_price (or list_price), category_id (or categ_id), type (consu|service), image (base64 in JSON or send as form-data with 'image' file), variant_ids (list of attribute IDs — attaches all values per attribute), attribute_lines (list of { attribute_id, value_ids } for explicit values). Accepts JSON or form/multipart."
+          }
+        },
+        {
+          "name": "Product Create (POST) - Form with Image",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Cappuccino", "description": "Required" },
+                { "key": "code", "value": "CAP-001" },
+                { "key": "description", "value": "Espresso with steamed milk" },
+                { "key": "sale_price", "value": "2.50" },
+                { "key": "category_id", "value": "1" },
+                { "key": "type", "value": "consu", "description": "consu | service" },
+                { "key": "image", "type": "file", "description": "Optional - product image file" },
+                { "key": "variant_ids", "value": "[1, 2]", "description": "Optional - JSON array of attribute IDs" },
+                { "key": "attribute_lines", "value": "[{\"attribute_id\":1,\"value_ids\":[1,2,3]}]", "description": "Optional - JSON array of { attribute_id, value_ids }" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product",
+            "description": "Same as Product Create (POST) but using form-data. Use when uploading an image file. Optional: variant_ids (JSON array of attribute IDs), attribute_lines (JSON array of { attribute_id, value_ids }). Only shop owner can create."
+          }
+        },
+        {
+          "name": "Global Product List (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/product?page=1&limit=20&sort=name&order=asc&filter_shop=&filter_category=&filter_price_min=&filter_price_max=&filter_has_variants=",
+            "description": "All products with optional filter_shop. Public."
+          }
+        },
+        {
+          "name": "Global Product Detail (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/product/1",
+            "description": "Single product by template ID. Public."
+          }
+        },
+        {
+          "name": "Product Category List (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/product/category?page=1&limit=20&search=&sort=name&order=asc&filter_parent=&filter_has_children=",
+            "description": "Product categories. Public."
+          }
+        },
+        {
+          "name": "Product Variant (Attributes) List (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/product/variant?page=1&limit=20&search=&sort=name&order=asc&filter_create_variant=&filter_display_type=",
+            "description": "Product attributes (variants). Public. filter_create_variant: no_variant|always; filter_display_type: multi|radio."
+          }
+        },
+        {
+          "name": "Shop Variant List (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant?search=&sort=id&order=asc&filter_create_variant=&filter_display_type=",
+            "description": "Variants (attributes) for shop. Auth: angkit."
+          }
+        },
+        {
+          "name": "Shop Variant Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Size", "description": "Required" },
+                { "key": "create_variant", "value": "always", "description": "Required: no_variant | always" },
+                { "key": "display_type", "value": "radio", "description": "Required: multi | radio" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant",
+            "description": "Create product attribute (variant). If display_type=multi, create_variant is forced to no_variant."
+          }
+        },
+        {
+          "name": "Shop Variant Update (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Size" },
+                { "key": "create_variant", "value": "no_variant" },
+                { "key": "display_type", "value": "radio" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+            "description": "Full update of variant (attribute). Ownership required."
+          }
+        },
+        {
+          "name": "Shop Variant Patch (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Size\",\n  \"create_variant\": \"no_variant\",\n  \"display_type\": \"radio\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+            "description": "Partial update. Accepts JSON or form. Only name, create_variant, display_type."
+          }
+        },
+        {
+          "name": "Shop Variant Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/{{variant_id}}",
+            "description": "Delete variant. Returns 204."
+          }
+        },
+        {
+          "name": "Variant Value List (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/{{variant_id}}/value?search=&sort=id&order=asc",
+            "description": "Values for an attribute. sort: id|name|default_extra_price|create_date."
+          }
+        },
+        {
+          "name": "Variant Value Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "attribute_id", "value": "1", "description": "Required - attribute/variant ID" },
+                { "key": "values", "value": "[{\"name\":\"Small\",\"extra_price\":0},{\"name\":\"Large\",\"extra_price\":1.5}]", "description": "Required - JSON array of { name, extra_price? }" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/value",
+            "description": "Create multiple attribute values. values must be JSON string."
+          }
+        },
+        {
+          "name": "Variant Value Update (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Medium" },
+                { "key": "price_extra", "value": "0.5" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/value/{{value_id}}",
+            "description": "Update single value. name and/or price_extra (maps to default_extra_price)."
+          }
+        },
+        {
+          "name": "Variant Value Patch (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Medium" },
+                { "key": "price_extra", "value": "0.5" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/value/{{value_id}}"
+          }
+        },
+        {
+          "name": "Variant Value Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant/value/{{value_id}}"
+          }
+        },
+        {
+          "name": "Image Add (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "type": "file", "description": "Required - image file" },
+                { "key": "res_id", "value": "0" },
+                { "key": "res_model", "value": "ir.ui.view" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/image/add",
+            "description": "Upload image, stored as ir.attachment. Returns image URL and image_id."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "item": [
+        {
+          "name": "My Order List (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/my/order?page=1&limit=20&search=&order_by=date_order&order_direction=desc",
+            "description": "Paginated orders for current user. order_by: id|name|date_order."
+          }
+        },
+        {
+          "name": "My Order Detail (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/my/order/1",
+            "description": "Single order detail for current user."
+          }
+        },
+        {
+          "name": "My Order Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_lines\": [\n    { \"product_id\": 1, \"quantity\": 2, \"price_unit\": 3.50 },\n    { \"product_id\": 2, \"quantity\": 1 }\n  ],\n  \"note\": \"No onions\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/my/order",
+            "description": "Create order for current user. product_id can be template or variant ID. price_unit optional (uses list_price)."
+          }
+        },
+        {
+          "name": "Cart Checkout (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cart\": [\n    { \"product_id\": 1, \"quantity\": 2 },\n    { \"product_id\": 2, \"quantity\": 1 }\n  ]\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/cart/checkout",
+            "description": "Validate cart and check stock. Returns sufficient_stock / insufficient_stock and total_amount. type=json (Odoo JSON-RPC)."
+          }
+        },
+        {
+          "name": "Sale List (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}{{api_prefix}}/sale?page=1&limit=20&search=&sort=date_order&order=desc&filter_state=&filter_date_from=&filter_date_to=&filter_amount_min=&filter_amount_max=&filter_customer=",
+            "description": "Global sale orders. filter_state: draft|sent|sale|done|cancel. filter_date_from/to: YYYY-MM-DD."
+          }
+        },
+        {
+          "name": "Global Order Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": 1,\n  \"order_lines\": [\n    { \"product_id\": 1, \"quantity\": 2, \"price_unit\": 3.50 },\n    { \"product_id\": 2, \"quantity\": 1, \"price_unit\": 0.0 }\n  ]\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/order",
+            "description": "Create sale order with partner_id. product_id = product.product (variant) ID."
+          }
+        },
+        {
+          "name": "Telegram Order Create (POST)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": 1,\n  \"shop_id\": 1,\n  \"telegram_id\": 123456789,\n  \"order_date\": \"2025-12-28T10:00:00Z\",\n  \"notes\": \"Delivery to front desk\",\n  \"lines\": [\n    {\n      \"template_id\": 1,\n      \"qty\": 2,\n      \"variant_value_ids\": [1, 2],\n      \"price_unit\": 4.00,\n      \"note\": \"Less ice\",\n      \"addons\": [\n        { \"product_id\": 10, \"qty\": 1, \"price_unit\": 1.50, \"note\": \"Extra shot\" }\n      ]\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/telegram/order",
+            "description": "Create order from Telegram Mini App. Public. partner_id required; lines[] with template_id and qty; optional variant_value_ids, addons, order_date, notes, telegram_id."
+          }
+        }
+      ]
+    }
+  ]
+}

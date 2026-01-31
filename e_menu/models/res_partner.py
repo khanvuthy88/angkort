@@ -21,6 +21,30 @@ class Partner(models.Model):
     shop_wifi_ids = fields.One2many('shop.wifi', 'shop_id')
     shop_open_hour_ids = fields.One2many('shop.open.hour', 'shop_id')
     shop_banner = fields.Image()
+    product_count = fields.Integer(
+        string='Products',
+        compute='_compute_product_count',
+    )
+
+    def _compute_product_count(self):
+        for partner in self:
+            if partner.type == 'store':
+                partner.product_count = self.env['product.template'].search_count([
+                    ('shop_id', '=', partner.id)
+                ])
+            else:
+                partner.product_count = 0
+
+    def action_open_shop_products(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Shop Products'),
+            'res_model': 'product.template',
+            'view_mode': 'list,form',
+            'domain': [('shop_id', '=', self.id)],
+            'context': {'default_shop_id': self.id},
+        }
 
     def generate_telegram_token(self):
         for partner in self:

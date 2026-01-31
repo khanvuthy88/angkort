@@ -881,3 +881,130 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
             }, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/category", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='shop')
+    def shop_category_create(self, shop_id, **kw):
+        """
+        Create a new product category for a shop.
+        The category will be automatically attached to the current shop.
+        
+        Parameters:
+        - shop_id (int): ID of the shop to attach the category to
+        - name (string): Name of the category (required)
+        - parent_id (int): ID of the parent category (optional)
+        
+        Returns:
+        - 201: Category created successfully with category data
+        - 400: Validation error (missing required fields)
+        - 403: Unauthorized (user doesn't own the shop)
+        - 404: Shop not found
+        - 500: Server error
+        """
+        try:
+            # Get data from form or JSON
+            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
+                data = request.get_json_data()
+            else:
+                data = request.httprequest.form
+            
+            # Validate required fields
+            if 'name' not in data or not data.get('name'):
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create category",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": "Category name is required"}]
+                }), status=400, content_type='application/json')
+            
+            # Verify shop exists
+            shop = request.env['res.partner'].sudo().search([
+                ('id', '=', shop_id),
+                ('type', '=', 'store')
+            ], limit=1)
+            
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create category",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+            
+            # Prepare category data
+            category_data = {
+                'name': data['name'].strip(),
+                'shop_id': shop_id
+            }
+            
+            # Handle parent category if provided
+            parent_id = data.get('parent_id')
+            if parent_id:
+                try:
+                    parent_id = int(parent_id)
+                    # Verify parent category exists and belongs to the same shop
+                    parent_category = request.env['product.category'].sudo().search([
+                        ('id', '=', parent_id),
+                        ('shop_id', '=', shop_id)
+                    ], limit=1)
+                    
+                    if not parent_category:
+                        return Response(json.dumps({
+                            "status": "error",
+                            "message": "Failed to create category",
+                            "statusCode": "400",
+                            "errors": [{"name": "parent_id", "message": "Parent category not found or doesn't belong to this shop"}]
+                        }), status=400, content_type='application/json')
+                    
+                    category_data['parent_id'] = parent_id
+                except (ValueError, TypeError):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to create category",
+                        "statusCode": "400",
+                        "errors": [{"name": "parent_id", "message": "Parent ID must be a valid integer"}]
+                    }), status=400, content_type='application/json')
+            
+            # Check if category with same name already exists for this shop
+            existing_category = request.env['product.category'].sudo().search([
+                ('name', '=', category_data['name']),
+                ('shop_id', '=', shop_id)
+            ], limit=1)
+            
+            if existing_category:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create category",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": "A category with this name already exists for this shop"}]
+                }), status=400, content_type='application/json')
+            
+            # Create the category
+            category = request.env['product.category'].sudo().create(category_data)
+            
+            # Prepare response data
+            response_data = {
+                'id': category.id,
+                'name': category.name,
+                'shop_id': category.shop_id.id if category.shop_id else None,
+                'shop_name': category.shop_id.name if category.shop_id else None,
+                'parent_id': category.parent_id.id if category.parent_id else None,
+                'parent_name': category.parent_id.name if category.parent_id else None,
+                'complete_name': category.complete_name or category.name,
+                'createdAt': category.create_date.isoformat() if category.create_date else None,
+                'updatedAt': category.write_date.isoformat() if category.write_date else None
+            }
+            
+            return Response(json.dumps({
+                "status": "success",
+                "message": "Category created successfully",
+                "data": response_data
+            }), status=201, content_type='application/json')
+            
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create category",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
