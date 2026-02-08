@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "Angkort Shop API",
+    "name": "Angkort Shop API - X",
     "description": "Postman collection for Angkort e_menu API. Base URL: `/angkort/api/v1`.\n\n**Sections:** Auth, Shop, Product, Order.\n\nEach request includes:\n- **Auth:** Public, Bearer, or ownership requirement\n- **Path / query / body params** with types and required flag\n- Sample payloads where applicable\n\n**Collection variables:** base_url, api_prefix, access_token, shop_id, variant_id, value_id, wifi_id, hour_id, category_id.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -13,7 +13,8 @@
     { "key": "value_id", "value": "1" },
     { "key": "wifi_id", "value": "1" },
     { "key": "hour_id", "value": "1" },
-    { "key": "category_id", "value": "1" }
+    { "key": "category_id", "value": "1" },
+    { "key": "bank_id", "value": "1" }
   ],
   "auth": {
     "type": "bearer",
@@ -227,6 +228,105 @@
             "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
             "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/wifi/{{wifi_id}}",
             "description": "**Auth:** Bearer, shop ownership required\n\n**Path params:** shop_id (int), wifi_id (int)\n\n**Response:** 204 or error."
+          }
+        },
+        {
+          "name": "Shop Bank List (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path params:** shop_id (int)\n\n**Response:** List of bank accounts for the shop."
+          }
+        },
+        {
+          "name": "Shop Bank Detail (GET)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank/{{bank_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path params:** shop_id (int), bank_id (int)\n\n**Response:** Single bank account."
+          }
+        },
+        {
+          "name": "Shop Bank Create (POST) - JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ABA Bank\",\n  \"code\": \"ABA\",\n  \"currency\": \"KHR\",\n  \"link\": \"https://aba.com.kh/qr/123\",\n  \"sequence\": 10,\n  \"active\": true,\n  \"logo\": \"<base64>\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int)\n\n**Request body (JSON):**\n\n| Param | Type | Required | Description |\n|-------|------|----------|-------------|\n| name | string | Yes | Bank name |\n| code | string | Yes | Bank code |\n| currency | string | Yes | Currency code (KHR or USD) |\n| link | string | No | Payment link |\n| sequence | int | No | Sort order |\n| active | bool | No | Active flag |\n| logo | string | No | Base64 image |"
+          }
+        },
+        {
+          "name": "Shop Bank Create (POST) - Form",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "ABA Bank", "description": "Required. Bank name." },
+                { "key": "code", "value": "ABA", "description": "Required. Bank code." },
+                { "key": "currency", "value": "KHR", "description": "Required. Currency code (KHR or USD)." },
+                { "key": "link", "value": "https://aba.com.kh/qr/123", "description": "Optional. Payment link." },
+                { "key": "sequence", "value": "10", "description": "Optional. Sort order." },
+                { "key": "active", "value": "true", "description": "Optional. true | false." },
+                { "key": "logo", "type": "file", "description": "Optional. Bank logo image file." }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int)\n\n**Body (form-data):** Same fields as JSON; use file for logo."
+          }
+        },
+        {
+          "name": "Shop Bank Update (PUT) - JSON",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ABA Bank (Updated)\",\n  \"currency\": \"USD\",\n  \"active\": false,\n  \"sequence\": 5\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank/{{bank_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int), bank_id (int)\n\n**Request body (JSON):** Any subset of name, code, currency (KHR or USD), link, sequence, active, logo."
+          }
+        },
+        {
+          "name": "Shop Bank Update (PUT) - Form",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "ABA Bank (Updated)", "description": "Bank name" },
+                { "key": "currency", "value": "USD", "description": "Currency code (KHR or USD)" },
+                { "key": "active", "value": "false", "description": "true | false" },
+                { "key": "sequence", "value": "5", "description": "Sort order" },
+                { "key": "logo", "type": "file", "description": "Optional. New logo image." }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank/{{bank_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path:** shop_id (int), bank_id (int)\n\n**Body (form-data):** Any subset of fields; at least one required."
+          }
+        },
+        {
+          "name": "Shop Bank Delete (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{access_token}}" } ],
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/bank/{{bank_id}}",
+            "description": "**Auth:** Bearer, shop ownership required\n\n**Path params:** shop_id (int), bank_id (int)\n\n**Response:** 204 No Content on success."
           }
         },
         {

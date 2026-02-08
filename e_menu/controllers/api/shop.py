@@ -918,10 +918,19 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
                 }), status=404, content_type='application/json')
 
+            currency = data.get('currency')
+            if currency not in ('KHR', 'USD'):
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create bank",
+                    "statusCode": "400",
+                    "errors": [{"name": "currency", "message": "Currency must be KHR or USD"}]
+                }), status=400, content_type='application/json')
+
             bank_data = {
                 'name': data.get('name'),
                 'code': data.get('code'),
-                'currency': data.get('currency'),
+                'currency': currency,
                 'link': data.get('link') or '',
                 'shop_id': shop_id,
             }
@@ -996,7 +1005,15 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             if data.get('code') is not None:
                 update_data['code'] = data.get('code')
             if data.get('currency') is not None:
-                update_data['currency'] = data.get('currency')
+                currency = data.get('currency')
+                if currency not in ('KHR', 'USD'):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update bank",
+                        "statusCode": "400",
+                        "errors": [{"name": "currency", "message": "Currency must be KHR or USD"}]
+                    }), status=400, content_type='application/json')
+                update_data['currency'] = currency
             if data.get('link') is not None:
                 update_data['link'] = data.get('link')
 
