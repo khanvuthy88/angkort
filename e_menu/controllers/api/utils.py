@@ -102,7 +102,7 @@ def verify_ownership(entity_type='shop'):
     Decorator to verify that the current user owns the entity they're trying to modify.
     
     Args:
-        entity_type (str): Type of entity to check ('shop', 'product', 'category', 'variant', 'variant_value', 'wifi', 'open_hour')
+        entity_type (str): Type of entity to check ('shop', 'product', 'category', 'variant', 'variant_value', 'wifi', 'open_hour', 'bank')
     """
     def decorator(func):
         @wraps(func)
@@ -278,6 +278,42 @@ def verify_ownership(entity_type='shop'):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only modify open hours you own'
                             }, status=403)
+
+                elif entity_type == 'bank':
+                    shop_id = kwargs.get('shop_id')
+                    bank_id = kwargs.get('bank_id')
+
+                    if not shop_id:
+                        return request.make_json_response({'error': 'Shop ID is required'}, status=400)
+
+                    # For bank creation, check shop ownership
+                    if not bank_id:
+                        shop = request.env['res.partner'].sudo().search([
+                            ('id', '=', shop_id),
+                            ('type', '=', 'store')
+                        ], limit=1)
+
+                        if not shop:
+                            return request.make_json_response({'error': 'Shop not found'}, status=404)
+
+                        if shop.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only create banks for shops you own'
+                            }, status=403)
+                    else:
+                        # For bank update/delete, check bank ownership
+                        bank = request.env['angkort.shop.bank'].sudo().search([
+                            ('id', '=', bank_id),
+                            ('shop_id', '=', shop_id)
+                        ], limit=1)
+
+                        if not bank:
+                            return request.make_json_response({'error': 'Bank not found'}, status=404)
+
+                        if bank.create_uid.id != current_user_id:
+                            return request.make_json_response({
+                                'error': 'Unauthorized: You can only modify banks you own'
+                            }, status=403)
                 
                 elif entity_type == 'banner':
                     shop_id = kwargs.get('shop_id')
@@ -352,10 +388,13 @@ class APIUtilsMixin:
     @classmethod
     def _shop_bank_to_dict(cls, bank):
         return {
+            'id': bank.id,
             'name': bank.name or '',
+            'code': bank.code or '',
             'link': bank.link or '',
             'currency': bank.currency or '',
-            'logo': cls._get_image_url('angkort.shop.bank', bank.id, 'logo') if bank.logo else ''
+            'logo': cls._get_image_url('angkort.shop.bank', bank.id, 'logo') if bank.logo else '',\
+            'shop_id': bank.shop_id.id if bank.shop_id else None
         }
 
     @classmethod

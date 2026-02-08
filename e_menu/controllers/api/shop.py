@@ -835,6 +835,247 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 "errors": [{"name": "general", "message": str(e)}]
             }), status=500, content_type='application/json')
 
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
+    @verify_ownership(entity_type='bank')
+    def shop_bank_list(self, shop_id, **kw):
+        """
+        List all bank accounts for a shop.
+        """
+        try:
+            banks = request.env['angkort.shop.bank'].sudo().search(
+                [('shop_id', '=', shop_id)],
+                order='sequence, id'
+            )
+            response_data = [self._shop_bank_to_dict(bank) for bank in banks]
+            return Response(json.dumps(response_data), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to list banks",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
+    @verify_ownership(entity_type='bank')
+    def shop_bank_detail(self, shop_id, bank_id, **kw):
+        """
+        Retrieve a bank account for a shop.
+        """
+        try:
+            bank = request.env['angkort.shop.bank'].sudo().search([
+                ('id', '=', bank_id),
+                ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not bank:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to fetch bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "bank_id", "message": "Bank not found"}]
+                }), status=404, content_type='application/json')
+            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to fetch bank",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
+    @verify_ownership(entity_type='bank')
+    def shop_bank_create(self, shop_id, **kw):
+        """
+        Create a new bank account for a shop.
+        """
+        try:
+            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
+                data = request.get_json_data() or {}
+            else:
+                data = request.httprequest.form
+            files = request.httprequest.files
+
+            required_fields = ['name', 'code', 'currency']
+            missing_fields = [field for field in required_fields if not data.get(field)]
+            if missing_fields:
+                errors = []
+                for field in missing_fields:
+                    errors.append({"name": field, "message": f"{field.replace('_', ' ').title()} is required"})
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create bank",
+                    "statusCode": "400",
+                    "errors": errors
+                }), status=400, content_type='application/json')
+
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to create bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+
+            bank_data = {
+                'name': data.get('name'),
+                'code': data.get('code'),
+                'currency': data.get('currency'),
+                'link': data.get('link') or '',
+                'shop_id': shop_id,
+            }
+
+            if data.get('sequence') is not None:
+                try:
+                    bank_data['sequence'] = int(data.get('sequence'))
+                except (ValueError, TypeError):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to create bank",
+                        "statusCode": "400",
+                        "errors": [{"name": "sequence", "message": "Sequence must be a valid integer"}]
+                    }), status=400, content_type='application/json')
+
+            if data.get('active') is not None:
+                active_val = str(data.get('active')).lower()
+                bank_data['active'] = active_val in ('true', '1', 'yes', 'y')
+
+            logo_file = files.get('logo')
+            if logo_file:
+                image_data = logo_file.read()
+                if image_data:
+                    bank_data['logo'] = base64.b64encode(image_data)
+            elif data.get('logo'):
+                bank_data['logo'] = data.get('logo')
+
+            bank = request.env['angkort.shop.bank'].sudo().create(bank_data)
+            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=201, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to create bank",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
+    @verify_ownership(entity_type='bank')
+    def shop_bank_update(self, shop_id, bank_id, **kw):
+        """
+        Update a bank account for a shop.
+        """
+        try:
+            if request.httprequest.content_type and 'application/json' in request.httprequest.content_type:
+                data = request.get_json_data() or {}
+            else:
+                data = request.httprequest.form
+            files = request.httprequest.files
+
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+
+            bank = request.env['angkort.shop.bank'].sudo().search([('id', '=', bank_id), ('shop_id', '=', shop_id)], limit=1)
+            if not bank:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "bank_id", "message": "Bank not found"}]
+                }), status=404, content_type='application/json')
+
+            update_data = {}
+            if data.get('name') is not None:
+                update_data['name'] = data.get('name')
+            if data.get('code') is not None:
+                update_data['code'] = data.get('code')
+            if data.get('currency') is not None:
+                update_data['currency'] = data.get('currency')
+            if data.get('link') is not None:
+                update_data['link'] = data.get('link')
+
+            if data.get('sequence') is not None:
+                try:
+                    update_data['sequence'] = int(data.get('sequence'))
+                except (ValueError, TypeError):
+                    return Response(json.dumps({
+                        "status": "error",
+                        "message": "Failed to update bank",
+                        "statusCode": "400",
+                        "errors": [{"name": "sequence", "message": "Sequence must be a valid integer"}]
+                    }), status=400, content_type='application/json')
+
+            if data.get('active') is not None:
+                active_val = str(data.get('active')).lower()
+                update_data['active'] = active_val in ('true', '1', 'yes', 'y')
+
+            logo_file = files.get('logo')
+            if logo_file:
+                image_data = logo_file.read()
+                if image_data:
+                    update_data['logo'] = base64.b64encode(image_data)
+            elif data.get('logo'):
+                update_data['logo'] = data.get('logo')
+
+            if not update_data:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to update bank",
+                    "statusCode": "400",
+                    "errors": [{"name": "fields", "message": "No valid fields to update"}]
+                }), status=400, content_type='application/json')
+
+            bank.write(update_data)
+            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=200, content_type='application/json')
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to update bank",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
+    @verify_ownership(entity_type='bank')
+    def shop_bank_delete(self, shop_id, bank_id, **kw):
+        """
+        Delete a bank account from a shop.
+        """
+        try:
+            shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
+            if not shop:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "shop_id", "message": "Shop not found"}]
+                }), status=404, content_type='application/json')
+
+            bank = request.env['angkort.shop.bank'].sudo().search([('id', '=', bank_id), ('shop_id', '=', shop_id)], limit=1)
+            if not bank:
+                return Response(json.dumps({
+                    "status": "error",
+                    "message": "Failed to delete bank",
+                    "statusCode": "404",
+                    "errors": [{"name": "bank_id", "message": "Bank not found"}]
+                }), status=404, content_type='application/json')
+
+            bank.unlink()
+            return Response(status=204)
+        except Exception as e:
+            return Response(json.dumps({
+                "status": "error",
+                "message": "Failed to delete bank",
+                "statusCode": "500",
+                "errors": [{"name": "general", "message": str(e)}]
+            }), status=500, content_type='application/json')
+
     @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
     def create_shop(self, **kw):
         """
