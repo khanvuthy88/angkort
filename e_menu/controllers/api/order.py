@@ -1,5 +1,5 @@
 from odoo import http, Command, fields, _
-from odoo.http import request, Response
+from odoo.http import request
 from odoo.exceptions import UserError
 from .utils import (
     validate_auth, validate_input_data, paginate_results, 

@@ -1,5 +1,5 @@
 from odoo import http
-from odoo.http import request, Response
+from odoo.http import request
 import json
 import base64
 from .utils import (
@@ -33,7 +33,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Shop not found'}, status=404)
             
             # Parse query parameters
             page = int(request.httprequest.args.get('page', 1))
@@ -493,7 +493,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             product = request.env['product.template'].sudo().search([('id', '=', product_id)], limit=1)
             if not product:
-                return Response(json.dumps({'error': 'Product not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Product not found'}, status=404)
             product_data = self._get_product_details(product)
             product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
             product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
@@ -501,9 +501,9 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             response = {
                 'data': product_data
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({'error': str(e)}, status=500)
 
     @http.route(f"{BASE_URL}/product/category", methods=['GET'], auth="public", type="http", cors="*")
     def global_product_category(self, **kw):
@@ -670,9 +670,11 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Fetch attributes
             attributes = request.env['product.attribute'].sudo().search(
                 domain,
+                limit=limit,
+                offset=offset,
                 order=order_clause
             )
-            
+
             attributes_data = []
             for attribute in attributes:
                 attribute_data = self._attribute_to_dict(attribute)
@@ -680,7 +682,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 attribute_data['updatedAt'] = attribute.write_date.isoformat() if attribute.write_date else None
                 attribute_data['publishedAt'] = attribute.create_date.isoformat() if attribute.create_date else None
                 attributes_data.append(attribute_data)
-            
+
             # Build keyword metadata
             keyword_meta = {
                 "search": search if search else None,
@@ -688,12 +690,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 "order": order,
                 "filter": {}
             }
-            
+
             if filter_create_variant:
                 keyword_meta["filter"]["create_variant"] = filter_create_variant
             if filter_display_type:
                 keyword_meta["filter"]["display_type"] = filter_display_type
-            
+
             response = {
                 'data': attributes_data,
                 'meta': {
@@ -722,7 +724,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Shop not found'}, status=404)
             
             # Parse query parameters
             search = request.httprequest.args.get('search', '').strip()
@@ -795,9 +797,9 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'keyword': keyword_meta
                 }
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({'error': str(e)}, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
@@ -822,36 +824,36 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     elif field == 'display_type':
                         errors.append({"name": "display_type", "message": "Display type is required"})
                 
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             if data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant",
                     "statusCode": "400",
                     "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             if data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant",
                     "statusCode": "400",
                     "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             if request.env['product.attribute'].sudo().search_count([('name', '=', data['name']), ('shop_id', '=', shop_id)], limit=1):
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant",
                     "statusCode": "400",
                     "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             variant_create_data = {
                 'name': data['name'],
@@ -862,14 +864,14 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             if variant_create_data.get('display_type') == 'multi':
                 variant_create_data['create_variant'] = 'no_variant'
             attribute = request.env['product.attribute'].sudo().create(variant_create_data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=201, content_type='application/json')
+            return request.make_json_response(self._attribute_to_dict(attribute), status=201)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant')
@@ -878,64 +880,126 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         Update an existing product variant for a specific shop.
         """
         try:
-            data = request.httprequest.form
+            # Get request data - try JSON first, fallback to form data
+            content_type = request.httprequest.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    if hasattr(request, 'get_json_data'):
+                        data = request.get_json_data() or {}
+                    else:
+                        if request.httprequest.data:
+                            data = json.loads(request.httprequest.data.decode('utf-8'))
+                        else:
+                            data = {}
+                except (ValueError, TypeError, AttributeError, UnicodeDecodeError):
+                    data = {}
+            else:
+                data = dict(request.httprequest.form)
+
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
-            
+                }, status=404)
+
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant",
                     "statusCode": "404",
                     "errors": [{"name": "variant_id", "message": "Attribute not found"}]
-                }), status=404, content_type='application/json')
-            
+                }, status=404)
+
+            # Define valid fields and allowed values
+            VALID_FIELDS = {'name', 'create_variant', 'display_type'}
             VALID_CREATE_VARIANTS = {'no_variant', 'always'}
             VALID_DISPLAY_TYPES = {'multi', 'radio'}
-            
-            if 'create_variant' in data and data['create_variant'] not in VALID_CREATE_VARIANTS:
-                return Response(json.dumps({
+
+            # PUT requires all fields
+            missing_fields = VALID_FIELDS - set(data.keys())
+            if missing_fields:
+                errors = []
+                for field in missing_fields:
+                    errors.append({"name": field, "message": f"{field} is required"})
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": errors
+                }, status=400)
+
+            # Filter only valid fields and prepare update dict
+            update_vals = {}
+
+            # Validate and process name
+            name = data['name']
+            if isinstance(name, str):
+                name = name.strip()
+            if not name:
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to update variant",
+                    "statusCode": "400",
+                    "errors": [{"name": "name", "message": "Variant name is required"}]
+                }, status=400)
+            if name != attribute.name:
+                if request.env['product.attribute'].sudo().search_count([
+                    ('shop_id', '=', shop_id),
+                    ('name', '=', name),
+                    ('id', '!=', attribute.id)
+                ]):
+                    return request.make_json_response({
+                        "status": "error",
+                        "message": "Failed to update variant",
+                        "statusCode": "400",
+                        "errors": [{"name": "name", "message": f"Attribute with name '{name}' already exists"}]
+                    }, status=400)
+            update_vals['name'] = name
+
+            # Validate and process create_variant
+            create_variant = data['create_variant']
+            if isinstance(create_variant, str):
+                create_variant = create_variant.strip()
+            if create_variant not in VALID_CREATE_VARIANTS:
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant",
                     "statusCode": "400",
                     "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
-                }), status=400, content_type='application/json')
-            
-            if 'display_type' in data and data['display_type'] not in VALID_DISPLAY_TYPES:
-                return Response(json.dumps({
+                }, status=400)
+            update_vals['create_variant'] = create_variant
+
+            # Validate and process display_type
+            display_type = data['display_type']
+            if isinstance(display_type, str):
+                display_type = display_type.strip()
+            if display_type not in VALID_DISPLAY_TYPES:
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update variant",
                     "statusCode": "400",
                     "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
-                }), status=400, content_type='application/json')
-            
-            if 'name' in data and data['name'] != attribute.name:
-                if request.env['product.attribute'].sudo().search_count([('shop_id', '=', shop_id), ('name', '=', data['name'])], limit=1):
-                    return Response(json.dumps({
-                        "status": "error",
-                        "message": "Failed to update variant",
-                        "statusCode": "400",
-                        "errors": [{"name": "name", "message": f"Attribute with name {data['name']} already exists"}]
-                    }), status=400, content_type='application/json')
-            
-            if data.get('display_type') == 'multi':
-                data['create_variant'] = 'no_variant'
-            attribute.write(data)
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+                }, status=400)
+            update_vals['display_type'] = display_type
+
+            # Auto-set create_variant for multi display type
+            if display_type == 'multi':
+                update_vals['create_variant'] = 'no_variant'
+
+            # Write only validated fields
+            attribute.write(update_vals)
+            return request.make_json_response(self._attribute_to_dict(attribute), status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant')
@@ -965,22 +1029,22 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Validate shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch variant",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Validate attribute exists
             attribute = request.env['product.attribute'].sudo().search([('id', '=', variant_id), ('shop_id', '=', shop_id)], limit=1)
             if not attribute:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch variant",
                     "statusCode": "404",
                     "errors": [{"name": "variant_id", "message": "Attribute not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Define valid fields that can be updated
             VALID_FIELDS = {'name', 'create_variant', 'display_type'}
@@ -1002,12 +1066,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                             ('name', '=', name),
                             ('id', '!=', attribute.id)
                         ]):
-                            return Response(json.dumps({
+                            return request.make_json_response({
                                 "status": "error",
                                 "message": "Failed to patch variant",
                                 "statusCode": "400",
                                 "errors": [{"name": "name", "message": f"Attribute with name '{name}' already exists"}]
-                            }), status=400, content_type='application/json')
+                            }, status=400)
                         update_vals['name'] = name
             
             # Validate and process create_variant
@@ -1016,12 +1080,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if isinstance(create_variant, str):
                     create_variant = create_variant.strip()
                 if create_variant not in VALID_CREATE_VARIANTS:
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to patch variant",
                         "statusCode": "400",
                         "errors": [{"name": "create_variant", "message": f"Invalid create_variant value. Must be one of: {', '.join(VALID_CREATE_VARIANTS)}"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
                 update_vals['create_variant'] = create_variant
             
             # Validate and process display_type
@@ -1030,12 +1094,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if isinstance(display_type, str):
                     display_type = display_type.strip()
                 if display_type not in VALID_DISPLAY_TYPES:
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to patch variant",
                         "statusCode": "400",
                         "errors": [{"name": "display_type", "message": f"Invalid display_type value. Must be one of: {', '.join(VALID_DISPLAY_TYPES)}"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
                 update_vals['display_type'] = display_type
                 
                 # Auto-set create_variant for multi display type
@@ -1044,24 +1108,24 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             
             # If no valid fields to update, return error
             if not update_vals:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch variant",
                     "statusCode": "400",
                     "errors": [{"name": "general", "message": "No valid fields provided for update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Write only validated fields
             attribute.write(update_vals)
             
-            return Response(json.dumps(self._attribute_to_dict(attribute)), status=200, content_type='application/json')
+            return request.make_json_response(self._attribute_to_dict(attribute), status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to patch variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/<int:variant_id>", type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant')
@@ -1072,12 +1136,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete variant",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             attribute = request.env['product.attribute'].sudo().search([
                 ('id', '=', variant_id),
@@ -1085,22 +1149,22 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 ('create_uid', '=', request.env.user.id)
             ], limit=1)
             if not attribute:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete variant",
                     "statusCode": "404",
                     "errors": [{"name": "variant_id", "message": "Attribute not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             attribute.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete variant",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/<int:variant_id>/value", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
     def variant_value_list(self, shop_id, variant_id, **kw):
@@ -1186,39 +1250,39 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if 'values' not in data:
                     errors.append({"name": "values", "message": "Values are required"})
                 
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant values",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             attribute = request.env['product.attribute'].sudo().browse(int(data['attribute_id']))
             if not attribute.exists():
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant values",
                     "statusCode": "404",
                     "errors": [{"name": "attribute_id", "message": f"Attribute with ID {data['attribute_id']} not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             if attribute.shop_id.id != shop_id:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant values",
                     "statusCode": "400",
                     "errors": [{"name": "attribute_id", "message": "Attribute doesn't belong to this shop"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             try:
                 values_data = json.loads(data['values'])
                 if not isinstance(values_data, list):
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to create variant values",
                         "statusCode": "400",
                         "errors": [{"name": "values", "message": "Values must be a list"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
                 
                 values_to_create = [{
                     'default_extra_price': value.get('extra_price', 0.0),
@@ -1226,21 +1290,21 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'attribute_id': attribute.id,
                 } for value in values_data if 'name' in value]
                 request.env['product.attribute.value'].sudo().create(values_to_create)
-                return Response(json.dumps({'message': 'Attribute values created successfully'}), status=201, content_type='application/json')
+                return request.make_json_response({'message': 'Attribute values created successfully'}, status=201)
             except json.JSONDecodeError:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create variant values",
                     "statusCode": "400",
                     "errors": [{"name": "values", "message": "Invalid JSON format for values"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create variant values",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product/variant/value/<int:value_id>", type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
     @verify_ownership(entity_type='variant_value')
@@ -1333,22 +1397,22 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             variant_value = request.env['product.attribute.value'].sudo().browse(value_id)
             if not variant_value.exists():
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete variant value",
                     "statusCode": "404",
                     "errors": [{"name": "value_id", "message": "Variant value not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             variant_value.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete variant value",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/image/add", auth="angkit", type="http", methods=["POST"], cors="*", csrf=False)
     def image_add(self, quality=0, width=0, height=0, res_id=False, res_model='ir.ui.view', **kw):
@@ -1371,14 +1435,13 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'error': 'Empty file'
                 }, status=400)
 
-            # Read and encode image
-            image_data = base64.b64encode(image_file.read()).decode('utf-8')
-            data = base64.b64decode(image_data)
+            # Read and encode image (datas expects base64)
+            image_data = base64.b64encode(image_file.read())
 
             # Create attachment
             attachment = request.env['ir.attachment'].sudo().create({
                 'name': image_file.filename,
-                'datas': data,
+                'datas': image_data,
                 'res_model': res_model,
                 'res_id': res_id if res_id else 0,
                 'mimetype': image_file.content_type

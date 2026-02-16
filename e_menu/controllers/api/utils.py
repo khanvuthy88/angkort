@@ -10,7 +10,7 @@ from functools import wraps
 from typing import List
 import requests
 from odoo import http, Command, fields, _
-from odoo.http import request, Response
+from odoo.http import request
 from odoo.tools import config, html2plaintext
 from collections import defaultdict
 from werkzeug.exceptions import NotFound, BadRequest

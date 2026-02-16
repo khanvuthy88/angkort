@@ -1,5 +1,5 @@
 from odoo import fields, http
-from odoo.http import request, route, Response
+from odoo.http import request, route
 import jwt
 from datetime import datetime, timedelta
 import hashlib
@@ -169,58 +169,59 @@ class Authentication(http.Controller, AuthMixin):
                 else:
                     data = dict(request.httprequest.form)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Invalid JSON format",
                     "error": str(e)
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             # Validate required fields
             username = data.get('username')
             password = data.get('password')
-            
+
             if not username or not password:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Missing required fields",
                     "error": "Username and password are required"
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             # Authenticate the user
             user = request.env['res.users'].sudo().search([('login', '=', username)], limit=1)
             if not user:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Authentication failed",
                     "error": "Invalid username or password"
-                }), status=401, content_type='application/json')
-            
+                }, status=401)
+
             # Verify password using Odoo's authentication system
             # We need to get db name from request.session.db or from config
             db = request.session.db
             credential = {'login': username, 'password': password, 'type': 'password'}
-            
+
             try:
                 uid = request.session.authenticate(db, credential)
                 if not uid:
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": False,
                         "message": "Authentication failed",
                         "error": "Invalid username or password"
-                    }), status=401, content_type='application/json')
+                    }, status=401)
             except Exception as auth_error:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Authentication failed",
                     "error": "Invalid credentials"
-                }), status=401, content_type='application/json')
-            
+                }, status=401)
+
             # Generate tokens
             access_token = self._generate_token(user.id, 'access', minutes=30)
             refresh_token = self._generate_token(user.id, 'refresh', days=7)
-            
-            # Store tokens in the database
+
+            # Deactivate any existing tokens for this user, then store new ones
             token_model = request.env['res.user.token'].sudo()
+            self._revoke_all_user_tokens(user.id)
             token_model.create_token(
                 user_id=user.id,
                 access_token=access_token,
@@ -266,15 +267,15 @@ class Authentication(http.Controller, AuthMixin):
                 }
             }
             
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
-            
+            return request.make_json_response(response_data, status=200)
+
         except Exception as e:
             _logger.error(f"Login error: {str(e)}")
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": False,
                 "message": "Internal server error",
                 "error": "An unexpected error occurred during login"
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @route(f'{BASE_URL}/register', type='http', cors="*", csrf=False, auth='public', methods=['POST'])
     def register(self, **kw):
@@ -289,36 +290,34 @@ class Authentication(http.Controller, AuthMixin):
                 else:
                     data = dict(request.httprequest.form)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Invalid JSON format",
                     "error": str(e)
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             # Validate required fields
             name = data.get('name')
             username = data.get('username')
             password = data.get('password')
 
-            print(f"Name: {name}, Password: {password}, Usrname: {username}")
-            
             if not name or not username or not password:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Missing required fields",
                     "error": "Name, username, and password are required"
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             # Check if user already exists
             # Use active_test=False to find inactive users too, preventing "User already exists" constraint error
             User = request.env['res.users'].sudo().with_context(active_test=False)
             existing_user = User.search([('login', '=', username)], limit=1)
             if existing_user:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Registration failed",
                     "error": "Username already exists"
-                }), status=409, content_type='application/json')
+                }, status=409)
             
             # Create the new user
             try:
@@ -356,23 +355,19 @@ class Authentication(http.Controller, AuthMixin):
             except Exception as e:
                 # Log the full error for server-side debugging if needed
                 _logger.exception("Registration failed during user creation")
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Registration failed",
                     "error": f"Could not create user: {str(e)}"
-                }), status=500, content_type='application/json')
-                return Response(json.dumps({
-                    "status": False,
-                    "message": "Registration failed",
-                    "error": f"Could not create user: {str(e)}"
-                }), status=500, content_type='application/json')
+                }, status=500)
             
             # Generate tokens
             access_token = self._generate_token(user.id, 'access', minutes=30)
             refresh_token = self._generate_token(user.id, 'refresh', days=7)
             
-            # Store tokens in the database
+            # Deactivate any existing tokens for this user, then store new ones
             token_model = request.env['res.user.token'].sudo()
+            self._revoke_all_user_tokens(user.id)
             token_model.create_token(
                 user_id=user.id,
                 access_token=access_token,
@@ -401,15 +396,15 @@ class Authentication(http.Controller, AuthMixin):
                 }
             }
             
-            return Response(json.dumps(response_data), status=201, content_type='application/json')
-            
+            return request.make_json_response(response_data, status=201)
+
         except Exception as e:
             _logger.error(f"Registration error: {str(e)}")
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": False,
                 "message": "Internal server error",
                 "error": "An unexpected error occurred during registration"
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @route(f'{BASE_URL}/refresh', type='http', cors="*", csrf=False, auth='none', methods=['POST'])
     def refresh_token(self, **kwargs):
@@ -420,54 +415,59 @@ class Authentication(http.Controller, AuthMixin):
             # Check Content-Type header
             content_type = request.httprequest.headers.get('Content-Type', '')
             if 'application/json' not in content_type:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Invalid request format",
                     "error": "Content-Type must be application/json"
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             try:
                 if request.httprequest.data:
                     request_data = json.loads(request.httprequest.data.decode('utf-8'))
                 else:
                     request_data = dict(request.httprequest.form)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Invalid JSON format",
                     "error": str(e)
-                }), status=400, content_type='application/json')
-            
+                }, status=400)
+
             refresh_token = request_data.get('refresh_token')
             if not refresh_token:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Missing required field",
                     "error": "Refresh token is required"
-                }), status=400, content_type='application/json')
-            
-            # Validate the refresh token using token model directly or helper
-            token_model = request.env['res.user.token'].sudo()
-            user_id = token_model.validate_token(refresh_token, token_type='refresh')
+                }, status=400)
 
+            # Validate the refresh token and rotate the access token in-place
+            token_model = request.env['res.user.token'].sudo()
+
+            # First peek at user_id so we can generate a token with it
+            user_id = token_model.validate_token(refresh_token, token_type='refresh')
             if not user_id:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Authentication failed",
                     "error": "Invalid or expired refresh token"
-                }), status=401, content_type='application/json')
+                }, status=401)
 
             # Generate a new access token
             new_access_token = self._generate_token(user_id, 'access', minutes=30)
 
-            # Update the database with the new token
-            token_model.create_token(
-                user_id=user_id,
-                access_token=new_access_token,
+            # Update the existing record instead of creating a duplicate
+            rotated_user_id = token_model.refresh_access_token(
                 refresh_token=refresh_token,
+                new_access_token=new_access_token,
                 access_expiry=datetime.utcnow() + timedelta(minutes=30),
-                refresh_expiry=datetime.utcnow() + timedelta(days=7)
             )
+            if not rotated_user_id:
+                return request.make_json_response({
+                    "status": False,
+                    "message": "Authentication failed",
+                    "error": "Invalid or expired refresh token"
+                }, status=401)
 
             response_data = {
                 "status": True,
@@ -479,15 +479,15 @@ class Authentication(http.Controller, AuthMixin):
                 }
             }
 
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
-            
+            return request.make_json_response(response_data, status=200)
+
         except Exception as e:
             _logger.error(f"Token refresh error: {str(e)}")
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": False,
                 "message": "Internal server error",
                 "error": "An unexpected error occurred during token refresh"
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @route(f'{BASE_URL}/logout', auth="angkit", type="http", methods=["POST"], csrf=False, cors="*")
     def logout(self, **kwargs):
@@ -497,11 +497,11 @@ class Authentication(http.Controller, AuthMixin):
         try:
             access_token_header = request.httprequest.headers.get('Authorization')
             if not access_token_header:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": False,
                     "message": "Access token missing",
                     "error": "Authorization header is required"
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             if access_token_header.startswith('Bearer '):
                 access_token_header = access_token_header[7:]
@@ -512,24 +512,24 @@ class Authentication(http.Controller, AuthMixin):
             if token:
                 token.write({'active': False})
                 request.session.logout(keep_db=True)
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": True,
                     "message": "Successfully logged out"
-                }), status=200, content_type='application/json')
+                }, status=200)
 
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": False,
                 "message": "Authentication failed",
                 "error": "Invalid access token"
-            }), status=401, content_type='application/json')
-            
+            }, status=401)
+
         except Exception as e:
             _logger.error(f"Logout error: {str(e)}")
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": False,
                 "message": "Internal server error",
                 "error": "An unexpected error occurred during logout"
-            }), status=500, content_type='application/json')
+            }, status=500)
 
 
 

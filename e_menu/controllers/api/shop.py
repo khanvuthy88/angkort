@@ -1,5 +1,5 @@
 from odoo import http
-from odoo.http import request, Response
+from odoo.http import request
 import json
 import base64
 from .utils import (
@@ -126,9 +126,9 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'keyword': keyword_meta
                 }
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({'error': str(e)}, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_detail(self, shop_id, **kw):
@@ -141,7 +141,7 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 ('type', '=', 'store')
             ], limit=1)
             if not shop:
-                return Response(json.dumps({'error': 'Shop not found'}), status=404, content_type='application/json')
+                return request.make_json_response({'error': 'Shop not found'}, status=404)
             response = {
                 'data': {
                     'id': shop.id,
@@ -168,9 +168,9 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'publishedAt': shop.create_date.isoformat() if shop.create_date else None
                 }
             }
-            return Response(json.dumps(response), status=200, content_type='application/json')
+            return request.make_json_response(response, status=200)
         except Exception as e:
-            return Response(json.dumps({'error': str(e)}), status=500, content_type='application/json')
+            return request.make_json_response({'error': str(e)}, status=500)
 
     @http.route(f"{BASE_URL}/shop", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     def shop_create(self, **kw):
@@ -202,12 +202,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     elif field == 'customer_address':
                         errors.append({"name": "customer_address", "message": "Shop address is required"})
 
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create shop",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             # Create partner (shop). Use create_company context to mark as company/store.
             shop = request.env['res.partner'].sudo().with_context(create_company=True).create([create_data])
@@ -219,14 +219,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     pass
 
             resp = {'id': shop.id, 'name': shop.name}
-            return Response(json.dumps(resp), status=201, content_type='application/json')
+            return request.make_json_response(resp, status=201)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create shop",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='shop')
@@ -301,31 +301,31 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     update_fields['shop_open_hour_ids'] = hour_commands
 
             if not update_fields:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update shop",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update shop",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             shop.write(update_fields)
-            return Response(json.dumps({'message': f'Shop with ID {shop_id} updated successfully'}), status=200, content_type='application/json')
+            return request.make_json_response({'message': f'Shop with ID {shop_id} updated successfully'}, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update shop",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["PATCH"], cors="*")
     @verify_ownership(entity_type='shop')
@@ -345,31 +345,31 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             update_fields.update(shop_related_fields)
 
             if not update_fields:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch shop",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to patch shop",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             shop.write(update_fields)
-            return Response(json.dumps({'message': f'Shop with ID {shop_id} patched successfully'}), status=200, content_type='application/json')
+            return request.make_json_response({'message': f'Shop with ID {shop_id} patched successfully'}, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to patch shop",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='shop')
@@ -380,21 +380,21 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete shop",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": f"Shop with ID {shop_id} not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             shop.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete shop",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -414,22 +414,22 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if 'password' not in data:
                     errors.append({"name": "password", "message": "WiFi password is required"})
                 
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create WiFi",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create WiFi",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Prepare WiFi data
             wifi_data = {
@@ -453,14 +453,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return Response(json.dumps(response_data), status=201, content_type='application/json')
+            return request.make_json_response(response_data, status=201)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create WiFi",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -475,22 +475,22 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update WiFi",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Verify WiFi exists and belongs to shop
             wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
             if not wifi:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update WiFi",
                     "statusCode": "404",
                     "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Prepare update data
             update_data = {}
@@ -505,12 +505,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 update_data['wifi_qr_code'] = base64.b64encode(image_data)
             
             if not update_data:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update WiFi",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Update WiFi entry
             wifi.write(update_data)
@@ -522,14 +522,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'wifi_qr_code': self._get_image_url('shop.wifi', wifi.id, 'wifi_qr_code') if wifi.wifi_qr_code else ''
             }
             
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
+            return request.make_json_response(response_data, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update WiFi",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/wifi/<int:wifi_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='wifi')
@@ -541,33 +541,33 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete WiFi",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Verify WiFi exists and belongs to shop
             wifi = request.env['shop.wifi'].sudo().search([('id', '=', wifi_id), ('shop_id', '=', shop_id)], limit=1)
             if not wifi:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete WiFi",
                     "statusCode": "404",
                     "errors": [{"name": "wifi_id", "message": "WiFi not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Delete WiFi entry
             wifi.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete WiFi",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/banner", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='banner')
@@ -579,22 +579,22 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             banner_file = request.httprequest.files.get('shop_banner')
             
             if not banner_file:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update banner",
                     "statusCode": "400",
                     "errors": [{"name": "shop_banner", "message": "Banner image is required"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update banner",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Read and encode banner image
             image_data = banner_file.read()
@@ -608,14 +608,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'banner_url': f'/web/image/res.partner/{shop_id}/shop_banner'
             }
             
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
+            return request.make_json_response(response_data, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update banner",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='open_hour')
@@ -636,32 +636,32 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if 'close' not in data:
                     errors.append({"name": "close", "message": "Closing time is required"})
                 
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create open hour",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Validate day value
             valid_days = ['0', '1', '2', '3', '4', '5', '6']
             if data['day'] not in valid_days:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create open hour",
                     "statusCode": "400",
                     "errors": [{"name": "day", "message": "Day must be between 0-6 (0=Monday, 6=Sunday)"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create open hour",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Check if open hour for this day already exists
             existing_hour = request.env['shop.open.hour'].sudo().search([
@@ -670,12 +670,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             ], limit=1)
             
             if existing_hour:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create open hour",
                     "statusCode": "400",
                     "errors": [{"name": "day", "message": "Open hour for this day already exists"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Create open hour entry
             open_hour_data = {
@@ -695,14 +695,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'close': open_hour.close
             }
             
-            return Response(json.dumps(response_data), status=201, content_type='application/json')
+            return request.make_json_response(response_data, status=201)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create open hour",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='open_hour')
@@ -716,33 +716,33 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update open hour",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Verify open hour exists and belongs to shop
             open_hour = request.env['shop.open.hour'].sudo().search([('id', '=', hour_id), ('shop_id', '=', shop_id)], limit=1)
             if not open_hour:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update open hour",
                     "statusCode": "404",
                     "errors": [{"name": "hour_id", "message": "Open hour not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Validate day value if provided
             if 'day' in data:
                 valid_days = ['0', '1', '2', '3', '4', '5', '6']
                 if data['day'] not in valid_days:
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to update open hour",
                         "statusCode": "400",
                         "errors": [{"name": "day", "message": "Day must be between 0-6 (0=Monday, 6=Sunday)"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
                 
                 # Check if day is being changed and if new day already exists
                 if data['day'] != open_hour.day:
@@ -753,12 +753,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     ], limit=1)
                     
                     if existing_hour:
-                        return Response(json.dumps({
+                        return request.make_json_response({
                             "status": "error",
                             "message": "Failed to update open hour",
                             "statusCode": "400",
                             "errors": [{"name": "day", "message": "Open hour for this day already exists"}]
-                        }), status=400, content_type='application/json')
+                        }, status=400)
             
             # Prepare update data
             update_data = {}
@@ -770,12 +770,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 update_data['close'] = data['close']
             
             if not update_data:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update open hour",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Update open hour entry
             open_hour.write(update_data)
@@ -788,14 +788,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'close': open_hour.close
             }
             
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
+            return request.make_json_response(response_data, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update open hour",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/open-hours/<int:hour_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='open_hour')
@@ -807,33 +807,33 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete open hour",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Verify open hour exists and belongs to shop
             open_hour = request.env['shop.open.hour'].sudo().search([('id', '=', hour_id), ('shop_id', '=', shop_id)], limit=1)
             if not open_hour:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete open hour",
                     "statusCode": "404",
                     "errors": [{"name": "hour_id", "message": "Open hour not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Delete open hour entry
             open_hour.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete open hour",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
     @verify_ownership(entity_type='bank')
@@ -847,14 +847,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 order='sequence, id'
             )
             response_data = [self._shop_bank_to_dict(bank) for bank in banks]
-            return Response(json.dumps(response_data), status=200, content_type='application/json')
+            return request.make_json_response(response_data, status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to list banks",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["GET"], cors="*")
     @verify_ownership(entity_type='bank')
@@ -868,20 +868,20 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 ('shop_id', '=', shop_id)
             ], limit=1)
             if not bank:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to fetch bank",
                     "statusCode": "404",
                     "errors": [{"name": "bank_id", "message": "Bank not found"}]
-                }), status=404, content_type='application/json')
-            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=200, content_type='application/json')
+                }, status=404)
+            return request.make_json_response(self._shop_bank_to_dict(bank), status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to fetch bank",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank", type="http", auth="angkit", csrf=False, methods=["POST"], cors="*")
     @verify_ownership(entity_type='bank')
@@ -902,30 +902,30 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 errors = []
                 for field in missing_fields:
                     errors.append({"name": field, "message": f"{field.replace('_', ' ').title()} is required"})
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create bank",
                     "statusCode": "400",
                     "errors": errors
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create bank",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             currency = data.get('currency')
             if currency not in ('KHR', 'USD'):
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create bank",
                     "statusCode": "400",
                     "errors": [{"name": "currency", "message": "Currency must be KHR or USD"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             bank_data = {
                 'name': data.get('name'),
@@ -939,12 +939,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 try:
                     bank_data['sequence'] = int(data.get('sequence'))
                 except (ValueError, TypeError):
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to create bank",
                         "statusCode": "400",
                         "errors": [{"name": "sequence", "message": "Sequence must be a valid integer"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
 
             if data.get('active') is not None:
                 active_val = str(data.get('active')).lower()
@@ -959,14 +959,14 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 bank_data['logo'] = data.get('logo')
 
             bank = request.env['angkort.shop.bank'].sudo().create(bank_data)
-            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=201, content_type='application/json')
+            return request.make_json_response(self._shop_bank_to_dict(bank), status=201)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create bank",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["PUT"], cors="*")
     @verify_ownership(entity_type='bank')
@@ -983,21 +983,21 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update bank",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             bank = request.env['angkort.shop.bank'].sudo().search([('id', '=', bank_id), ('shop_id', '=', shop_id)], limit=1)
             if not bank:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update bank",
                     "statusCode": "404",
                     "errors": [{"name": "bank_id", "message": "Bank not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             update_data = {}
             if data.get('name') is not None:
@@ -1007,12 +1007,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             if data.get('currency') is not None:
                 currency = data.get('currency')
                 if currency not in ('KHR', 'USD'):
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to update bank",
                         "statusCode": "400",
                         "errors": [{"name": "currency", "message": "Currency must be KHR or USD"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
                 update_data['currency'] = currency
             if data.get('link') is not None:
                 update_data['link'] = data.get('link')
@@ -1021,12 +1021,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 try:
                     update_data['sequence'] = int(data.get('sequence'))
                 except (ValueError, TypeError):
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to update bank",
                         "statusCode": "400",
                         "errors": [{"name": "sequence", "message": "Sequence must be a valid integer"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
 
             if data.get('active') is not None:
                 active_val = str(data.get('active')).lower()
@@ -1041,22 +1041,22 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 update_data['logo'] = data.get('logo')
 
             if not update_data:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to update bank",
                     "statusCode": "400",
                     "errors": [{"name": "fields", "message": "No valid fields to update"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
 
             bank.write(update_data)
-            return Response(json.dumps(self._shop_bank_to_dict(bank)), status=200, content_type='application/json')
+            return request.make_json_response(self._shop_bank_to_dict(bank), status=200)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to update bank",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/bank/<int:bank_id>", type="http", auth="angkit", csrf=False, methods=["DELETE"], cors="*")
     @verify_ownership(entity_type='bank')
@@ -1067,31 +1067,31 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         try:
             shop = request.env['res.partner'].sudo().search([('id', '=', shop_id), ('type', '=', 'store')], limit=1)
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete bank",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             bank = request.env['angkort.shop.bank'].sudo().search([('id', '=', bank_id), ('shop_id', '=', shop_id)], limit=1)
             if not bank:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to delete bank",
                     "statusCode": "404",
                     "errors": [{"name": "bank_id", "message": "Bank not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
 
             bank.unlink()
-            return Response(status=204)
+            return request.make_json_response('', status=204)
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to delete bank",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)
 
     @http.route(f"{BASE_URL}/shop/create", auth="angkit", type="http", csrf=False, cors="*", methods=["POST"])
     def create_shop(self, **kw):
@@ -1168,12 +1168,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             
             # Validate required fields
             if 'name' not in data or not data.get('name'):
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create category",
                     "statusCode": "400",
                     "errors": [{"name": "name", "message": "Category name is required"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Verify shop exists
             shop = request.env['res.partner'].sudo().search([
@@ -1182,12 +1182,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             ], limit=1)
             
             if not shop:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create category",
                     "statusCode": "404",
                     "errors": [{"name": "shop_id", "message": "Shop not found"}]
-                }), status=404, content_type='application/json')
+                }, status=404)
             
             # Prepare category data
             category_data = {
@@ -1207,21 +1207,21 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     ], limit=1)
                     
                     if not parent_category:
-                        return Response(json.dumps({
+                        return request.make_json_response({
                             "status": "error",
                             "message": "Failed to create category",
                             "statusCode": "400",
                             "errors": [{"name": "parent_id", "message": "Parent category not found or doesn't belong to this shop"}]
-                        }), status=400, content_type='application/json')
+                        }, status=400)
                     
                     category_data['parent_id'] = parent_id
                 except (ValueError, TypeError):
-                    return Response(json.dumps({
+                    return request.make_json_response({
                         "status": "error",
                         "message": "Failed to create category",
                         "statusCode": "400",
                         "errors": [{"name": "parent_id", "message": "Parent ID must be a valid integer"}]
-                    }), status=400, content_type='application/json')
+                    }, status=400)
             
             # Check if category with same name already exists for this shop
             existing_category = request.env['product.category'].sudo().search([
@@ -1230,12 +1230,12 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             ], limit=1)
             
             if existing_category:
-                return Response(json.dumps({
+                return request.make_json_response({
                     "status": "error",
                     "message": "Failed to create category",
                     "statusCode": "400",
                     "errors": [{"name": "name", "message": "A category with this name already exists for this shop"}]
-                }), status=400, content_type='application/json')
+                }, status=400)
             
             # Create the category
             category = request.env['product.category'].sudo().create(category_data)
@@ -1253,16 +1253,16 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'updatedAt': category.write_date.isoformat() if category.write_date else None
             }
             
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "success",
                 "message": "Category created successfully",
                 "data": response_data
-            }), status=201, content_type='application/json')
+            }, status=201)
             
         except Exception as e:
-            return Response(json.dumps({
+            return request.make_json_response({
                 "status": "error",
                 "message": "Failed to create category",
                 "statusCode": "500",
                 "errors": [{"name": "general", "message": str(e)}]
-            }), status=500, content_type='application/json')
+            }, status=500)

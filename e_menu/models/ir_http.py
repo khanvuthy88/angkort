@@ -2,7 +2,6 @@
 
 from datetime import datetime
 import jwt
-from werkzeug.exceptions import BadRequest
 
 from odoo import models
 from odoo.http import request
@@ -13,7 +12,6 @@ class IrHttp(models.AbstractModel):
 
     @classmethod
     def _auth_method_angkit(cls):
-        print("JWT Auth - _auth_method_angkit called")
         # Get the Authorization header
         auth_header = request.httprequest.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
@@ -28,20 +26,17 @@ class IrHttp(models.AbstractModel):
 
         try:
             secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret')
-            
+
             # Decode the JWT token with verification
             try:
                 payload = jwt.decode(token, secret_key, algorithms=["HS256"])
-                print(f"JWT Auth - Token decoded successfully: {payload}")
-            except jwt.ExpiredSignatureError as e:
-                print(f"JWT Auth - Token expired: {str(e)}")
+            except jwt.ExpiredSignatureError:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Authentication failed',
                     'error': 'Token has expired'
                 }, status=401)
-            except jwt.InvalidTokenError as e:
-                print(f"JWT Auth - Invalid token: {str(e)}")
+            except jwt.InvalidTokenError:
                 return request.make_json_response({
                     'status': False,
                     'message': 'Authentication failed',
@@ -50,7 +45,6 @@ class IrHttp(models.AbstractModel):
 
             # Check expiration (additional check for safety)
             if payload.get('exp') and payload.get('exp') < int(datetime.utcnow().timestamp()):
-                print("JWT Auth - Token expired (additional check)")
                 return request.make_json_response({
                     'status': False,
                     'message': 'Authentication failed',
@@ -69,9 +63,7 @@ class IrHttp(models.AbstractModel):
 
             # Set the user context using update_env
             request.update_env(user=user_id)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
+        except Exception:
             return request.make_json_response({
                 'status': False,
                 'message': 'Authentication failed',
