@@ -12,6 +12,10 @@ class IrHttp(models.AbstractModel):
 
     @classmethod
     def _auth_method_angkit(cls):
+        # Allow OPTIONS request for CORS preflight
+        if request.httprequest.method == 'OPTIONS':
+            return
+
         # Get the Authorization header
         auth_header = request.httprequest.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):

@@ -156,6 +156,20 @@ class AuthMixin:
 
 class Authentication(http.Controller, AuthMixin):
 
+    @route(f'{BASE_URL}/<path:path>', type='http', auth='none', methods=['OPTIONS'], csrf=False, cors="*")
+    def api_options(self, path=None, **kw):
+        """
+        Global handler for CORS preflight (OPTIONS) requests.
+        Returns a 200 OK with the necessary Access-Control headers.
+        """
+        headers = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+            'Access-Control-Max-Age': '86400',
+        }
+        return request.make_response('', headers=headers)
+
     @route(f'{BASE_URL}/login', type='http', cors="*", csrf=False, auth='none', methods=['POST'])
     def login(self, **kw):
         """
@@ -267,7 +281,10 @@ class Authentication(http.Controller, AuthMixin):
                 }
             }
             
-            return request.make_json_response(response_data, status=200)
+            headers = {
+                'Authorization': f'Bearer {access_token}'
+            }
+            return request.make_json_response(response_data, status=200, headers=headers)
 
         except Exception as e:
             _logger.error(f"Login error: {str(e)}")
@@ -396,7 +413,10 @@ class Authentication(http.Controller, AuthMixin):
                 }
             }
             
-            return request.make_json_response(response_data, status=201)
+            headers = {
+                'Authorization': f'Bearer {access_token}'
+            }
+            return request.make_json_response(response_data, status=201, headers=headers)
 
         except Exception as e:
             _logger.error(f"Registration error: {str(e)}")
