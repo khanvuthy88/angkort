@@ -171,19 +171,21 @@ def verify_ownership(entity_type='shop'):
                 elif entity_type == 'variant':
                     shop_id = kwargs.get('shop_id')
                     variant_id = kwargs.get('variant_id')
-                    
+
                     if not shop_id or not variant_id:
                         return request.make_json_response({'error': 'Shop ID and Variant ID are required'}, status=400)
-                    
+
                     variant = request.env['product.attribute'].sudo().search([
                         ('id', '=', variant_id),
                         ('shop_id', '=', shop_id)
                     ], limit=1)
-                    
+
                     if not variant:
                         return request.make_json_response({'error': 'Variant not found'}, status=404)
-                    
-                    if variant.create_uid.id != current_user_id:
+
+                    # Ownership verified by shop_id match above.
+                    # create_uid is not reliable because records may be created via sudo().
+                    if variant.shop_id.id != shop_id:
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify variants you own'
                         }, status=403)
@@ -191,18 +193,32 @@ def verify_ownership(entity_type='shop'):
                 elif entity_type == 'variant_value':
                     shop_id = kwargs.get('shop_id')
                     value_id = kwargs.get('value_id')
-                    
+
                     if not shop_id or not value_id:
                         return request.make_json_response({'error': 'Shop ID and Value ID are required'}, status=400)
-                    
+
                     variant_value = request.env['product.attribute.value'].sudo().search([
                         ('id', '=', value_id)
                     ], limit=1)
-                    
+
                     if not variant_value:
                         return request.make_json_response({'error': 'Variant value not found'}, status=404)
-                    
-                    if variant_value.create_uid.id != current_user_id:
+
+                    # Ownership is checked via the parent attribute's shop_id.
+                    # Values are created with sudo() so create_uid is always superuser — not usable for ownership.
+                    # Also reject values whose parent attribute has no shop_id (global attributes are not shop-owned).
+                    attr_shop = variant_value.attribute_id.shop_id
+                    if not attr_shop or attr_shop.id != shop_id:
+                        return request.make_json_response({
+                            'error': 'Unauthorized: You can only modify variant values you own'
+                        }, status=403)
+
+                    # Additionally verify the shop itself is owned by the current user
+                    attr_shop_record = request.env['res.partner'].sudo().search([
+                        ('id', '=', shop_id),
+                        ('type', '=', 'store')
+                    ], limit=1)
+                    if not attr_shop_record or attr_shop_record.create_uid.id != current_user_id:
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify variant values you own'
                         }, status=403)
@@ -420,10 +436,11 @@ class APIUtilsMixin:
     @classmethod
     def _get_product_options(cls, option):
         return {
-            'id': option.id,
-            'name': option.display_name,
+            'id': option.id,                           # product.template.attribute.line.id
+            'attribute_id': option.attribute_id.id,    # product.attribute.id (for CRUD)
+            'name': option.attribute_id.name,          # attribute name (reliable, no prefix)
             'data': [{
-                'id': data.id,
+                'id': data.product_attribute_value_id.id,  # product.attribute.value.id (for CRUD)
                 'name': data.name,
                 'price': data.price_extra
             } for data in option.product_template_value_ids]
@@ -433,9 +450,10 @@ class APIUtilsMixin:
     def _get_product_choices(cls, choice):
         return {
             'id': choice.id,
-            'name': choice.display_name,
+            'attribute_id': choice.attribute_id.id,
+            'name': choice.attribute_id.name,
             'data': [{
-                'id': data.id,
+                'id': data.product_attribute_value_id.id,
                 'name': data.name,
                 'price': data.price_extra
             } for data in choice.product_template_value_ids]

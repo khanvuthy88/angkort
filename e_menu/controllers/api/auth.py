@@ -38,8 +38,13 @@ class AuthMixin:
             'iat': datetime.utcnow()
         }
 
-        # Get secret key from Odoo configuration
-        secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret', 'your-secret-key-here')
+        # Get secret key from Odoo configuration — must be explicitly configured
+        secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret')
+        if not secret_key:
+            raise ValueError(
+                "JWT secret key (system parameter 'database.secret') is not configured. "
+                "Set it via Settings > Technical > Parameters > System Parameters."
+            )
         token = jwt.encode(payload, secret_key, algorithm='HS256')
 
         return token
@@ -262,6 +267,7 @@ class Authentication(http.Controller, AuthMixin):
                 'phone': shop.phone or '',
                 'customer_address': shop.customer_address or '',
             } for shop in shops]
+
             
             # Prepare success response
             response_data = {

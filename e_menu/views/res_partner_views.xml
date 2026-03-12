@@ -24,6 +24,12 @@
                             <span class="o_stat_text">Products</span>
                         </div>
                     </button>
+                    <button name="action_open_shop_variants" type="object" class="oe_stat_button" icon="fa-list-alt" invisible="type != 'store'">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_value"><field name="variant_count"/></span>
+                            <span class="o_stat_text">Variants</span>
+                        </div>
+                    </button>
                     <button name="generate_telegram_token" type="object" class="oe_stat_button" string="Generate Token"/>
                 </div>
                 <field name="vat" position="after">
@@ -75,6 +81,7 @@
             <field name="name">Shops</field>
             <field name="res_model">res.partner</field>
             <field name="view_mode">kanban,list,form</field>
+            <field name="context">{'search_default_filter_type_store': 1}</field>
         </record>
     </data>
 </odoo>

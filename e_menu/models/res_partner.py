@@ -25,6 +25,10 @@ class Partner(models.Model):
         string='Products',
         compute='_compute_product_count',
     )
+    variant_count = fields.Integer(
+        string='Variants',
+        compute='_compute_variant_count',
+    )
 
     def _compute_product_count(self):
         for partner in self:
@@ -34,6 +38,26 @@ class Partner(models.Model):
                 ])
             else:
                 partner.product_count = 0
+
+    def _compute_variant_count(self):
+        for partner in self:
+            if partner.type == 'store':
+                partner.variant_count = self.env['product.attribute'].search_count([
+                    ('shop_id', '=', partner.id)
+                ])
+            else:
+                partner.variant_count = 0
+
+    def action_open_shop_variants(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Shop Variants'),
+            'res_model': 'product.attribute',
+            'view_mode': 'list,form',
+            'domain': [('shop_id', '=', self.id)],
+            'context': {'default_shop_id': self.id},
+        }
 
     def action_open_shop_products(self):
         self.ensure_one()

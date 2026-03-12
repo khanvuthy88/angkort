@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
+import hashlib
 import jwt
 
 from odoo import models
@@ -30,6 +31,12 @@ class IrHttp(models.AbstractModel):
 
         try:
             secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret')
+            if not secret_key:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication failed',
+                    'error': 'Server authentication misconfiguration'
+                }, status=500)
 
             # Decode the JWT token with verification
             try:
@@ -53,6 +60,20 @@ class IrHttp(models.AbstractModel):
                     'status': False,
                     'message': 'Authentication failed',
                     'error': 'Token has expired'
+                }, status=401)
+
+            # Check token revocation: verify the token is still active in the DB.
+            # This ensures logout/revocation is respected even within the JWT TTL window.
+            hashed_token = hashlib.sha256(token.encode()).hexdigest()
+            token_record = request.env['res.user.token'].sudo().search([
+                ('access_token', '=', hashed_token),
+                ('active', '=', True),
+            ], limit=1)
+            if not token_record:
+                return request.make_json_response({
+                    'status': False,
+                    'message': 'Authentication failed',
+                    'error': 'Token has been revoked or is invalid'
                 }, status=401)
 
             # Fetch the user from the database

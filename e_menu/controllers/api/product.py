@@ -21,7 +21,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Error converting attribute to dictionary: {str(e)}',
+                'message': f'Error converting  te to dictionary: {str(e)}',
             }
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
@@ -281,7 +281,8 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     if attr_id in seen_attr_ids:
                         continue
                     attr = request.env['product.attribute'].sudo().browse(attr_id)
-                    if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                    # Reject attributes that don't exist, have no shop_id (global), or belong to a different shop
+                    if not attr.exists() or not attr.shop_id or attr.shop_id.id != shop_id:
                         continue
                     values = request.env['product.attribute.value'].sudo().search([
                         ('attribute_id', '=', attr_id)
@@ -309,7 +310,8 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 if not attr_id:
                     continue
                 attr = request.env['product.attribute'].sudo().browse(attr_id)
-                if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                # Reject attributes that don't exist, have no shop_id (global), or belong to a different shop
+                if not attr.exists() or not attr.shop_id or attr.shop_id.id != shop_id:
                     continue
                 val_ids = _parse_ids(raw.get('value_ids'))
                 if not val_ids:
@@ -346,6 +348,132 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 "statusCode": 500,
                 "errors": [{"name": "general", "message": str(e)}]
             }, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>', type="http", auth="public", methods=["GET"], cors="*", csrf=False)
+    def product_detail(self, shop_id, product_id, **kw):
+        """Get a single product by ID for a specific shop."""
+        try:
+            product = request.env['product.template'].sudo().search([
+                ('id', '=', product_id), ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not product:
+                return request.make_json_response({'error': 'Product not found'}, status=404)
+            product_data = self._get_product_details(product)
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+            return request.make_json_response({'data': product_data}, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/attribute-line', type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def product_attribute_line_create(self, shop_id, product_id, **kw):
+        """Link an attribute (with all its current values) to an existing product."""
+        try:
+            data = request.httprequest.form
+            try:
+                attribute_id = int(data.get('attribute_id', 0))
+            except (TypeError, ValueError):
+                attribute_id = 0
+            if not attribute_id:
+                return request.make_json_response({
+                    'status': 'error', 'message': 'attribute_id is required'
+                }, status=400)
+            product = request.env['product.template'].sudo().search([
+                ('id', '=', product_id), ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not product:
+                return request.make_json_response({'status': 'error', 'message': 'Product not found'}, status=404)
+            attribute = request.env['product.attribute'].sudo().search([
+                ('id', '=', attribute_id), ('shop_id', '=', shop_id)
+            ], limit=1)
+            if not attribute:
+                return request.make_json_response({'status': 'error', 'message': 'Attribute not found'}, status=404)
+            existing = request.env['product.template.attribute.line'].sudo().search([
+                ('product_tmpl_id', '=', product_id), ('attribute_id', '=', attribute_id)
+            ], limit=1)
+            if existing:
+                return request.make_json_response({
+                    'status': 'ok', 'message': 'Attribute already linked to this product'
+                }, status=200)
+            values = request.env['product.attribute.value'].sudo().search([('attribute_id', '=', attribute_id)])
+            if not values:
+                return request.make_json_response({
+                    'status': 'error',
+                    'message': 'This attribute has no values yet. Add values to the attribute before linking it to a product.'
+                }, status=400)
+            request.env['product.template.attribute.line'].sudo().create({
+                'product_tmpl_id': product_id,
+                'attribute_id': attribute_id,
+                'value_ids': [(6, 0, values.ids)],  # all current values; user removes unwanted ones per-product
+            })
+            return request.make_json_response({'message': 'Attribute linked to product'}, status=201)
+        except Exception as e:
+            return request.make_json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/attribute-line/<int:line_id>', type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def product_attribute_line_delete(self, shop_id, product_id, line_id, **kw):
+        """Remove an attribute line from a product (unlinks the attribute from this product only)."""
+        try:
+            line = request.env['product.template.attribute.line'].sudo().search([
+                ('id', '=', line_id),
+                ('product_tmpl_id', '=', product_id),
+                ('product_tmpl_id.shop_id', '=', shop_id),
+            ], limit=1)
+            if not line:
+                return request.make_json_response({'status': 'error', 'message': 'Attribute line not found'}, status=404)
+            line.unlink()
+            return request.make_json_response('', status=204)
+        except Exception as e:
+            return request.make_json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/attribute-line/<int:line_id>/value', type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def product_attribute_line_value_add(self, shop_id, product_id, line_id, **kw):
+        """Add an existing product.attribute.value to a product's attribute line (per-product, no global creation)."""
+        try:
+            data = request.httprequest.form
+            try:
+                value_id = int(data.get('value_id', 0))
+            except (TypeError, ValueError):
+                value_id = 0
+            if not value_id:
+                return request.make_json_response({'status': 'error', 'message': 'value_id is required'}, status=400)
+            line = request.env['product.template.attribute.line'].sudo().search([
+                ('id', '=', line_id),
+                ('product_tmpl_id', '=', product_id),
+                ('product_tmpl_id.shop_id', '=', shop_id),
+            ], limit=1)
+            if not line:
+                return request.make_json_response({'status': 'error', 'message': 'Attribute line not found'}, status=404)
+            value = request.env['product.attribute.value'].sudo().browse(value_id)
+            if not value.exists() or value.attribute_id.id != line.attribute_id.id:
+                return request.make_json_response({'status': 'error', 'message': 'Value not found or does not belong to this attribute'}, status=404)
+            if value in line.value_ids:
+                return request.make_json_response({'status': 'error', 'message': 'Value already in this product'}, status=400)
+            line.write({'value_ids': [(4, value_id)]})
+            return request.make_json_response({'message': 'Value added to product'}, status=201)
+        except Exception as e:
+            return request.make_json_response({'status': 'error', 'message': str(e)}, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/attribute-line/<int:line_id>/value/<int:value_id>', type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def product_attribute_line_value_remove(self, shop_id, product_id, line_id, value_id, **kw):
+        """Remove a value from a product's attribute line (does NOT delete the global product.attribute.value)."""
+        try:
+            line = request.env['product.template.attribute.line'].sudo().search([
+                ('id', '=', line_id),
+                ('product_tmpl_id', '=', product_id),
+                ('product_tmpl_id.shop_id', '=', shop_id),
+            ], limit=1)
+            if not line:
+                return request.make_json_response({'status': 'error', 'message': 'Attribute line not found'}, status=404)
+            line.write({'value_ids': [(3, value_id)]})
+            return request.make_json_response('', status=204)
+        except Exception as e:
+            return request.make_json_response({'status': 'error', 'message': str(e)}, status=500)
 
     @http.route(f'{BASE_URL}/product', methods=['GET'], auth='public', type="http", cors="*")
     def global_product_list(self, **kw):
@@ -742,9 +870,10 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             if order not in {'asc', 'desc'}:
                 order = 'asc'
             
-            # Build domain
+            # Build domain — filter by shop_id only.
+            # create_uid is unreliable because attributes are created via sudo() (create_uid = superuser).
+            # Shop ownership is verified via verify_ownership on write endpoints; listing is scoped to the shop.
             domain = [
-                ('create_uid', '=', request.env.user.id),
                 ('shop_id', '=', shop_id)
             ]
             
@@ -1146,7 +1275,6 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             attribute = request.env['product.attribute'].sudo().search([
                 ('id', '=', variant_id),
                 ('shop_id', '=', shop_id),
-                ('create_uid', '=', request.env.user.id)
             ], limit=1)
             if not attribute:
                 return request.make_json_response({
@@ -1155,7 +1283,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "statusCode": "404",
                     "errors": [{"name": "variant_id", "message": "Attribute not found"}]
                 }, status=404)
-            
+
             attribute.unlink()
             return request.make_json_response('', status=204)
         except Exception as e:
@@ -1289,7 +1417,23 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'name': value['name'],
                     'attribute_id': attribute.id,
                 } for value in values_data if 'name' in value]
-                request.env['product.attribute.value'].sudo().create(values_to_create)
+                created_values = request.env['product.attribute.value'].sudo().create(values_to_create)
+
+                # If product_id is provided, also add the new values to that product's attribute line
+                product_id_raw = data.get('product_id')
+                if product_id_raw and created_values:
+                    try:
+                        product_id_val = int(product_id_raw)
+                        line = request.env['product.template.attribute.line'].sudo().search([
+                            ('product_tmpl_id', '=', product_id_val),
+                            ('product_tmpl_id.shop_id', '=', shop_id),
+                            ('attribute_id', '=', attribute.id),
+                        ], limit=1)
+                        if line:
+                            line.write({'value_ids': [(4, vid) for vid in created_values.ids]})
+                    except (TypeError, ValueError):
+                        pass
+
                 return request.make_json_response({'message': 'Attribute values created successfully'}, status=201)
             except json.JSONDecodeError:
                 return request.make_json_response({

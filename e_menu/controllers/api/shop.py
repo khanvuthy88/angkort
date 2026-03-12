@@ -147,7 +147,10 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     'id': shop.id,
                     'name': shop.name or '',
                     'phoneNumber': self._string_to_string_list(shop.phone) or [],
+                    'email': shop.email or '',
                     "address": [shop.customer_address] if shop.customer_address else [],
+                    'shop_latitude': shop.shop_latitude or 0.0,
+                    'shop_longitude': shop.shop_longitude or 0.0,
                     'banner': self._get_image_url('res.partner', shop.id, 'shop_banner') if shop.shop_banner else '',
                     'shop_wifi_ids': [{
                         'id': wifi.id,
