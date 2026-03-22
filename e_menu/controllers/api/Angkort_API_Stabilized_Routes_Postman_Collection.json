@@ -1,0 +1,395 @@
+{
+  "info": {
+    "name": "Angkort API - Stabilized Routes",
+    "description": "Importable Postman collection for the stabilized and tested routes in e_menu. Covers authentication, shop creation, product creation, variant creation, and secured sale listing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8069" },
+    { "key": "api_prefix", "value": "/angkort/api/v1" },
+    { "key": "username", "value": "merchant.owner@example.com" },
+    { "key": "password", "value": "Pl1bhD@2!owner" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "shop_id", "value": "" },
+    { "key": "product_id", "value": "" },
+    { "key": "variant_id", "value": "" },
+    { "key": "variant_value_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data && body.data.access_token) pm.collectionVariables.set('access_token', body.data.access_token);",
+                  "  if (body.data && body.data.refresh_token) pm.collectionVariables.set('refresh_token', body.data.refresh_token);",
+                  "  if (body.data && body.data.shops && body.data.shops.length) pm.collectionVariables.set('shop_id', String(body.data.shops[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/login",
+            "description": "Authenticate a user and return bearer tokens.\n\nParams:\n- username: string, required\n- password: string, required\n\nSuccess: 200 with access_token, refresh_token, expires_in, role, and owned shops.\nErrors:\n- 400 missing username/password or invalid JSON\n- 401 invalid credentials\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"username\": \"merchant.owner@example.com\",\n  \"password\": \"Pl1bhD@2!owner\"\n}" },
+                "url": "{{base_url}}{{api_prefix}}/login"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"access_token\": \"<jwt>\",\n    \"refresh_token\": \"<jwt>\",\n    \"token_type\": \"Bearer\",\n    \"expires_in\": 1800,\n    \"user_id\": 12,\n    \"username\": \"merchant.owner@example.com\",\n    \"name\": \"Merchant Owner\",\n    \"email\": \"merchant.owner@example.com\",\n    \"roles\": \"MERCHANT\",\n    \"shops\": [\n      {\n        \"id\": 101,\n        \"name\": \"Owner Shop\",\n        \"phone\": \"012345678\",\n        \"customer_address\": \"Owner Street\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "Invalid Credentials",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"username\": \"merchant.owner@example.com\",\n  \"password\": \"wrong-password\"\n}" },
+                "url": "{{base_url}}{{api_prefix}}/login"
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": false,\n  \"message\": \"Authentication failed\",\n  \"error\": \"Invalid credentials\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data && body.data.access_token) pm.collectionVariables.set('access_token', body.data.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "refresh_token", "value": "{{refresh_token}}", "type": "text" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/refresh",
+            "description": "Refresh an access token using a valid refresh token.\n\nParams:\n- refresh_token: string, required\n\nSuccess: 200 with a new access_token.\nErrors:\n- 400 missing refresh_token or invalid JSON\n- 401 invalid/expired refresh token\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [{ "key": "refresh_token", "value": "<refresh_token>", "type": "text" }]
+                },
+                "url": "{{base_url}}{{api_prefix}}/refresh"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": true,\n  \"message\": \"Token refreshed successfully\",\n  \"data\": {\n    \"access_token\": \"<jwt>\",\n    \"token_type\": \"Bearer\",\n    \"expires_in\": 1800\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{base_url}}{{api_prefix}}/logout",
+            "description": "Revoke the current access token.\n\nHeaders:\n- Authorization: Bearer <access_token>, required\n\nSuccess: 200 on successful logout.\nErrors:\n- 400 missing Authorization header\n- 401 invalid token\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer <access_token>" }],
+                "url": "{{base_url}}{{api_prefix}}/logout"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": true,\n  \"message\": \"Successfully logged out\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "item": [
+        {
+          "name": "Create Shop",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.id) pm.collectionVariables.set('shop_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Fresh Shop", "type": "text" },
+                { "key": "phone", "value": "011223344", "type": "text" },
+                { "key": "customer_address", "value": "Fresh Street", "type": "text" },
+                { "key": "email", "value": "fresh.shop@example.com", "type": "text" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop",
+            "description": "Create a new shop for the authenticated merchant.\n\nHeaders:\n- Authorization: Bearer <access_token>, required\n\nForm params:\n- name: string, required\n- phone: string, required\n- customer_address: string, required\n- email: string, optional\n- wifi_name: string, optional\n- shop_latitude: string/number, optional\n- shop_longitude: string/number, optional\n- shop_wifi_ids: JSON string, optional\n- shop_open_hour_ids: JSON string, optional\n- shop_banner: file, optional\n\nSuccess: 201 with shop id and name.\nErrors:\n- 400 missing required fields\n- 401 missing/invalid token\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer <access_token>" }],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "name", "value": "Fresh Shop", "type": "text" },
+                    { "key": "phone", "value": "011223344", "type": "text" },
+                    { "key": "customer_address", "value": "Fresh Street", "type": "text" }
+                  ]
+                },
+                "url": "{{base_url}}{{api_prefix}}/shop"
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"id\": 102,\n  \"name\": \"Fresh Shop\"\n}"
+            },
+            {
+              "name": "Validation Error",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer <access_token>" }],
+                "body": { "mode": "formdata", "formdata": [{ "key": "name", "value": "", "type": "text" }] },
+                "url": "{{base_url}}{{api_prefix}}/shop"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"error\",\n  \"message\": \"Failed to create shop\",\n  \"statusCode\": \"400\",\n  \"errors\": [\n    { \"name\": \"phone\", \"message\": \"Phone number is required\" },\n    { \"name\": \"customer_address\", \"message\": \"Shop address is required\" }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Product",
+      "item": [
+        {
+          "name": "Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data && body.data.id) pm.collectionVariables.set('product_id', String(body.data.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Noodle Soup\",\n  \"code\": \"SOUP-001\",\n  \"description\": \"House noodle soup\",\n  \"sale_price\": 4.5,\n  \"attribute_lines\": [\n    {\n      \"attribute_id\": {{variant_id}},\n      \"value_ids\": [{{variant_value_id}}]\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product",
+            "description": "Create a product for a shop owned by the authenticated user.\n\nHeaders:\n- Authorization: Bearer <access_token>, required\n\nJSON params:\n- name: string, required\n- code/default_code: string, optional\n- description: string, optional\n- sale_price/list_price: number, optional\n- category_id/categ_id: integer, optional\n- type: consu|service, optional\n- image: base64 string, optional\n- variant_ids: integer array, optional\n- attribute_lines: array of { attribute_id, value_ids[] }, optional\n\nSuccess: 201 with response body { data: product }.\nErrors:\n- 400 missing name or invalid ownership/input\n- 401 missing/invalid token\n- 403 unauthorized shop ownership\n- 404 shop not found\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer <access_token>" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Noodle Soup\",\n  \"code\": \"SOUP-001\",\n  \"sale_price\": 4.5\n}"
+                },
+                "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product"
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"data\": {\n    \"id\": 55,\n    \"name\": \"Noodle Soup\",\n    \"code\": \"SOUP-001\",\n    \"description\": \"House noodle soup\",\n    \"sale_price\": 4.5,\n    \"image\": \"\",\n    \"category\": {\n      \"id\": 1,\n      \"name\": \"All\"\n    },\n    \"options\": [],\n    \"choices\": [],\n    \"createdAt\": \"2026-03-22T02:06:47\",\n    \"updatedAt\": \"2026-03-22T02:06:47\",\n    \"publishedAt\": \"2026-03-22T02:06:47\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Variant",
+      "item": [
+        {
+          "name": "Create Variant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.id) pm.collectionVariables.set('variant_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Spice Level", "type": "text" },
+                { "key": "create_variant", "value": "always", "type": "text" },
+                { "key": "display_type", "value": "radio", "type": "text" }
+              ]
+            },
+            "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant",
+            "description": "Create a product attribute (variant) for a shop owned by the authenticated user.\n\nHeaders:\n- Authorization: Bearer <access_token>, required\n\nForm params:\n- name: string, required, unique per shop\n- create_variant: no_variant|always, required\n- display_type: multi|radio, required\n\nSuccess: 201 with created variant object.\nErrors:\n- 400 missing/invalid fields or duplicate name\n- 401 missing/invalid token\n- 403 unauthorized shop ownership\n- 500 internal error"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer <access_token>" }],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "name", "value": "Spice Level", "type": "text" },
+                    { "key": "create_variant", "value": "always", "type": "text" },
+                    { "key": "display_type", "value": "radio", "type": "text" }
+                  ]
+                },
+                "url": "{{base_url}}{{api_prefix}}/shop/{{shop_id}}/product/variant"
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"id\": 14,\n  \"name\": \"Spice Level\",\n  \"create_variant\": \"always\",\n  \"display_type\": \"radio\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "item": [
+        {
+          "name": "Sale List (Secured)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{base_url}}{{api_prefix}}/sale",
+            "description": "List sale orders visible to the authenticated caller.\n\nHeaders:\n- Authorization: Bearer <access_token>, required\n\nBehavior:\n- admin sees all orders\n- merchant sees orders for owned shops\n- non-merchant authenticated user sees own partner orders\n\nSuccess: 200 with paginated order list.\nErrors:\n- 401 missing/invalid/revoked token"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer <access_token>" }],
+                "url": "{{base_url}}{{api_prefix}}/sale"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"data\": [\n    {\n      \"id\": 77,\n      \"name\": \"S00077\",\n      \"partner_name\": \"Merchant Owner\",\n      \"date_order\": \"2026-03-22\",\n      \"amount_total\": 4.5,\n      \"state\": \"draft\",\n      \"createdAt\": \"2026-03-22T02:00:15\",\n      \"updatedAt\": \"2026-03-22T02:00:15\",\n      \"publishedAt\": \"2026-03-22T02:00:15\"\n    }\n  ],\n  \"meta\": {\n    \"pagination\": {\n      \"page\": 1,\n      \"pageSize\": 20,\n      \"pageCount\": 1,\n      \"total\": 1\n    },\n    \"keyword\": {\n      \"search\": null,\n      \"sort\": \"date_order\",\n      \"order\": \"desc\",\n      \"filter\": {}\n    }\n  }\n}"
+            },
+            {
+              "name": "Unauthorized",
+              "originalRequest": {
+                "method": "GET",
+                "url": "{{base_url}}{{api_prefix}}/sale"
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "text",
+              "body": "Unauthorized"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

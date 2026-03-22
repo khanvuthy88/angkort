@@ -41,6 +41,39 @@ ORDER_STATE = {
 
 BASE_URL = '/angkort/api/v1'
 
+
+def get_current_user_shop_ids(user=None):
+    """Return store IDs owned by the current authenticated user.
+
+    We cannot rely on create_uid because many API writes use sudo(), which stamps
+    records with the superuser. We therefore prefer the explicit owner field and
+    keep a couple of fallbacks for older data.
+    """
+    current_user = user or request.env.user
+    if not current_user or current_user.id == request.env.ref('base.public_user').id:
+        return []
+
+    shop_env = request.env['res.partner'].sudo()
+    shop_ids = set(shop_env.search([
+        ('type', '=', 'store'),
+        ('owner_user_id', '=', current_user.id),
+    ]).ids)
+    shop_ids.update(shop_env.search([
+        ('type', '=', 'store'),
+        ('create_uid', '=', current_user.id),
+    ]).ids)
+
+    parent_shop = current_user.partner_id.parent_id
+    if parent_shop and parent_shop.type == 'store':
+        shop_ids.add(parent_shop.id)
+
+    return list(shop_ids)
+
+
+def current_user_owns_shop(shop, user=None):
+    """Check whether the current request user owns the provided shop record."""
+    return bool(shop and shop.id in set(get_current_user_shop_ids(user=user)))
+
 # Decorators
 def validate_auth(func):
     @wraps(func)
@@ -108,8 +141,6 @@ def verify_ownership(entity_type='shop'):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                current_user_id = request.env.user.id
-                
                 if entity_type == 'shop':
                     shop_id = kwargs.get('shop_id')
                     if not shop_id:
@@ -123,7 +154,7 @@ def verify_ownership(entity_type='shop'):
                     if not shop:
                         return request.make_json_response({'error': 'Shop not found'}, status=404)
                     
-                    if shop.create_uid.id != current_user_id:
+                    if not current_user_owns_shop(shop):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify shops you own'
                         }, status=403)
@@ -143,7 +174,7 @@ def verify_ownership(entity_type='shop'):
                     if not product:
                         return request.make_json_response({'error': 'Product not found'}, status=404)
                     
-                    if product.create_uid.id != current_user_id:
+                    if not current_user_owns_shop(product.shop_id):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify products you own'
                         }, status=403)
@@ -163,7 +194,7 @@ def verify_ownership(entity_type='shop'):
                     if not category:
                         return request.make_json_response({'error': 'Category not found'}, status=404)
                     
-                    if category.create_uid.id != current_user_id:
+                    if not current_user_owns_shop(category.shop_id):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify categories you own'
                         }, status=403)
@@ -183,9 +214,7 @@ def verify_ownership(entity_type='shop'):
                     if not variant:
                         return request.make_json_response({'error': 'Variant not found'}, status=404)
 
-                    # Ownership verified by shop_id match above.
-                    # create_uid is not reliable because records may be created via sudo().
-                    if variant.shop_id.id != shop_id:
+                    if not current_user_owns_shop(variant.shop_id):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify variants you own'
                         }, status=403)
@@ -218,7 +247,7 @@ def verify_ownership(entity_type='shop'):
                         ('id', '=', shop_id),
                         ('type', '=', 'store')
                     ], limit=1)
-                    if not attr_shop_record or attr_shop_record.create_uid.id != current_user_id:
+                    if not attr_shop_record or not current_user_owns_shop(attr_shop_record):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only modify variant values you own'
                         }, status=403)
@@ -240,7 +269,7 @@ def verify_ownership(entity_type='shop'):
                         if not shop:
                             return request.make_json_response({'error': 'Shop not found'}, status=404)
                         
-                        if shop.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(shop):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only create wifi for shops you own'
                             }, status=403)
@@ -254,7 +283,7 @@ def verify_ownership(entity_type='shop'):
                         if not wifi:
                             return request.make_json_response({'error': 'WiFi not found'}, status=404)
                         
-                        if wifi.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(wifi.shop_id):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only modify wifi you own'
                             }, status=403)
@@ -276,7 +305,7 @@ def verify_ownership(entity_type='shop'):
                         if not shop:
                             return request.make_json_response({'error': 'Shop not found'}, status=404)
                         
-                        if shop.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(shop):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only create open hours for shops you own'
                             }, status=403)
@@ -290,7 +319,7 @@ def verify_ownership(entity_type='shop'):
                         if not open_hour:
                             return request.make_json_response({'error': 'Open hour not found'}, status=404)
                         
-                        if open_hour.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(open_hour.shop_id):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only modify open hours you own'
                             }, status=403)
@@ -312,7 +341,7 @@ def verify_ownership(entity_type='shop'):
                         if not shop:
                             return request.make_json_response({'error': 'Shop not found'}, status=404)
 
-                        if shop.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(shop):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only create banks for shops you own'
                             }, status=403)
@@ -326,7 +355,7 @@ def verify_ownership(entity_type='shop'):
                         if not bank:
                             return request.make_json_response({'error': 'Bank not found'}, status=404)
 
-                        if bank.create_uid.id != current_user_id:
+                        if not current_user_owns_shop(bank.shop_id):
                             return request.make_json_response({
                                 'error': 'Unauthorized: You can only modify banks you own'
                             }, status=403)
@@ -345,7 +374,7 @@ def verify_ownership(entity_type='shop'):
                     if not shop:
                         return request.make_json_response({'error': 'Shop not found'}, status=404)
                     
-                    if shop.create_uid.id != current_user_id:
+                    if not current_user_owns_shop(shop):
                         return request.make_json_response({
                             'error': 'Unauthorized: You can only update banners for shops you own'
                         }, status=403)

@@ -3,8 +3,9 @@
 from datetime import datetime
 import hashlib
 import jwt
+import werkzeug.exceptions
 
-from odoo import models
+from odoo import fields, models
 from odoo.http import request
 
 
@@ -12,7 +13,7 @@ class IrHttp(models.AbstractModel):
     _inherit = 'ir.http'
 
     @classmethod
-    def _auth_method_angkit(cls):
+    def _bearer_authenticate(cls):
         # Allow OPTIONS request for CORS preflight
         if request.httprequest.method == 'OPTIONS':
             return
@@ -20,11 +21,7 @@ class IrHttp(models.AbstractModel):
         # Get the Authorization header
         auth_header = request.httprequest.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            return request.make_json_response({
-                'status': False,
-                'message': 'Authentication failed',
-                'error': 'Missing or invalid Authorization header'
-            }, status=401)
+            raise werkzeug.exceptions.Unauthorized('Missing or invalid Authorization header')
 
         # Extract the token
         token = auth_header.split(' ')[1]
@@ -32,35 +29,19 @@ class IrHttp(models.AbstractModel):
         try:
             secret_key = request.env['ir.config_parameter'].sudo().get_param('database.secret')
             if not secret_key:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Server authentication misconfiguration'
-                }, status=500)
+                raise werkzeug.exceptions.InternalServerError('Server authentication misconfiguration')
 
             # Decode the JWT token with verification
             try:
                 payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             except jwt.ExpiredSignatureError:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Token has expired'
-                }, status=401)
+                raise werkzeug.exceptions.Unauthorized('Token has expired')
             except jwt.InvalidTokenError:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Invalid token'
-                }, status=401)
+                raise werkzeug.exceptions.Unauthorized('Invalid token')
 
             # Check expiration (additional check for safety)
             if payload.get('exp') and payload.get('exp') < int(datetime.utcnow().timestamp()):
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Token has expired'
-                }, status=401)
+                raise werkzeug.exceptions.Unauthorized('Token has expired')
 
             # Check token revocation: verify the token is still active in the DB.
             # This ensures logout/revocation is respected even within the JWT TTL window.
@@ -70,27 +51,34 @@ class IrHttp(models.AbstractModel):
                 ('active', '=', True),
             ], limit=1)
             if not token_record:
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Token has been revoked or is invalid'
-                }, status=401)
+                raise werkzeug.exceptions.Unauthorized('Token has been revoked or is invalid')
 
             # Fetch the user from the database
             user_id = payload.get('user_id')
             user = request.env['res.users'].sudo().browse(user_id)
             if not user.exists():
-                return request.make_json_response({
-                    'status': False,
-                    'message': 'Authentication failed',
-                    'error': 'Invalid token'
-                }, status=401)
+                raise werkzeug.exceptions.Unauthorized('Invalid token')
+
+            if payload.get('token_type') != 'access':
+                raise werkzeug.exceptions.Unauthorized('Invalid token type')
+
+            if token_record.user_id.id != user.id:
+                raise werkzeug.exceptions.Unauthorized('Token user mismatch')
+
+            if token_record.expires_at and token_record.expires_at <= fields.Datetime.now():
+                raise werkzeug.exceptions.Unauthorized('Token has expired')
 
             # Set the user context using update_env
             request.update_env(user=user_id)
-        except Exception:
-            return request.make_json_response({
-                'status': False,
-                'message': 'Authentication failed',
-                'error': 'Token validation error'
-            }, status=401)
+        except werkzeug.exceptions.HTTPException:
+            raise
+        except Exception as exc:
+            raise werkzeug.exceptions.Unauthorized('Token validation error') from exc
+
+    @classmethod
+    def _auth_method_angkit(cls):
+        return cls._bearer_authenticate()
+
+    @classmethod
+    def _auth_method_core_access(cls):
+        return cls._bearer_authenticate()

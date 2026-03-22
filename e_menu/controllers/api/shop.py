@@ -186,6 +186,9 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
             # only allow base partner fields from PARTNER_FIELDS
             create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
+            public_user = request.env.ref('base.public_user')
+            if request.env.user and request.env.user.id != public_user.id:
+                create_data['owner_user_id'] = request.env.user.id
 
             # Handle shop related fields using helper method
             shop_related_fields = self._handle_shop_related_fields(data, files, 'create')
@@ -1127,10 +1130,11 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'phone': create_data['phone'],
                 'customer_address': create_data['customer_address'],
                 'type': 'store',
+                'owner_user_id': request.env.user.id if request.env.user and request.env.user.id != request.env.ref('base.public_user').id else False,
                 'wifi_name': create_data.get('wifi_name', ''),
                 'shop_latitude': create_data.get('shop_latitude', 0.0),
                 'shop_longitude': create_data.get('shop_longitude', 0.0),
-                               'email': create_data.get('email', ''),
+                'email': create_data.get('email', ''),
             }])
             if request.env.user.id != request.env.ref('base.public_user').id:
                 request.env.user.partner_id.update({'parent_id': shop_data.id})

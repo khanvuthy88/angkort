@@ -1,11 +1,13 @@
 from odoo import fields, http
 from odoo.http import request, route
+from odoo.tools import config
+from odoo.exceptions import AccessDenied
 import jwt
 from datetime import datetime, timedelta
 import hashlib
 import json
 import logging
-from .utils import BASE_URL
+from .utils import BASE_URL, get_current_user_shop_ids
 
 _logger = logging.getLogger(__name__)
 
@@ -217,17 +219,25 @@ class Authentication(http.Controller, AuthMixin):
             # Verify password using Odoo's authentication system
             # We need to get db name from request.session.db or from config
             db = request.session.db
+            if not db:
+                db = request.db or config.get('db_name')
             credential = {'login': username, 'password': password, 'type': 'password'}
 
             try:
-                uid = request.session.authenticate(db, credential)
+                auth_info = request.env['res.users'].authenticate(db, credential, {
+                    'interactive': False,
+                    'base_location': request.httprequest.url_root.rstrip('/'),
+                    'HTTP_HOST': request.httprequest.environ.get('HTTP_HOST'),
+                    'REMOTE_ADDR': request.httprequest.environ.get('REMOTE_ADDR'),
+                })
+                uid = auth_info.get('uid')
                 if not uid:
                     return request.make_json_response({
                         "status": False,
                         "message": "Authentication failed",
                         "error": "Invalid username or password"
                     }, status=401)
-            except Exception as auth_error:
+            except AccessDenied:
                 return request.make_json_response({
                     "status": False,
                     "message": "Authentication failed",
@@ -249,17 +259,16 @@ class Authentication(http.Controller, AuthMixin):
                 refresh_expiry=datetime.utcnow() + timedelta(days=7)
             )
 
-            if request.env.user.has_group("base.group_system"):
+            if user.has_group("base.group_system"):
                 role = "ADMIN"
-            elif request.env.user.has_group("e_menu.group_merchant"):
+            elif user.has_group("e_menu.group_merchant"):
                 role = "MERCHANT"
             else:
                 role = "NORMAL"
 
-            # Shops owned by the current user (created by this user)
+            shop_ids = get_current_user_shop_ids(user=user)
             shops = request.env['res.partner'].sudo().search([
-                ('type', '=', 'store'),
-                ('create_uid', '=', user.id)
+                ('id', 'in', shop_ids)
             ], order='id')
             shops_data = [{
                 'id': shop.id,
@@ -438,15 +447,6 @@ class Authentication(http.Controller, AuthMixin):
         Generate a new access token using a valid refresh token.
         """
         try:
-            # Check Content-Type header
-            content_type = request.httprequest.headers.get('Content-Type', '')
-            if 'application/json' not in content_type:
-                return request.make_json_response({
-                    "status": False,
-                    "message": "Invalid request format",
-                    "error": "Content-Type must be application/json"
-                }, status=400)
-
             try:
                 if request.httprequest.data:
                     request_data = json.loads(request.httprequest.data.decode('utf-8'))
@@ -536,7 +536,10 @@ class Authentication(http.Controller, AuthMixin):
             token = token_model.search([('access_token', '=', hashlib.sha256(access_token_header.encode()).hexdigest())], limit=1)
 
             if token:
-                token.write({'active': False})
+                token.write({
+                    'active': False,
+                    'deactivated_at': fields.Datetime.now(),
+                })
                 request.session.logout(keep_db=True)
                 return request.make_json_response({
                     "status": True,
@@ -556,6 +559,3 @@ class Authentication(http.Controller, AuthMixin):
                 "message": "Internal server error",
                 "error": "An unexpected error occurred during logout"
             }, status=500)
-
-
-

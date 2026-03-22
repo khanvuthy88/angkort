@@ -21,6 +21,11 @@ class Partner(models.Model):
     shop_wifi_ids = fields.One2many('shop.wifi', 'shop_id')
     shop_open_hour_ids = fields.One2many('shop.open.hour', 'shop_id')
     shop_banner = fields.Image()
+    owner_user_id = fields.Many2one(
+        'res.users',
+        string='Shop Owner',
+        help='Primary API owner of this shop. This is used for ownership checks on records created with sudo().',
+    )
     product_count = fields.Integer(
         string='Products',
         compute='_compute_product_count',

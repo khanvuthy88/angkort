@@ -2,7 +2,7 @@ from odoo import http, Command, fields, _
 from odoo.http import request
 from odoo.exceptions import UserError
 from .utils import (
-    validate_auth, validate_input_data, paginate_results, 
+    validate_auth, validate_input_data, paginate_results, get_current_user_shop_ids,
     APIUtilsMixin, ORDER_STATE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, BASE_URL
 )
 from .auth import AuthMixin
@@ -357,7 +357,7 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="public", type="http", cors="*")
+    @http.route(f"{BASE_URL}/sale", methods=['GET'], auth="angkit", type="http", cors="*")
     def global_sale_order(self, **kw):
         """
         Retrieve a paginated list of all sale orders (global, not user-specific) with search, filter, and sort capabilities.
@@ -385,8 +385,16 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             if order not in {'asc', 'desc'}:
                 order = 'desc'
             
+            current_user = request.env.user
+            owned_shop_ids = get_current_user_shop_ids()
+
             # Build domain
-            domain = []
+            if current_user.has_group('base.group_system'):
+                domain = []
+            elif owned_shop_ids:
+                domain = [('shop_id', 'in', owned_shop_ids)]
+            else:
+                domain = [('partner_id', '=', current_user.partner_id.id)]
             
             # Add search functionality
             if search:
@@ -395,7 +403,7 @@ class OrderAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     ('name', 'ilike', search),
                     ('partner_id.name', 'ilike', search)
                 ]
-                domain = search_domain
+                domain = ['&'] + domain + search_domain
             
             # Add filters
             if filter_state:
