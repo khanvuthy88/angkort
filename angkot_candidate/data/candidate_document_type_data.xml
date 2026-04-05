@@ -1,0 +1,74 @@
+<odoo noupdate="1">
+    <record id="document_type_nid" model="angkot.candidate.document.type">
+        <field name="sequence">10</field>
+        <field name="name">National ID (NID)</field>
+        <field name="code">nid</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_photos" model="angkot.candidate.document.type">
+        <field name="sequence">20</field>
+        <field name="name">Photos 4x6 (2 pcs)</field>
+        <field name="code">photos_4x6</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_passport" model="angkot.candidate.document.type">
+        <field name="sequence">30</field>
+        <field name="name">Passport</field>
+        <field name="code">passport</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_nssf" model="angkot.candidate.document.type">
+        <field name="sequence">40</field>
+        <field name="name">NSSF Card</field>
+        <field name="code">nssf_card</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_birth_certificate" model="angkot.candidate.document.type">
+        <field name="sequence">50</field>
+        <field name="name">Birth Certificate</field>
+        <field name="code">birth_certificate</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_family_book" model="angkot.candidate.document.type">
+        <field name="sequence">60</field>
+        <field name="name">Family Book</field>
+        <field name="code">family_book</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_residential_certificate" model="angkot.candidate.document.type">
+        <field name="sequence">70</field>
+        <field name="name">Residential Certificate</field>
+        <field name="code">residential_certificate</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_employee_card_photo" model="angkot.candidate.document.type">
+        <field name="sequence">80</field>
+        <field name="name">Employee ID Card (Photo)</field>
+        <field name="code">employee_id_photo</field>
+        <field name="category">identity</field>
+    </record>
+    <record id="document_type_education_certificate" model="angkot.candidate.document.type">
+        <field name="sequence">90</field>
+        <field name="name">Education Certificate(s)</field>
+        <field name="code">education_certificate</field>
+        <field name="category">education</field>
+    </record>
+    <record id="document_type_bank_account" model="angkot.candidate.document.type">
+        <field name="sequence">100</field>
+        <field name="name">Saving/Payroll Account (SBI Bank)</field>
+        <field name="code">payroll_account</field>
+        <field name="category">banking</field>
+    </record>
+    <record id="document_type_medical_checkup" model="angkot.candidate.document.type">
+        <field name="sequence">110</field>
+        <field name="name">Medical Checkup Certificate (Health Check)</field>
+        <field name="code">medical_checkup</field>
+        <field name="category">compliance</field>
+    </record>
+    <record id="document_type_criminal_certificate" model="angkot.candidate.document.type">
+        <field name="sequence">120</field>
+        <field name="name">Criminal Certificate</field>
+        <field name="code">criminal_certificate</field>
+        <field name="category">compliance</field>
+    </record>
+</odoo>

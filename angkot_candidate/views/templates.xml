@@ -1,0 +1,103 @@
+<odoo>
+    <data>
+        <template id="portal_home_menu_candidate_documents" inherit_id="portal.portal_my_home" priority="30">
+            <xpath expr="//div[@id='portal_common_category']" position="inside">
+                <t t-if="request.env['hr.candidate'].sudo().search_count([('portal_user_id', '=', request.env.user.id)])">
+                    <t t-call="portal.portal_docs_entry">
+                        <t t-set="icon" t-value="'/portal/static/src/img/portal-connection.svg'"/>
+                        <t t-set="title">Candidate Documents</t>
+                        <t t-set="text">Upload your PDF and image requirements for HR review</t>
+                        <t t-set="url" t-value="'/my/candidate/documents'"/>
+                        <t t-set="placeholder_count" t-value="'candidate_document_count'"/>
+                        <t t-set="show_count" t-value="True"/>
+                    </t>
+                </t>
+            </xpath>
+        </template>
+
+        <template id="portal_candidate_documents" name="Candidate Documents">
+            <t t-call="portal.portal_layout">
+                <t t-set="breadcrumbs_searchbar" t-value="True"/>
+                <div class="container o_portal_my_doc py-4">
+                    <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center mb-4">
+                        <div>
+                            <h2 class="mb-1">Candidate Documents</h2>
+                            <p class="text-muted mb-0">
+                                Upload PDF or image files. HR will review each item after submission.
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge rounded-pill text-bg-primary px-3 py-2">
+                                <t t-out="candidate.accepted_document_count"/> / <t t-out="candidate.required_document_count"/> accepted
+                            </span>
+                            <span class="badge rounded-pill text-bg-info px-3 py-2" t-if="candidate.submitted_document_count">
+                                <t t-out="candidate.submitted_document_count"/> pending review
+                            </span>
+                        </div>
+                    </div>
+
+                    <div t-if="flash_message" t-attf-class="alert alert-#{flash_level or 'info'}" role="alert">
+                        <t t-out="flash_message"/>
+                    </div>
+
+                    <t t-foreach="document_groups" t-as="group">
+                        <section class="card border-0 shadow-sm mb-4">
+                            <div class="card-body p-4">
+                                <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center mb-4">
+                                    <div>
+                                        <h3 class="h4 mb-1"><t t-out="group['label']"/></h3>
+                                        <p class="text-muted mb-0">
+                                            <t t-out="group['accepted_count']"/> of <t t-out="group['required_count']"/> completed
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <t t-foreach="group['documents']" t-as="document">
+                                        <div class="col-12 col-xl-4 col-md-6">
+                                            <div class="card h-100 border">
+                                                <div class="card-body d-flex flex-column">
+                                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                                                        <h4 class="h5 mb-0"><t t-out="document.document_type_id.name"/></h4>
+                                                        <span t-if="document.status == 'accepted'" class="badge text-bg-success">accepted</span>
+                                                        <span t-if="document.status == 'submitted'" class="badge text-bg-info">submitted</span>
+                                                        <span t-if="document.status == 'missing'" class="badge text-bg-danger">missing</span>
+                                                        <span t-if="document.status == 'rejected'" class="badge text-bg-warning">rejected</span>
+                                                    </div>
+                                                    <p class="text-muted small mb-3" t-if="document.filename">
+                                                        Latest file: <t t-out="document.filename"/>
+                                                    </p>
+                                                    <p class="text-danger small mb-3" t-if="document.review_note and document.status == 'rejected'">
+                                                        <t t-out="document.review_note"/>
+                                                    </p>
+                                                    <div class="mt-auto d-flex flex-column gap-2">
+                                                        <a t-if="document.attachment_id"
+                                                           t-att-href="'/my/candidate/documents/%s/content' % document.id"
+                                                           class="btn btn-outline-secondary"
+                                                           target="_blank">
+                                                            View
+                                                        </a>
+                                                        <form t-att-action="'/my/candidate/documents/%s/upload' % document.id"
+                                                              method="post"
+                                                              enctype="multipart/form-data"
+                                                              class="d-flex flex-column gap-2">
+                                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                            <input class="form-control" type="file" name="file" accept=".pdf,image/*" required="required"/>
+                                                            <button type="submit" class="btn btn-primary">
+                                                                <t t-if="document.attachment_id">Update</t>
+                                                                <t t-else="">Upload</t>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </section>
+                    </t>
+                </div>
+            </t>
+        </template>
+    </data>
+</odoo>
