@@ -6,6 +6,73 @@ from odoo import api, fields, models, _
 class HrCandidate(models.Model):
     _inherit = "hr.candidate"
 
+    image_1920 = fields.Image("Photo", attachment=True, max_width=1920, max_height=1920)
+    khmer_name = fields.Char("Khmer Name", tracking=True)
+    english_name = fields.Char("English Name", tracking=True)
+    position_name = fields.Char("Position", tracking=True)
+    gender = fields.Selection(
+        selection=[
+            ("male", "Male"),
+            ("female", "Female"),
+            ("other", "Other"),
+        ],
+        tracking=True,
+    )
+    marital_status = fields.Selection(
+        selection=[
+            ("single", "Single"),
+            ("married", "Married"),
+            ("divorced", "Divorced"),
+            ("widowed", "Widowed"),
+        ],
+        tracking=True,
+    )
+    date_of_birth = fields.Date("Date of Birth", tracking=True)
+    place_of_birth = fields.Text("Place of Birth")
+    current_address = fields.Text("Current Address")
+    permanent_address = fields.Text("Permanent Address")
+    national_id_or_passport = fields.Char("National ID/Passport No.", tracking=True)
+
+    father_name = fields.Char("Father Name")
+    father_job = fields.Char("Father Occupation")
+    mother_name = fields.Char("Mother Name")
+    mother_job = fields.Char("Mother Occupation")
+    number_of_siblings = fields.Integer("Number of Siblings")
+    family_contact_number = fields.Char("Family Contact Number")
+    family_current_address = fields.Text("Family Current Address")
+    family_permanent_address = fields.Text("Family Permanent Address")
+
+    spouse_name = fields.Char("Spouse Name")
+    spouse_job = fields.Char("Spouse Occupation")
+    number_of_children = fields.Integer("Number of Children")
+    spouse_contact_number = fields.Char("Spouse Contact Number")
+    spouse_current_address = fields.Text("Spouse Current Address")
+    spouse_permanent_address = fields.Text("Spouse Permanent Address")
+
+    years_of_study = fields.Char("Years of Study")
+    degree_types = fields.Char("Degree Types")
+    education_major = fields.Char("Education Major")
+    education_notes = fields.Text("Education Notes / Other")
+
+    short_course_certificates = fields.Char("Short-Course Certificates")
+    short_course_duration = fields.Char("Short-Course Duration")
+    short_course_major = fields.Char("Short-Course Major")
+    short_course_notes = fields.Text("Short-Course Notes / Other")
+
+    latest_institution_name = fields.Char("Latest Institution Name")
+    employment_history_position = fields.Char("Employment History Position")
+    duration_of_work = fields.Char("Duration of Work")
+    job_responsibility = fields.Text("Job Responsibility")
+    employment_history_notes = fields.Text("Employment History Notes / Other")
+
+    had_injury = fields.Boolean("Had Serious Illness or Injury")
+    had_injury_description = fields.Text("Illness / Injury Description")
+    arrested = fields.Boolean("Arrested / Convicted / Committed Crimes")
+    arrested_description = fields.Text("Crime / Arrest Description")
+
+    declaration_date = fields.Date("Declaration Date")
+    declaration_signature = fields.Text("Declaration Signature")
+
     portal_user_id = fields.Many2one(
         "res.users",
         string="Candidate User",
@@ -53,15 +120,27 @@ class HrCandidate(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            self._normalize_candidate_identity_vals(vals)
         candidates = super().create(vals_list)
         candidates._ensure_required_document_lines()
         return candidates
 
     def write(self, vals):
+        self._normalize_candidate_identity_vals(vals)
         result = super().write(vals)
         if {"company_id", "portal_user_id"} & set(vals):
             self._ensure_required_document_lines()
         return result
+
+    @api.model
+    def _normalize_candidate_identity_vals(self, vals):
+        english_name = vals.get("english_name")
+        partner_name = vals.get("partner_name")
+        if english_name and not partner_name:
+            vals["partner_name"] = english_name
+        elif partner_name and not english_name:
+            vals["english_name"] = partner_name
 
     def _ensure_required_document_lines(self):
         document_type_model = self.env["angkot.candidate.document.type"]

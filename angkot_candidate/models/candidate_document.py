@@ -90,11 +90,11 @@ class CandidateDocument(models.Model):
             parts = [part for part in [document.candidate_id.display_name, document.document_type_id.name] if part]
             document.name = " - ".join(parts)
 
-    @api.depends("attachment_id", "attachment_id.name", "attachment_id.mimetype", "attachment_id.datas_fname")
+    @api.depends("attachment_id", "attachment_id.name", "attachment_id.mimetype")
     def _compute_attachment_meta(self):
         for document in self:
             attachment = document.attachment_id
-            document.filename = attachment.datas_fname or attachment.name
+            document.filename = attachment.name
             document.mimetype = attachment.mimetype
 
     @api.depends("mimetype")
@@ -132,8 +132,7 @@ class CandidateDocument(models.Model):
         effective_mimetype = self._check_uploadable_file(filename, mimetype)
         previous_attachment = self.attachment_id.sudo()
         attachment_vals = {
-            "name": "%s - %s" % (self.candidate_id.display_name, self.document_type_id.name),
-            "datas_fname": filename,
+            "name": filename or ("%s - %s" % (self.candidate_id.display_name, self.document_type_id.name)),
             "raw": content,
             "mimetype": effective_mimetype,
             "res_model": "hr.candidate",

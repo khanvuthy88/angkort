@@ -177,7 +177,7 @@ class Authentication(http.Controller, AuthMixin):
         }
         return request.make_response('', headers=headers)
 
-    @route(f'{BASE_URL}/login', type='http', cors="*", csrf=False, auth='none', methods=['POST'])
+    @route(f'{BASE_URL}/login', type='http', cors="*", csrf=False, auth='public', methods=['POST'])
     def login(self, **kw):
         """
         Login and generate tokens.
@@ -441,7 +441,7 @@ class Authentication(http.Controller, AuthMixin):
                 "error": "An unexpected error occurred during registration"
             }, status=500)
 
-    @route(f'{BASE_URL}/refresh', type='http', cors="*", csrf=False, auth='none', methods=['POST'])
+    @route(f'{BASE_URL}/refresh', type='http', cors="*", csrf=False, auth='public', methods=['POST'])
     def refresh_token(self, **kwargs):
         """
         Generate a new access token using a valid refresh token.

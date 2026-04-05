@@ -19,6 +19,110 @@
                 <field name="portal_user_id" groups="angkot_candidate.group_candidate_hr_reviewer"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
+                <page string="Employee Form" groups="angkot_candidate.group_candidate_encharge_officer,angkot_candidate.group_candidate_hr_reviewer">
+                    <group>
+                        <group>
+                            <field name="image_1920" widget="image" class="oe_avatar"
+                                   options="{'preview_image': 'image_1920'}"/>
+                        </group>
+                        <group>
+                            <field name="khmer_name"/>
+                            <field name="english_name"/>
+                            <field name="position_name"/>
+                            <field name="national_id_or_passport"/>
+                        </group>
+                    </group>
+                    <group string="Personal Information" col="2">
+                        <group>
+                            <field name="partner_name" string="Candidate Name"/>
+                            <field name="email_from"/>
+                            <field name="partner_phone" string="Contact Number"/>
+                            <field name="gender"/>
+                            <field name="marital_status"/>
+                            <field name="date_of_birth"/>
+                        </group>
+                        <group>
+                            <field name="place_of_birth"/>
+                            <field name="permanent_address"/>
+                            <field name="current_address"/>
+                        </group>
+                    </group>
+                    <group string="Family / Parent Information" col="2">
+                        <group>
+                            <field name="father_name"/>
+                            <field name="father_job"/>
+                            <field name="mother_name"/>
+                            <field name="mother_job"/>
+                        </group>
+                        <group>
+                            <field name="number_of_siblings"/>
+                            <field name="family_contact_number"/>
+                            <field name="family_permanent_address"/>
+                            <field name="family_current_address"/>
+                        </group>
+                    </group>
+                    <group string="Spouse Information" col="2">
+                        <group>
+                            <field name="spouse_name"/>
+                            <field name="spouse_job"/>
+                            <field name="number_of_children"/>
+                        </group>
+                        <group>
+                            <field name="spouse_contact_number"/>
+                            <field name="spouse_permanent_address"/>
+                            <field name="spouse_current_address"/>
+                        </group>
+                    </group>
+                    <group string="Education Information" col="2">
+                        <group>
+                            <field name="years_of_study"/>
+                            <field name="degree_types"/>
+                            <field name="education_major"/>
+                        </group>
+                        <group>
+                            <field name="education_notes"/>
+                        </group>
+                    </group>
+                    <group string="Short-Course Information" col="2">
+                        <group>
+                            <field name="short_course_certificates"/>
+                            <field name="short_course_duration"/>
+                            <field name="short_course_major"/>
+                        </group>
+                        <group>
+                            <field name="short_course_notes"/>
+                        </group>
+                    </group>
+                    <group string="Employment History" col="2">
+                        <group>
+                            <field name="latest_institution_name"/>
+                            <field name="employment_history_position"/>
+                            <field name="duration_of_work"/>
+                        </group>
+                        <group>
+                            <field name="job_responsibility"/>
+                            <field name="employment_history_notes"/>
+                        </group>
+                    </group>
+                    <group string="Other Information" col="2">
+                        <group>
+                            <field name="had_injury"/>
+                            <field name="had_injury_description" invisible="not had_injury"/>
+                        </group>
+                        <group>
+                            <field name="arrested"/>
+                            <field name="arrested_description" invisible="not arrested"/>
+                        </group>
+                    </group>
+                    <group string="Declaration" col="2">
+                        <group>
+                            <field name="declaration_date"/>
+                        </group>
+                        <group>
+                            <field name="declaration_signature" widget="text" placeholder="SVG signature or declaration payload"/>
+                        </group>
+                    </group>
+                </page>
                 <page string="Document Checklist" groups="angkot_candidate.group_candidate_encharge_officer,angkot_candidate.group_candidate_hr_reviewer">
                     <group col="4">
                         <field name="required_document_count" readonly="1"/>

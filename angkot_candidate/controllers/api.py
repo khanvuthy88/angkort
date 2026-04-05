@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import base64
 import hashlib
+import json
 import jwt
 
 from odoo import fields, http
@@ -11,6 +13,53 @@ BASE_URL = "/angkort/api/v1"
 
 
 class CandidateDocumentApi(http.Controller):
+
+    EMPLOYEE_FORM_FIELD_MAP = {
+        "position": ("position_name", "char"),
+        "khmerName": ("khmer_name", "char"),
+        "englishName": ("english_name", "char"),
+        "gender": ("gender", "char"),
+        "maritalStatus": ("marital_status", "char"),
+        "placeOfBirth": ("place_of_birth", "text"),
+        "currentAddress": ("current_address", "text"),
+        "permanentAddress": ("permanent_address", "text"),
+        "nationalIdOrPassport": ("national_id_or_passport", "char"),
+        "contactNumber": ("partner_phone", "char"),
+        "dateOfBirth": ("date_of_birth", "date"),
+        "fatherJob": ("father_job", "char"),
+        "fatherName": ("father_name", "char"),
+        "motherJob": ("mother_job", "char"),
+        "motherName": ("mother_name", "char"),
+        "numberOfSiblings": ("number_of_siblings", "int"),
+        "familyContactNumber": ("family_contact_number", "char"),
+        "familyCurrentAddress": ("family_current_address", "text"),
+        "familyPermanentAddress": ("family_permanent_address", "text"),
+        "job": ("spouse_job", "char"),
+        "name": ("spouse_name", "char"),
+        "numberOfChildren": ("number_of_children", "int"),
+        "spouseContactNumber": ("spouse_contact_number", "char"),
+        "spouseCurrentAddress": ("spouse_current_address", "text"),
+        "spousePermanentAddress": ("spouse_permanent_address", "text"),
+        "degreeTypes": ("degree_types", "char"),
+        "major": ("education_major", "char"),
+        "other": ("education_notes", "text"),
+        "yearsOfStudy": ("years_of_study", "char"),
+        "shortCourseCertificates": ("short_course_certificates", "char"),
+        "shortCourseDuration": ("short_course_duration", "char"),
+        "shortCourseMajor": ("short_course_major", "char"),
+        "shortCourseOther": ("short_course_notes", "text"),
+        "durationOfWork": ("duration_of_work", "char"),
+        "jobResponsibility": ("job_responsibility", "text"),
+        "latestInstitutionName": ("latest_institution_name", "char"),
+        "employmentHistoryPosition": ("employment_history_position", "char"),
+        "employmentHistoryOther": ("employment_history_notes", "text"),
+        "hadInjury": ("had_injury", "bool"),
+        "hadInjuryDescription": ("had_injury_description", "text"),
+        "arrested": ("arrested", "bool"),
+        "arrestedDescription": ("arrested_description", "text"),
+        "date": ("declaration_date", "date"),
+        "signature": ("declaration_signature", "text"),
+    }
 
     @http.route(f"{BASE_URL}/candidate/documents/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidate/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
@@ -95,6 +144,181 @@ class CandidateDocumentApi(http.Controller):
             ("portal_user_id", "=", user.id),
         ], limit=1)
 
+    def _parse_request_payload(self):
+        if request.httprequest.data:
+            try:
+                return json.loads(request.httprequest.data.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        return dict(request.params)
+
+    def _coerce_form_value(self, value, value_type):
+        if value_type in ("char", "text"):
+            return value or False
+        if value_type == "date":
+            return value or False
+        if value_type == "int":
+            if value in (None, "", False):
+                return False
+            return int(value)
+        if value_type == "bool":
+            if isinstance(value, bool):
+                return value
+            if value in (None, "", False):
+                return False
+            if isinstance(value, str):
+                return value.strip().lower() in ("1", "true", "yes", "on")
+            return bool(value)
+        return value
+
+    def _extract_employee_form_vals(self, payload):
+        vals = {}
+        if not isinstance(payload, dict):
+            return vals
+
+        personal = payload.get("personalInformation") or {}
+        family = payload.get("familyInformation") or {}
+        spouse = payload.get("spouseInformation") or {}
+        education = payload.get("educationInformation") or {}
+        short_course = payload.get("shortCourseInformation") or {}
+        employment = payload.get("employmentHistory") or {}
+        other = payload.get("otherInformation") or {}
+        declaration = payload.get("declaration") or {}
+
+        for source in (personal, payload):
+            if not isinstance(source, dict):
+                continue
+            for api_key, (field_name, value_type) in self.EMPLOYEE_FORM_FIELD_MAP.items():
+                if api_key in source:
+                    vals[field_name] = self._coerce_form_value(source.get(api_key), value_type)
+
+        nested_mappings = (
+            (family, {
+                "fatherName": ("father_name", "char"),
+                "fatherJob": ("father_job", "char"),
+                "motherName": ("mother_name", "char"),
+                "motherJob": ("mother_job", "char"),
+                "numberOfSiblings": ("number_of_siblings", "int"),
+                "contactNumber": ("family_contact_number", "char"),
+                "currentAddress": ("family_current_address", "text"),
+                "permanentAddress": ("family_permanent_address", "text"),
+            }),
+            (spouse, {
+                "name": ("spouse_name", "char"),
+                "job": ("spouse_job", "char"),
+                "numberOfChildren": ("number_of_children", "int"),
+                "contactNumber": ("spouse_contact_number", "char"),
+                "currentAddress": ("spouse_current_address", "text"),
+                "permanentAddress": ("spouse_permanent_address", "text"),
+            }),
+            (education, {
+                "degreeTypes": ("degree_types", "char"),
+                "major": ("education_major", "char"),
+                "other": ("education_notes", "text"),
+                "yearsOfStudy": ("years_of_study", "char"),
+            }),
+            (short_course, {
+                "shortCourseCertificates": ("short_course_certificates", "char"),
+                "shortCourseDuration": ("short_course_duration", "char"),
+                "major": ("short_course_major", "char"),
+                "other": ("short_course_notes", "text"),
+            }),
+            (employment, {
+                "name": ("latest_institution_name", "char"),
+                "position": ("employment_history_position", "char"),
+                "durationOfWork": ("duration_of_work", "char"),
+                "jobResponsibility": ("job_responsibility", "text"),
+                "other": ("employment_history_notes", "text"),
+            }),
+            (other, {
+                "hadInjury": ("had_injury", "bool"),
+                "hadInjuryDescription": ("had_injury_description", "text"),
+                "arrested": ("arrested", "bool"),
+                "arrestedDescription": ("arrested_description", "text"),
+            }),
+            (declaration, {
+                "date": ("declaration_date", "date"),
+                "signature": ("declaration_signature", "text"),
+            }),
+        )
+        for source, mapping in nested_mappings:
+            if not isinstance(source, dict):
+                continue
+            for api_key, (field_name, value_type) in mapping.items():
+                if api_key in source:
+                    vals[field_name] = self._coerce_form_value(source.get(api_key), value_type)
+        return vals
+
+    def _stringify_int(self, value):
+        return "" if value in (False, None) else str(value)
+
+    def _serialize_employee_form(self, candidate):
+        return {
+            "candidateId": candidate.id,
+            "candidateName": candidate.display_name,
+            "personalInformation": {
+                "photoUrl": "%s/candidate/employee-form/photo" % BASE_URL if candidate.image_1920 else "",
+                "position": candidate.position_name or "",
+                "khmerName": candidate.khmer_name or "",
+                "englishName": candidate.english_name or candidate.partner_name or "",
+                "gender": candidate.gender or "",
+                "maritalStatus": candidate.marital_status or "",
+                "placeOfBirth": candidate.place_of_birth or "",
+                "currentAddress": candidate.current_address or "",
+                "permanentAddress": candidate.permanent_address or "",
+                "nationalIdOrPassport": candidate.national_id_or_passport or "",
+                "contactNumber": candidate.partner_phone or "",
+                "dateOfBirth": candidate.date_of_birth.isoformat() if candidate.date_of_birth else None,
+            },
+            "familyInformation": {
+                "fatherJob": candidate.father_job or "",
+                "fatherName": candidate.father_name or "",
+                "motherJob": candidate.mother_job or "",
+                "motherName": candidate.mother_name or "",
+                "numberOfSiblings": self._stringify_int(candidate.number_of_siblings),
+                "contactNumber": candidate.family_contact_number or "",
+                "currentAddress": candidate.family_current_address or "",
+                "permanentAddress": candidate.family_permanent_address or "",
+            },
+            "spouseInformation": {
+                "name": candidate.spouse_name or "",
+                "job": candidate.spouse_job or "",
+                "numberOfChildren": self._stringify_int(candidate.number_of_children),
+                "contactNumber": candidate.spouse_contact_number or "",
+                "currentAddress": candidate.spouse_current_address or "",
+                "permanentAddress": candidate.spouse_permanent_address or "",
+            },
+            "educationInformation": {
+                "degreeTypes": candidate.degree_types or "",
+                "major": candidate.education_major or "",
+                "other": candidate.education_notes or "",
+                "yearsOfStudy": candidate.years_of_study or "",
+            },
+            "shortCourseInformation": {
+                "shortCourseCertificates": candidate.short_course_certificates or "",
+                "shortCourseDuration": candidate.short_course_duration or "",
+                "major": candidate.short_course_major or "",
+                "other": candidate.short_course_notes or "",
+            },
+            "employmentHistory": {
+                "name": candidate.latest_institution_name or "",
+                "position": candidate.employment_history_position or "",
+                "durationOfWork": candidate.duration_of_work or "",
+                "jobResponsibility": candidate.job_responsibility or "",
+                "other": candidate.employment_history_notes or "",
+            },
+            "otherInformation": {
+                "hadInjury": bool(candidate.had_injury),
+                "hadInjuryDescription": candidate.had_injury_description or "",
+                "arrested": bool(candidate.arrested),
+                "arrestedDescription": candidate.arrested_description or "",
+            },
+            "declaration": {
+                "date": candidate.declaration_date.isoformat() if candidate.declaration_date else None,
+                "signature": candidate.declaration_signature or "",
+            },
+        }
+
     def _serialize_document(self, document):
         attachment = document.attachment_id
         return {
@@ -113,6 +337,86 @@ class CandidateDocumentApi(http.Controller):
             "has_attachment": bool(attachment),
             "view_url": "/angkort/api/v1/candidate/documents/%s/content" % document.id if attachment else "",
         }
+
+    @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    def candidate_employee_form_options(self, subpath=None, **kwargs):
+        headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+            "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+            "Access-Control-Max-Age": "86400",
+        }
+        return request.make_response("", headers=headers)
+
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate_employee_form(self, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self._json_error("Authentication failed", error="Login is required", status=401)
+
+        candidate = self._get_candidate_for_user(user)
+        if not candidate:
+            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+
+        return self._json_success(
+            "Candidate employee form fetched successfully",
+            data=self._serialize_employee_form(candidate.sudo()),
+        )
+
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
+    def upsert_candidate_employee_form(self, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self._json_error("Authentication failed", error="Login is required", status=401)
+
+        candidate = self._get_candidate_for_user(user)
+        if not candidate:
+            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+
+        payload = self._parse_request_payload()
+        try:
+            vals = self._extract_employee_form_vals(payload)
+        except (TypeError, ValueError) as error:
+            return self._json_error("Invalid form payload", error=str(error), status=400)
+
+        photo_file = request.httprequest.files.get("photo")
+        photo_base64 = payload.get("photoBase64") if isinstance(payload, dict) else None
+        if photo_file and photo_file.filename:
+            vals["image_1920"] = base64.b64encode(photo_file.read())
+        elif photo_base64:
+            vals["image_1920"] = photo_base64
+
+        if not vals:
+            return self._json_error("No form values were provided", error="Provide JSON fields or multipart form data", status=400)
+
+        try:
+            candidate.sudo().write(vals)
+        except Exception as error:
+            return self._json_error("Unable to save employee form", error=str(error), status=400)
+
+        return self._json_success(
+            "Candidate employee form saved successfully",
+            data=self._serialize_employee_form(candidate.sudo()),
+        )
+
+    @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate_employee_form_photo(self, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self._json_error("Authentication failed", error="Login is required", status=401)
+
+        candidate = self._get_candidate_for_user(user)
+        if not candidate or not candidate.image_1920:
+            return self._json_error("Photo not found", error="No profile photo is available", status=404)
+
+        raw_content = base64.b64decode(candidate.image_1920)
+        headers = [
+            ("Content-Type", "image/png"),
+            ("Content-Length", str(len(raw_content))),
+            ("Content-Disposition", content_disposition("candidate-photo.png", disposition_type="inline")),
+        ]
+        return request.make_response(raw_content, headers)
 
     @http.route(f"{BASE_URL}/candidate/documents", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_documents(self, **kwargs):
