@@ -113,7 +113,7 @@ class CandidatePortal(CustomerPortal):
             ("Content-Type", attachment.mimetype or "application/octet-stream"),
             ("Content-Length", str(len(raw_content))),
             ("Content-Disposition", content_disposition(
-                attachment.datas_fname or attachment.name or document.document_type_id.name,
+                attachment.name or document.document_type_id.name,
                 disposition_type=disposition,
             )),
         ]

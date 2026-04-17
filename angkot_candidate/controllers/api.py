@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import base64
+import datetime
 import hashlib
 import json
 import jwt
@@ -90,6 +91,48 @@ class CandidateDocumentApi(http.Controller):
             payload["data"] = data
         return request.make_json_response(payload, status=status)
 
+    def _get_secret_key(self):
+        return request.env["ir.config_parameter"].sudo().get_param("database.secret")
+
+    def _issue_tokens(self, user_id, secret_key):
+        now = datetime.datetime.utcnow()
+        access_payload = {
+            "user_id": user_id,
+            "token_type": "access",
+            "iat": now,
+            "exp": now + datetime.timedelta(hours=1),
+        }
+        refresh_payload = {
+            "user_id": user_id,
+            "token_type": "refresh",
+            "iat": now,
+            "exp": now + datetime.timedelta(days=30),
+        }
+        access_token = jwt.encode(access_payload, secret_key, algorithm="HS256")
+        refresh_token = jwt.encode(refresh_payload, secret_key, algorithm="HS256")
+        return access_token, refresh_token
+
+    def _store_token_record(self, user_id, access_token, refresh_token, secret_key):
+        """Store tokens in res.user.token if e_menu is installed; silently skip otherwise."""
+        if not request.env.registry.get("res.user.token"):
+            return
+        try:
+            now = datetime.datetime.utcnow()
+            access_payload = jwt.decode(access_token, secret_key, algorithms=["HS256"])
+            refresh_payload = jwt.decode(refresh_token, secret_key, algorithms=["HS256"])
+            request.env["res.user.token"].sudo().search([
+                ("user_id", "=", user_id), ("active", "=", True)
+            ]).write({"active": False})
+            request.env["res.user.token"].sudo().create({
+                "user_id": user_id,
+                "access_token": hashlib.sha256(access_token.encode()).hexdigest(),
+                "refresh_token": hashlib.sha256(refresh_token.encode()).hexdigest(),
+                "active": True,
+                "expires_at": datetime.datetime.utcfromtimestamp(access_payload["exp"]),
+            })
+        except Exception:
+            pass
+
     def _get_bearer_user(self):
         auth_header = request.httprequest.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -99,10 +142,7 @@ class CandidateDocumentApi(http.Controller):
         if not token:
             return request.env["res.users"]
 
-        if not request.env.registry.get("res.user.token"):
-            return request.env["res.users"]
-
-        secret_key = request.env["ir.config_parameter"].sudo().get_param("database.secret")
+        secret_key = self._get_secret_key()
         if not secret_key:
             return request.env["res.users"]
 
@@ -114,18 +154,103 @@ class CandidateDocumentApi(http.Controller):
         if payload.get("token_type") != "access":
             return request.env["res.users"]
 
-        hashed_token = hashlib.sha256(token.encode()).hexdigest()
-        token_record = request.env["res.user.token"].sudo().search([
-            ("access_token", "=", hashed_token),
-            ("active", "=", True),
-        ], limit=1)
-        if not token_record:
-            return request.env["res.users"]
-        if token_record.expires_at and token_record.expires_at <= fields.Datetime.now():
-            return request.env["res.users"]
+        user_id = payload.get("user_id")
+        # If e_menu is installed, enforce DB-side revocation check.
+        if request.env.registry.get("res.user.token"):
+            hashed_token = hashlib.sha256(token.encode()).hexdigest()
+            token_record = request.env["res.user.token"].sudo().search([
+                ("access_token", "=", hashed_token),
+                ("active", "=", True),
+            ], limit=1)
+            if not token_record:
+                return request.env["res.users"]
+            if token_record.expires_at and token_record.expires_at <= fields.Datetime.now():
+                return request.env["res.users"]
+            if token_record.user_id.id != user_id:
+                return request.env["res.users"]
 
-        user = request.env["res.users"].sudo().browse(payload.get("user_id"))
-        return user if user.exists() and token_record.user_id.id == user.id else request.env["res.users"]
+        user = request.env["res.users"].sudo().browse(user_id)
+        return user if user.exists() else request.env["res.users"]
+
+    @http.route(f"{BASE_URL}/login", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    def candidate_login_options(self, **kwargs):
+        headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+            "Access-Control-Max-Age": "86400",
+        }
+        return request.make_response("", headers=headers)
+
+    @http.route(f"{BASE_URL}/login", auth="none", type="http", methods=["POST"], csrf=False, cors="*")
+    def candidate_login(self, **kwargs):
+        payload = self._parse_request_payload()
+        username = payload.get("username") or payload.get("login") or ""
+        password = payload.get("password") or ""
+
+        if not username or not password:
+            return self._json_error("Missing credentials", error="'username' and 'password' are required", status=400)
+
+        secret_key = self._get_secret_key()
+        if not secret_key:
+            return self._json_error("Server misconfiguration", error="JWT secret key is not configured", status=500)
+
+        credential = {"type": "password", "login": username, "password": password}
+        try:
+            auth_info = request.session.authenticate(request.env.cr.dbname, credential)
+            uid = auth_info.get("uid") if isinstance(auth_info, dict) else request.session.uid
+        except Exception:
+            uid = False
+
+        if not uid:
+            return self._json_error("Authentication failed", error="Invalid username or password", status=401)
+
+        user = request.env["res.users"].sudo().browse(uid)
+        access_token, refresh_token = self._issue_tokens(uid, secret_key)
+        self._store_token_record(uid, access_token, refresh_token, secret_key)
+
+        return self._json_success("Login successful", data={
+            "user_id": uid,
+            "name": user.name,
+            "email": user.email or username,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+        })
+
+    @http.route(f"{BASE_URL}/refresh", auth="none", type="http", methods=["POST"], csrf=False, cors="*")
+    def candidate_refresh(self, **kwargs):
+        payload = self._parse_request_payload()
+        refresh_token = payload.get("refresh_token") or ""
+
+        if not refresh_token:
+            return self._json_error("Missing token", error="'refresh_token' is required", status=400)
+
+        secret_key = self._get_secret_key()
+        if not secret_key:
+            return self._json_error("Server misconfiguration", error="JWT secret key is not configured", status=500)
+
+        try:
+            token_payload = jwt.decode(refresh_token, secret_key, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return self._json_error("Token expired", error="Refresh token has expired", status=401)
+        except jwt.InvalidTokenError:
+            return self._json_error("Invalid token", error="Refresh token is invalid", status=401)
+
+        if token_payload.get("token_type") != "refresh":
+            return self._json_error("Invalid token type", error="Provided token is not a refresh token", status=401)
+
+        user_id = token_payload.get("user_id")
+        user = request.env["res.users"].sudo().browse(user_id)
+        if not user.exists():
+            return self._json_error("User not found", error="Associated user no longer exists", status=401)
+
+        new_access_token, new_refresh_token = self._issue_tokens(user_id, secret_key)
+        self._store_token_record(user_id, new_access_token, new_refresh_token, secret_key)
+
+        return self._json_success("Token refreshed", data={
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
+        })
 
     def _get_authenticated_user(self):
         user = request.env.user
@@ -504,7 +629,7 @@ class CandidateDocumentApi(http.Controller):
             ("Content-Type", attachment.mimetype or "application/octet-stream"),
             ("Content-Length", str(len(raw_content))),
             ("Content-Disposition", content_disposition(
-                attachment.datas_fname or attachment.name or document.document_type_id.name,
+                attachment.name or document.document_type_id.name,
                 disposition_type=disposition,
             )),
         ]
