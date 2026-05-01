@@ -246,9 +246,9 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     pass
             elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
-                    # Extract base64 part from data URI
                     raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
-                    create_vals['image_1920'] = raw
+                    if raw and len(raw) > 10:
+                        create_vals['image_1920'] = raw
                 except Exception:
                     pass
 
@@ -431,7 +431,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 except (TypeError, ValueError):
                     pass
 
-            # Image handling: ONLY update if it's a new file or a base64 string
+            # Image handling: ONLY update if it's a new file or a valid base64 string
             image_file = files.get('image')
             image_data = data.get('image')
             
@@ -444,12 +444,17 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     pass
             elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
-                    # Extract base64 part from data URI
+                    # Extract and validate base64 part
                     raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
-                    update_vals['image_1920'] = raw
+                    if raw and len(raw) > 10: # Basic check for content
+                        update_vals['image_1920'] = raw
                 except Exception:
                     pass
-            # Note: If image_data is an 'http' URL, we skip it (means no change)
+            elif image_data is False or image_data == 'false' or image_data == '':
+                # Explicitly clear the image if empty string or false is sent
+                # But only if we are in a PUT request (full update)
+                if request.httprequest.method == 'PUT':
+                     update_vals['image_1920'] = False
 
             product.write(update_vals)
             
@@ -528,9 +533,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
                     raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
-                    update_vals['image_1920'] = raw
+                    if raw and len(raw) > 10:
+                        update_vals['image_1920'] = raw
                 except Exception:
                     pass
+            elif image_data == '' or image_data is False:
+                update_vals['image_1920'] = False
 
             if update_vals:
                 product.write(update_vals)
