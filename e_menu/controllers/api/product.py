@@ -207,14 +207,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "errors": [{"name": "name", "message": "Product name is required"}]
                 }, status=400)
 
-            # Build product values
+            # Build product values (Always service for e-menu)
             create_vals = {
                 'name': name,
                 'shop_id': shop_id,
-                'type': data.get('type', 'consu').strip() or 'consu',
+                'type': 'service',
             }
-            if create_vals['type'] not in ('consu', 'service'):
-                create_vals['type'] = 'consu'
 
             if data.get('code') is not None or data.get('default_code') is not None:
                 create_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
@@ -401,15 +399,11 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     "errors": [{"name": "name", "message": "Product name is required"}]
                 }, status=400)
 
-            # Build update values
+            # Build update values (Force type to service)
             update_vals = {
                 'name': name,
+                'type': 'service',
             }
-            
-            # Type handling (ensure it's a valid Odoo product type)
-            p_type = data.get('type', product.type)
-            if p_type in ('consu', 'service'):
-                update_vals['type'] = p_type
 
             if 'code' in data or 'default_code' in data:
                 update_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
@@ -499,10 +493,9 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
             if 'name' in data:
                 update_vals['name'] = data['name'].strip()
-            if 'type' in data:
-                val = data['type'].strip()
-                if val in ('consu', 'service'):
-                    update_vals['type'] = val
+            
+            # Always ensure type is service
+            update_vals['type'] = 'service'
             if 'description' in data:
                 update_vals['description'] = data['description'] or ''
             if 'code' in data or 'default_code' in data:
