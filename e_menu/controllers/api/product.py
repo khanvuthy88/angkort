@@ -17,11 +17,16 @@ class ProductAPIController(BaseAPIController, AuthMixin):
                 'name': attribute.name,
                 'create_variant': attribute.create_variant,
                 'display_type': attribute.display_type,
+                'value_ids': [{
+                    'id': v.id,
+                    'name': v.name,
+                    'html_color': v.html_color,
+                } for v in attribute.value_ids]
             }
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Error converting  te to dictionary: {str(e)}',
+                'message': f'Error converting attribute to dictionary: {str(e)}',
             }
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
@@ -1648,6 +1653,7 @@ class ProductAPIController(BaseAPIController, AuthMixin):
                 values_to_create = [{
                     'default_extra_price': value.get('extra_price', 0.0),
                     'name': value['name'],
+                    'html_color': value.get('html_color'),
                     'attribute_id': attribute.id,
                 } for value in values_data if 'name' in value]
                 created_values = request.env['product.attribute.value'].sudo().create(values_to_create)
