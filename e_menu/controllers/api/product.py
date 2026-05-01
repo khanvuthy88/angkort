@@ -366,6 +366,191 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>', type="http", auth="angkit", methods=["PUT"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
+    def product_update(self, shop_id, product_id, **kw):
+        """Update an existing product for a specific shop. PUT requires name."""
+        try:
+            # Parse request data: JSON or form
+            content_type = request.httprequest.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    if hasattr(request, 'get_json_data'):
+                        data = request.get_json_data() or {}
+                    elif request.httprequest.data:
+                        data = json.loads(request.httprequest.data.decode('utf-8'))
+                    else:
+                        data = {}
+                except Exception:
+                    data = {}
+                files = {}
+            else:
+                data = dict(request.httprequest.form)
+                files = request.httprequest.files or {}
+
+            product = request.env['product.template'].sudo().browse(product_id)
+            
+            # Required field for PUT: name
+            name = (data.get('name') or '').strip()
+            if not name:
+                return request.make_json_response({
+                    "status": "error",
+                    "message": "Failed to update product",
+                    "statusCode": 400,
+                    "errors": [{"name": "name", "message": "Product name is required"}]
+                }, status=400)
+
+            # Build update values
+            update_vals = {
+                'name': name,
+                'type': data.get('type', 'consu').strip() or 'consu',
+            }
+            if update_vals['type'] not in ('consu', 'service'):
+                update_vals['type'] = 'consu'
+
+            update_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
+            update_vals['description'] = data.get('description') or ''
+
+            if data.get('sale_price') is not None or data.get('list_price') is not None:
+                try:
+                    update_vals['list_price'] = float(data.get('sale_price') or data.get('list_price') or 0)
+                except (TypeError, ValueError):
+                    update_vals['list_price'] = 0.0
+
+            if data.get('category_id') is not None or data.get('categ_id') is not None:
+                try:
+                    categ_id = int(data.get('category_id') or data.get('categ_id') or 0)
+                    if categ_id and request.env['product.category'].sudo().browse(categ_id).exists():
+                        update_vals['categ_id'] = categ_id
+                except (TypeError, ValueError):
+                    pass
+
+            # Image: from file upload or base64
+            image_file = files.get('image')
+            if image_file:
+                try:
+                    content = image_file.read()
+                    if content:
+                        update_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
+                except Exception:
+                    pass
+            elif data.get('image'):
+                try:
+                    raw = data.get('image')
+                    if isinstance(raw, str) and raw.startswith('data:'):
+                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
+                    update_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                except Exception:
+                    pass
+
+            product.write(update_vals)
+            
+            product_data = self._get_product_details(product)
+            product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
+            product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
+            product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
+            return request.make_json_response({'data': product_data}, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                "status": "error",
+                "message": "Failed to update product",
+                "statusCode": 500,
+                "errors": [{"name": "general", "message": str(e)}]
+            }, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>', type="http", auth="angkit", methods=["PATCH"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
+    def product_patch(self, shop_id, product_id, **kw):
+        """Partially update an existing product for a specific shop."""
+        try:
+            content_type = request.httprequest.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    if hasattr(request, 'get_json_data'):
+                        data = request.get_json_data() or {}
+                    elif request.httprequest.data:
+                        data = json.loads(request.httprequest.data.decode('utf-8'))
+                    else:
+                        data = {}
+                except Exception:
+                    data = {}
+                files = {}
+            else:
+                data = dict(request.httprequest.form)
+                files = request.httprequest.files or {}
+
+            product = request.env['product.template'].sudo().browse(product_id)
+            update_vals = {}
+
+            if 'name' in data:
+                update_vals['name'] = data['name'].strip()
+            if 'type' in data:
+                val = data['type'].strip()
+                if val in ('consu', 'service'):
+                    update_vals['type'] = val
+            if 'description' in data:
+                update_vals['description'] = data['description'] or ''
+            if 'code' in data or 'default_code' in data:
+                update_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
+            if 'sale_price' in data or 'list_price' in data:
+                try:
+                    update_vals['list_price'] = float(data.get('sale_price') or data.get('list_price'))
+                except (TypeError, ValueError):
+                    pass
+            if 'category_id' in data or 'categ_id' in data:
+                try:
+                    categ_id = int(data.get('category_id') or data.get('categ_id'))
+                    if categ_id and request.env['product.category'].sudo().browse(categ_id).exists():
+                        update_vals['categ_id'] = categ_id
+                except (TypeError, ValueError):
+                    pass
+
+            image_file = files.get('image')
+            if image_file:
+                try:
+                    content = image_file.read()
+                    if content:
+                        update_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
+                except Exception:
+                    pass
+            elif 'image' in data:
+                try:
+                    raw = data.get('image')
+                    if isinstance(raw, str) and raw.startswith('data:'):
+                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
+                    update_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                except Exception:
+                    pass
+
+            if update_vals:
+                product.write(update_vals)
+
+            product_data = self._get_product_details(product)
+            return request.make_json_response({'data': product_data}, status=200)
+        except Exception as e:
+            return request.make_json_response({
+                "status": "error",
+                "message": "Failed to patch product",
+                "statusCode": 500,
+                "errors": [{"name": "general", "message": str(e)}]
+            }, status=500)
+
+    @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>', type="http", auth="angkit", methods=["DELETE"], cors="*", csrf=False)
+    @verify_ownership(entity_type='product')
+    def product_delete(self, shop_id, product_id, **kw):
+        """Delete a product from a specific shop."""
+        try:
+            product = request.env['product.template'].sudo().browse(product_id)
+            product.unlink()
+            return request.make_json_response('', status=204)
+        except Exception as e:
+            return request.make_json_response({
+                "status": "error",
+                "message": "Failed to delete product",
+                "statusCode": 500,
+                "errors": [{"name": "general", "message": str(e)}]
+            }, status=500)
+
     @http.route(f'{BASE_URL}/shop/<int:shop_id>/product/<int:product_id>/attribute-line', type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
     def product_attribute_line_create(self, shop_id, product_id, **kw):

@@ -56,6 +56,8 @@ The following endpoints explicitly accept both JSON and form-style input:
 - `PUT /shop/{shop_id}/bank/{bank_id}`
 - `POST /shop/{shop_id}/category`
 - `POST /shop/{shop_id}/product`
+- `PUT /shop/{shop_id}/product/{product_id}`
+- `PATCH /shop/{shop_id}/product/{product_id}`
 - `PUT /shop/{shop_id}/product/variant/{variant_id}`
 - `PATCH /shop/{shop_id}/product/variant/{variant_id}`
 
@@ -202,7 +204,34 @@ Form (`multipart/form-data`)
 - `attribute_lines`: `[{"attribute_id":1,"value_ids":[11,12]}]`
 - `image`: `(file, optional)`
 
-### 4.8 Variant Update (PUT)
+### 4.8 Product Update (PUT)
+
+JSON
+```json
+{
+  "name": "Iced Latte Large",
+  "type": "consu",
+  "sale_price": 4.5,
+  "code": "LATTE-01"
+}
+```
+
+### 4.9 Product Patch (PATCH)
+
+JSON
+```json
+{
+  "sale_price": 4.0
+}
+```
+
+### 4.10 Product Delete (DELETE)
+
+Method: `DELETE`
+Path: `/shop/1/product/55`
+Response: `204 No Content`
+
+### 4.11 Variant Update (PUT)
 
 JSON
 ```json
