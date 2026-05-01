@@ -235,6 +235,8 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
             # Image: from file upload or base64 in JSON
             image_file = files.get('image')
+            image_data = data.get('image')
+            
             if image_file:
                 try:
                     content = image_file.read()
@@ -242,12 +244,11 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                         create_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
                 except Exception:
                     pass
-            elif data.get('image'):
+            elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
-                    raw = data.get('image')
-                    if isinstance(raw, str) and raw.startswith('data:'):
-                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
-                    create_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                    # Extract base64 part from data URI
+                    raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
+                    create_vals['image_1920'] = raw
                 except Exception:
                     pass
 
@@ -403,19 +404,24 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             # Build update values
             update_vals = {
                 'name': name,
-                'type': data.get('type', 'consu').strip() or 'consu',
             }
-            if update_vals['type'] not in ('consu', 'service'):
-                update_vals['type'] = 'consu'
+            
+            # Type handling (ensure it's a valid Odoo product type)
+            p_type = data.get('type', product.type)
+            if p_type in ('consu', 'service', 'product'):
+                update_vals['type'] = p_type
 
-            update_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
-            update_vals['description'] = data.get('description') or ''
+            if 'code' in data or 'default_code' in data:
+                update_vals['default_code'] = (data.get('code') or data.get('default_code') or '').strip()
+            
+            if 'description' in data:
+                update_vals['description'] = data.get('description') or ''
 
             if data.get('sale_price') is not None or data.get('list_price') is not None:
                 try:
                     update_vals['list_price'] = float(data.get('sale_price') or data.get('list_price') or 0)
                 except (TypeError, ValueError):
-                    update_vals['list_price'] = 0.0
+                    pass
 
             if data.get('category_id') is not None or data.get('categ_id') is not None:
                 try:
@@ -425,8 +431,10 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 except (TypeError, ValueError):
                     pass
 
-            # Image: from file upload or base64
+            # Image handling: ONLY update if it's a new file or a base64 string
             image_file = files.get('image')
+            image_data = data.get('image')
+            
             if image_file:
                 try:
                     content = image_file.read()
@@ -434,14 +442,14 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                         update_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
                 except Exception:
                     pass
-            elif data.get('image'):
+            elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
-                    raw = data.get('image')
-                    if isinstance(raw, str) and raw.startswith('data:'):
-                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
-                    update_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                    # Extract base64 part from data URI
+                    raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
+                    update_vals['image_1920'] = raw
                 except Exception:
                     pass
+            # Note: If image_data is an 'http' URL, we skip it (means no change)
 
             product.write(update_vals)
             
@@ -486,7 +494,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 update_vals['name'] = data['name'].strip()
             if 'type' in data:
                 val = data['type'].strip()
-                if val in ('consu', 'service'):
+                if val in ('consu', 'service', 'product'):
                     update_vals['type'] = val
             if 'description' in data:
                 update_vals['description'] = data['description'] or ''
@@ -506,6 +514,8 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     pass
 
             image_file = files.get('image')
+            image_data = data.get('image')
+            
             if image_file:
                 try:
                     content = image_file.read()
@@ -513,12 +523,10 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                         update_vals['image_1920'] = base64.b64encode(content).decode('utf-8')
                 except Exception:
                     pass
-            elif 'image' in data:
+            elif isinstance(image_data, str) and image_data.startswith('data:'):
                 try:
-                    raw = data.get('image')
-                    if isinstance(raw, str) and raw.startswith('data:'):
-                        raw = raw.split(',', 1)[-1] if ',' in raw else raw
-                    update_vals['image_1920'] = raw if isinstance(raw, str) else base64.b64encode(raw).decode('utf-8')
+                    raw = image_data.split(',', 1)[-1] if ',' in image_data else image_data
+                    update_vals['image_1920'] = raw
                 except Exception:
                     pass
 
