@@ -445,8 +445,23 @@ class APIUtilsMixin:
     @classmethod
     def _get_product_details(cls, product):
         product_data = cls._product_to_dict(product)
+        # Detailed attribute lines for editing
+        product_data['attribute_line_ids'] = [{
+            'id': line.id,
+            'attribute_id': line.attribute_id.id,
+            'attribute_name': line.attribute_id.name,
+            'display_type': line.attribute_id.display_type,
+            'value_ids': line.value_ids.ids,
+            'values': [{
+                'id': v.id,
+                'name': v.name,
+                'html_color': v.html_color
+            } for v in line.value_ids]
+        } for line in product.attribute_line_ids]
+        
+        # Legacy fields for frontend compatibility
         product_data['options'] = [cls._get_product_options(option) for option in product.attribute_line_ids.filtered(
-            lambda x: x.attribute_id.display_type == 'radio')]
+            lambda x: x.attribute_id.display_type in ['radio', 'select', 'color'])]
         product_data['choices'] = [cls._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
             lambda x: x.attribute_id.display_type == 'multi')]
         return product_data
