@@ -615,3 +615,56 @@ class APIUtilsMixin:
             return True, "Valid"
         except Exception as e:
             return False, str(e)
+
+
+class BaseAPIController(http.Controller, APIUtilsMixin):
+    """
+    Base controller providing standardized response and logic helpers for all Angkort API routes.
+    """
+    
+    def success_response(self, data, meta=None, status=200):
+        """Returns a standardized successful JSON response."""
+        response = {'status': 'success', 'data': data}
+        if meta:
+            response['meta'] = meta
+        return request.make_json_response(response, status=status)
+
+    def error_response(self, message, status=500, errors=None, traceback=None):
+        """Returns a standardized error JSON response."""
+        response = {
+            'status': 'error',
+            'message': message,
+            'statusCode': status
+        }
+        if errors:
+            response['errors'] = errors
+        if traceback:
+            response['traceback'] = traceback
+        return request.make_json_response(response, status=status)
+
+    def _paginate(self, model_name, domain, page=1, limit=DEFAULT_PAGE_SIZE, order='id desc'):
+        """Helper to search and paginate records."""
+        model = request.env[model_name].sudo()
+        total = model.search_count(domain)
+        page_count = (total + limit - 1) // limit
+        
+        records = model.search(
+            domain,
+            offset=(page - 1) * limit,
+            limit=limit,
+            order=order
+        )
+        
+        meta = {
+            'pagination': {
+                'page': page,
+                'pageSize': limit,
+                'pageCount': page_count,
+                'total': total
+            }
+        }
+        return records, meta
+
+    def _get_my_shop_ids(self):
+        """Get IDs of shops owned by the current user."""
+        return get_current_user_shop_ids()

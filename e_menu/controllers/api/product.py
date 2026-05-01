@@ -4,11 +4,11 @@ import json
 import base64
 from .utils import (
     validate_auth, validate_input_data, paginate_results, verify_ownership,
-    APIUtilsMixin, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, BASE_URL
+    BaseAPIController, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, BASE_URL
 )
 from .auth import AuthMixin
 
-class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
+class ProductAPIController(BaseAPIController, AuthMixin):
 
     def _attribute_to_dict(self, attribute):
         try:
@@ -97,69 +97,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                     domain.append(('attribute_line_ids', '=', False))
             
             # Calculate pagination
-            offset = (page - 1) * limit
-            total = request.env['product.template'].sudo().search_count(domain)
-            page_count = (total + limit - 1) // limit
-            page = min(max(1, page), page_count) if page_count > 0 else 1
+            stores, meta = self._paginate('product.template', domain, page=page, limit=limit, order=f"{sort} {order}")
             
-            # Build order clause
-            order_clause = f"{sort} {order}"
-            
-            # Fetch products
-            products = request.env['product.template'].sudo().search(
-                domain,
-                offset=offset,
-                limit=limit,
-                order=order_clause
-            )
-            
-            products_data = []
-            for product in products:
-                product_data = self._product_to_dict(product)
-                product_data['options'] = [self._get_product_options(option) for option in product.attribute_line_ids.filtered(
-                    lambda x: x.attribute_id.display_type == 'radio')]
-                product_data['choices'] = [self._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
-                    lambda x: x.attribute_id.display_type == 'multi')]
-                product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
-                product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
-                product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
-                products_data.append(product_data)
-            
-            # Build keyword metadata
-            keyword_meta = {
-                "search": search if search else None,
-                "sort": sort,
-                "order": order,
-                "filter": {}
-            }
-            
-            if filter_category:
-                keyword_meta["filter"]["category"] = int(filter_category)
-            if filter_price_min:
-                keyword_meta["filter"]["price_min"] = float(filter_price_min)
-            if filter_price_max:
-                keyword_meta["filter"]["price_max"] = float(filter_price_max)
-            if filter_has_variants:
-                keyword_meta["filter"]["has_variants"] = filter_has_variants.lower() == 'true'
-            
-            response = {
-                'data': products_data,
-                'meta': {
-                    'pagination': {
-                        'page': page,
-                        'pageSize': limit,
-                        'pageCount': page_count,
-                        'total': total
-                    },
-                    'keyword': keyword_meta
-                }
-            }
-            return request.make_json_response(response, status=200)
+            data = [self._get_product_details(p) for p in stores]
+            return self.success_response(data, meta=meta)
         except Exception as e:
-            return request.make_json_response({
-                'error': 'Error retrieving products',
-                'message': str(e)
-            }, status=500)
+            return self.error_response(str(e))
 
     @http.route(f"{BASE_URL}/product/mine", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
     def product_mine(self, **kw):
@@ -178,12 +121,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 return request.make_json_response({'data': []}, status=200)
 
             domain = [('shop_id', 'in', shop_ids)]
-            products = request.env['product.template'].sudo().search(domain, order="id desc")
+            products, meta = self._paginate('product.template', domain, order="id desc")
             
             data = [self._get_product_details(p) for p in products]
-            return request.make_json_response({'data': data}, status=200)
+            return self.success_response(data, meta=meta)
         except Exception as e:
-            return request.make_json_response({'error': str(e)}, status=500)
+            return self.error_response(str(e))
 
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
