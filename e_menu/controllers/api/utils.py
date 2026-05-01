@@ -464,6 +464,17 @@ class APIUtilsMixin:
             lambda x: x.attribute_id.display_type in ['radio', 'select', 'color'])]
         product_data['choices'] = [cls._get_product_choices(choice) for choice in product.attribute_line_ids.filtered(
             lambda x: x.attribute_id.display_type == 'multi')]
+        
+        # Actual sellable variants
+        product_data['variants'] = [{
+            'id': v.id,
+            'name': v.name,
+            'combination_name': ", ".join(v.product_template_attribute_value_ids.mapped('name')),
+            'code': v.default_code,
+            'sale_price': v.list_price,
+            'image': cls._get_image_url('product.product', v.id, 'image_1920') if v.image_1920 else ''
+        } for v in product.product_variant_ids]
+        
         return product_data
 
     @classmethod
