@@ -161,6 +161,30 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'message': str(e)
             }, status=500)
 
+    @http.route(f"{BASE_URL}/product/mine", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def product_mine(self, **kw):
+        """
+        Retrieve all products across all shops owned by the current user.
+        """
+        try:
+            # Find all shop IDs owned by the user
+            owned_shops = request.env['res.partner'].sudo().search([
+                ('type', '=', 'store'),
+                ('owner_user_id', '=', request.env.user.id)
+            ])
+            shop_ids = owned_shops.ids
+
+            if not shop_ids:
+                return request.make_json_response({'data': []}, status=200)
+
+            domain = [('shop_id', 'in', shop_ids)]
+            products = request.env['product.template'].sudo().search(domain, order="id desc")
+            
+            data = [self._get_product_details(p) for p in products]
+            return request.make_json_response({'data': data}, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
     @http.route(f"{BASE_URL}/shop/<int:shop_id>/product", type="http", auth="angkit", methods=["POST"], cors="*", csrf=False)
     @verify_ownership(entity_type='shop')
     def product_create(self, shop_id, **kw):

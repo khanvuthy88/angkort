@@ -130,6 +130,31 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
         except Exception as e:
             return request.make_json_response({'error': str(e)}, status=500)
 
+    @http.route(f"{BASE_URL}/shop/mine", type="http", auth="angkit", methods=["GET"], cors="*", csrf=False)
+    def shop_mine(self, **kw):
+        """
+        Retrieve a list of shops owned by the currently authenticated user.
+        """
+        try:
+            domain = [('type', '=', 'store'), ('owner_user_id', '=', request.env.user.id)]
+            
+            # Reusing the logic from shop_list but strictly filtered
+            stores = request.env['res.partner'].sudo().search(domain, order="id desc")
+            
+            shops_data = [{
+                'id': shop.id,
+                'name': shop.name or '',
+                'phoneNumber': self._string_to_string_list(shop.phone) or [],
+                "address": [shop.customer_address] if shop.customer_address else [],
+                'banner': self._get_image_url('res.partner', shop.id, 'shop_banner') if shop.shop_banner else '',
+                'createdAt': shop.create_date.isoformat() if shop.create_date else None,
+                'updatedAt': shop.write_date.isoformat() if shop.write_date else None,
+            } for shop in stores]
+            
+            return request.make_json_response({'data': shops_data}, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
     @http.route(f"{BASE_URL}/shop/<int:shop_id>", type="http", auth="public", methods=["GET"], cors="*", csrf=False)
     def shop_detail(self, shop_id, **kw):
         """
@@ -186,9 +211,7 @@ class ShopAPIController(http.Controller, APIUtilsMixin, AuthMixin):
 
             # only allow base partner fields from PARTNER_FIELDS
             create_data = {k: v for k, v in data.items() if k in PARTNER_FIELDS}
-            public_user = request.env.ref('base.public_user')
-            if request.env.user and request.env.user.id != public_user.id:
-                create_data['owner_user_id'] = request.env.user.id
+            create_data['owner_user_id'] = request.env.user.id
 
             # Handle shop related fields using helper method
             shop_related_fields = self._handle_shop_related_fields(data, files, 'create')
