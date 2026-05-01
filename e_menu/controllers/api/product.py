@@ -459,10 +459,12 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             product_data['publishedAt'] = product.create_date.isoformat() if product.create_date else None
             return request.make_json_response({'data': product_data}, status=200)
         except Exception as e:
+            import traceback
             return request.make_json_response({
                 "status": "error",
-                "message": "Failed to update product",
+                "message": f"Failed to update product: {str(e)}",
                 "statusCode": 500,
+                "traceback": traceback.format_exc(),
                 "errors": [{"name": "general", "message": str(e)}]
             }, status=500)
 
