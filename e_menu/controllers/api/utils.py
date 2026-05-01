@@ -472,7 +472,7 @@ class APIUtilsMixin:
             'name': v.name,
             'combination_name': ", ".join(v.product_template_attribute_value_ids.mapped('name')),
             'code': v.default_code,
-            'sale_price': v.list_price,
+            'sale_price': v.list_price + v.price_extra,
             'image': cls._get_image_url('product.product', v.id, 'image_1920') if v.image_1920 else ''
         } for v in product.product_variant_ids]
         
