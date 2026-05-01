@@ -439,6 +439,7 @@ class ProductAPIController(BaseAPIController, AuthMixin):
                     
                     # Create new ones
                     AttributeLine = request.env['product.template.attribute.line'].sudo()
+                    TmplValue = request.env['product.template.attribute.value'].sudo()
                     for raw in attr_lines_raw:
                         if not isinstance(raw, dict):
                             continue
@@ -452,28 +453,53 @@ class ProductAPIController(BaseAPIController, AuthMixin):
                             if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
                                 continue
                                 
-                            val_ids = raw.get('value_ids', [])
-                            if isinstance(val_ids, str):
+                            val_data = raw.get('value_ids', [])
+                            if isinstance(val_data, str):
                                 try:
-                                    val_ids = json.loads(val_ids)
+                                    val_data = json.loads(val_data)
                                 except:
-                                    val_ids = []
+                                    val_data = []
                             
-                            if not val_ids or not isinstance(val_ids, list):
+                            if not val_data or not isinstance(val_data, list):
                                 continue
                                 
+                            # Extract IDs and Prices
+                            processed_vals = [] # list of dicts {'id': int, 'price': float}
+                            for v in val_data:
+                                if isinstance(v, (int, str)):
+                                    try: processed_vals.append({'id': int(v), 'price': 0.0})
+                                    except: continue
+                                elif isinstance(v, dict) and v.get('id'):
+                                    try: processed_vals.append({'id': int(v['id']), 'price': float(v.get('price_extra', 0.0))})
+                                    except: continue
+
                             # Ensure values belong to this attribute
-                            valid_val_ids = request.env['product.attribute.value'].sudo().search([
-                                ('id', 'in', [int(v) for v in val_ids if v]),
+                            valid_ids = [v['id'] for v in processed_vals]
+                            found_vals = request.env['product.attribute.value'].sudo().search([
+                                ('id', 'in', valid_ids),
                                 ('attribute_id', '=', attr_id)
-                            ]).ids
+                            ])
+                            found_ids = set(found_vals.ids)
                             
-                            if valid_val_ids:
-                                AttributeLine.create({
+                            final_val_ids = [v['id'] for v in processed_vals if v['id'] in found_ids]
+                            
+                            if final_val_ids:
+                                line = AttributeLine.create({
                                     'product_tmpl_id': product.id,
                                     'attribute_id': attr_id,
-                                    'value_ids': [(6, 0, valid_val_ids)],
+                                    'value_ids': [(6, 0, final_val_ids)],
                                 })
+                                # Update prices on the template attribute values
+                                if any(v['price'] != 0.0 for v in processed_vals):
+                                    for v in processed_vals:
+                                        if v['id'] in found_ids and v['price'] != 0.0:
+                                            tmpl_val = TmplValue.search([
+                                                ('product_tmpl_id', '=', product.id),
+                                                ('attribute_line_id', '=', line.id),
+                                                ('product_attribute_value_id', '=', v['id'])
+                                            ], limit=1)
+                                            if tmpl_val:
+                                                tmpl_val.write({'price_extra': v['price']})
                         except (TypeError, ValueError):
                             continue
 

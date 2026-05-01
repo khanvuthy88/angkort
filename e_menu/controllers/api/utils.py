@@ -451,12 +451,13 @@ class APIUtilsMixin:
             'attribute_id': line.attribute_id.id,
             'attribute_name': line.attribute_id.name,
             'display_type': line.attribute_id.display_type,
-            'value_ids': line.value_ids.ids,
+            'value_ids': line.product_template_value_ids.mapped('product_attribute_value_id').ids,
             'values': [{
-                'id': v.id,
+                'id': v.product_attribute_value_id.id,
                 'name': v.name,
-                'html_color': v.html_color
-            } for v in line.value_ids]
+                'html_color': v.product_attribute_value_id.html_color,
+                'price_extra': v.price_extra
+            } for v in line.product_template_value_ids]
         } for line in product.attribute_line_ids]
         
         # Legacy fields for frontend compatibility
