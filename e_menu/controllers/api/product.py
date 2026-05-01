@@ -408,7 +408,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
             
             # Type handling (ensure it's a valid Odoo product type)
             p_type = data.get('type', product.type)
-            if p_type in ('consu', 'service', 'product'):
+            if p_type in ('consu', 'service'):
                 update_vals['type'] = p_type
 
             if 'code' in data or 'default_code' in data:
@@ -501,7 +501,7 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 update_vals['name'] = data['name'].strip()
             if 'type' in data:
                 val = data['type'].strip()
-                if val in ('consu', 'service', 'product'):
+                if val in ('consu', 'service'):
                     update_vals['type'] = val
             if 'description' in data:
                 update_vals['description'] = data['description'] or ''
