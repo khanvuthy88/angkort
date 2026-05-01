@@ -424,6 +424,59 @@ class ProductAPIController(BaseAPIController, AuthMixin):
 
             product.write(update_vals)
             
+            # Handle attributes/variants update
+            attr_lines_raw = data.get('attribute_lines') or data.get('attribute_line_ids')
+            if attr_lines_raw is not None:
+                if isinstance(attr_lines_raw, str):
+                    try:
+                        attr_lines_raw = json.loads(attr_lines_raw)
+                    except (ValueError, TypeError):
+                        attr_lines_raw = []
+                
+                if isinstance(attr_lines_raw, list):
+                    # Remove existing lines first (simpler sync strategy)
+                    product.attribute_line_ids.unlink()
+                    
+                    # Create new ones
+                    AttributeLine = request.env['product.template.attribute.line'].sudo()
+                    for raw in attr_lines_raw:
+                        if not isinstance(raw, dict):
+                            continue
+                        try:
+                            attr_id = int(raw.get('attribute_id', 0) or 0)
+                            if not attr_id:
+                                continue
+                            
+                            # Validate attribute exists and belongs to shop
+                            attr = request.env['product.attribute'].sudo().browse(attr_id)
+                            if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                                continue
+                                
+                            val_ids = raw.get('value_ids', [])
+                            if isinstance(val_ids, str):
+                                try:
+                                    val_ids = json.loads(val_ids)
+                                except:
+                                    val_ids = []
+                            
+                            if not val_ids or not isinstance(val_ids, list):
+                                continue
+                                
+                            # Ensure values belong to this attribute
+                            valid_val_ids = request.env['product.attribute.value'].sudo().search([
+                                ('id', 'in', [int(v) for v in val_ids if v]),
+                                ('attribute_id', '=', attr_id)
+                            ]).ids
+                            
+                            if valid_val_ids:
+                                AttributeLine.create({
+                                    'product_tmpl_id': product.id,
+                                    'attribute_id': attr_id,
+                                    'value_ids': [(6, 0, valid_val_ids)],
+                                })
+                        except (TypeError, ValueError):
+                            continue
+
             product_data = self._get_product_details(product)
             product_data['createdAt'] = product.create_date.isoformat() if product.create_date else None
             product_data['updatedAt'] = product.write_date.isoformat() if product.write_date else None
@@ -507,6 +560,44 @@ class ProductAPIController(BaseAPIController, AuthMixin):
 
             if update_vals:
                 product.write(update_vals)
+
+            # Handle attributes/variants update (sync strategy)
+            attr_lines_raw = data.get('attribute_lines') or data.get('attribute_line_ids')
+            if attr_lines_raw is not None:
+                if isinstance(attr_lines_raw, str):
+                    try:
+                        attr_lines_raw = json.loads(attr_lines_raw)
+                    except:
+                        attr_lines_raw = []
+                
+                if isinstance(attr_lines_raw, list):
+                    product.attribute_line_ids.unlink()
+                    AttributeLine = request.env['product.template.attribute.line'].sudo()
+                    for raw in attr_lines_raw:
+                        if not isinstance(raw, dict): continue
+                        try:
+                            attr_id = int(raw.get('attribute_id', 0) or 0)
+                            if not attr_id: continue
+                            attr = request.env['product.attribute'].sudo().browse(attr_id)
+                            if not attr.exists() or (attr.shop_id and attr.shop_id.id != shop_id):
+                                continue
+                            val_ids = raw.get('value_ids', [])
+                            if isinstance(val_ids, str):
+                                try: val_ids = json.loads(val_ids)
+                                except: val_ids = []
+                            if not val_ids or not isinstance(val_ids, list):
+                                continue
+                            valid_val_ids = request.env['product.attribute.value'].sudo().search([
+                                ('id', 'in', [int(v) for v in val_ids if v]),
+                                ('attribute_id', '=', attr_id)
+                            ]).ids
+                            if valid_val_ids:
+                                AttributeLine.create({
+                                    'product_tmpl_id': product.id,
+                                    'attribute_id': attr_id,
+                                    'value_ids': [(6, 0, valid_val_ids)],
+                                })
+                        except: continue
 
             product_data = self._get_product_details(product)
             return request.make_json_response({'data': product_data}, status=200)
