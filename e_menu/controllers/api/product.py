@@ -942,6 +942,76 @@ class ProductAPIController(http.Controller, APIUtilsMixin, AuthMixin):
                 'message': str(e)
             }, status=500)
 
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/category", methods=['GET'], auth="public", type="http", cors="*")
+    def category_list(self, shop_id, **kw):
+        """List categories for a specific shop."""
+        try:
+            domain = [('shop_id', '=', shop_id)]
+            categories = request.env['product.category'].sudo().search(domain)
+            
+            data = []
+            for category in categories:
+                data.append({
+                    'id': category.id,
+                    'name': category.name,
+                    'parent_id': category.parent_id.id if category.parent_id else None,
+                    'shop_id': category.shop_id.id
+                })
+            return request.make_json_response({'data': data}, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/category", methods=['POST'], auth="angkit", type="http", cors="*", csrf=False)
+    @verify_ownership(entity_type='shop')
+    def category_create(self, shop_id, **kw):
+        """Create a category for a shop."""
+        try:
+            data = json.loads(request.httprequest.data) if request.httprequest.data else {}
+            name = data.get('name')
+            if not name:
+                return request.make_json_response({'error': 'Name is required'}, status=400)
+                
+            category = request.env['product.category'].sudo().create({
+                'name': name,
+                'shop_id': shop_id,
+                'parent_id': data.get('parent_id')
+            })
+            return request.make_json_response({
+                'data': {'id': category.id, 'name': category.name}
+            }, status=201)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/category/<int:cate_id>", methods=['PUT'], auth="angkit", type="http", cors="*", csrf=False)
+    @verify_ownership(entity_type='category')
+    def category_update(self, shop_id, cate_id, **kw):
+        """Update a shop category."""
+        try:
+            data = json.loads(request.httprequest.data) if request.httprequest.data else {}
+            category = request.env['product.category'].sudo().browse(cate_id)
+            
+            vals = {}
+            if 'name' in data: vals['name'] = data['name']
+            if 'parent_id' in data: vals['parent_id'] = data['parent_id']
+            
+            category.write(vals)
+            return request.make_json_response({
+                'data': {'id': category.id, 'name': category.name}
+            }, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
+    @http.route(f"{BASE_URL}/shop/<int:shop_id>/category/<int:cate_id>", methods=['DELETE'], auth="angkit", type="http", cors="*", csrf=False)
+    @verify_ownership(entity_type='category')
+    def category_delete(self, shop_id, cate_id, **kw):
+        """Delete a shop category."""
+        try:
+            category = request.env['product.category'].sudo().browse(cate_id)
+            category.unlink()
+            return request.make_json_response({'data': True}, status=200)
+        except Exception as e:
+            return request.make_json_response({'error': str(e)}, status=500)
+
     @http.route(f"{BASE_URL}/product/variant", methods=['GET'], auth="public", type="http", cors="*")
     def global_product_variant(self, **kw):
         """
