@@ -73,22 +73,25 @@ class CandidateDocumentApi(http.Controller):
         }
         return request.make_response("", headers=headers)
 
-    def _json_error(self, message, *, error=None, status=400):
+    def error_response(self, message, status=400, errors=None):
         payload = {
-            "status": False,
+            "status": "error",
             "message": message,
+            "statusCode": status
         }
-        if error:
-            payload["error"] = error
+        if errors:
+            payload["errors"] = errors
         return request.make_json_response(payload, status=status)
 
-    def _json_success(self, message, data=None, *, status=200):
+    def success_response(self, message=None, data=None, meta=None, status=200):
         payload = {
-            "status": True,
-            "message": message,
+            "status": "success",
+            "message": message
         }
         if data is not None:
             payload["data"] = data
+        if meta:
+            payload["meta"] = meta
         return request.make_json_response(payload, status=status)
 
     def _get_secret_key(self):
@@ -189,11 +192,11 @@ class CandidateDocumentApi(http.Controller):
         password = payload.get("password") or ""
 
         if not username or not password:
-            return self._json_error("Missing credentials", error="'username' and 'password' are required", status=400)
+            return self.error_response("Missing credentials", errors=["'username' and 'password' are required"], status=400)
 
         secret_key = self._get_secret_key()
         if not secret_key:
-            return self._json_error("Server misconfiguration", error="JWT secret key is not configured", status=500)
+            return self.error_response("Server misconfiguration", errors=["JWT secret key is not configured"], status=500)
 
         credential = {"type": "password", "login": username, "password": password}
         try:
@@ -203,13 +206,13 @@ class CandidateDocumentApi(http.Controller):
             uid = False
 
         if not uid:
-            return self._json_error("Authentication failed", error="Invalid username or password", status=401)
+            return self.error_response("Authentication failed", errors=["Invalid username or password"], status=401)
 
         user = request.env["res.users"].sudo().browse(uid)
         access_token, refresh_token = self._issue_tokens(uid, secret_key)
         self._store_token_record(uid, access_token, refresh_token, secret_key)
 
-        return self._json_success("Login successful", data={
+        return self.success_response("Login successful", data={
             "user_id": uid,
             "name": user.name,
             "email": user.email or username,
@@ -223,31 +226,31 @@ class CandidateDocumentApi(http.Controller):
         refresh_token = payload.get("refresh_token") or ""
 
         if not refresh_token:
-            return self._json_error("Missing token", error="'refresh_token' is required", status=400)
+            return self.error_response("Missing token", errors=["'refresh_token' is required"], status=400)
 
         secret_key = self._get_secret_key()
         if not secret_key:
-            return self._json_error("Server misconfiguration", error="JWT secret key is not configured", status=500)
+            return self.error_response("Server misconfiguration", errors=["JWT secret key is not configured"], status=500)
 
         try:
             token_payload = jwt.decode(refresh_token, secret_key, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            return self._json_error("Token expired", error="Refresh token has expired", status=401)
+            return self.error_response("Token expired", errors=["Refresh token has expired"], status=401)
         except jwt.InvalidTokenError:
-            return self._json_error("Invalid token", error="Refresh token is invalid", status=401)
+            return self.error_response("Invalid token", errors=["Refresh token is invalid"], status=401)
 
         if token_payload.get("token_type") != "refresh":
-            return self._json_error("Invalid token type", error="Provided token is not a refresh token", status=401)
+            return self.error_response("Invalid token type", errors=["Provided token is not a refresh token"], status=401)
 
         user_id = token_payload.get("user_id")
         user = request.env["res.users"].sudo().browse(user_id)
         if not user.exists():
-            return self._json_error("User not found", error="Associated user no longer exists", status=401)
+            return self.error_response("User not found", errors=["Associated user no longer exists"], status=401)
 
         new_access_token, new_refresh_token = self._issue_tokens(user_id, secret_key)
         self._store_token_record(user_id, new_access_token, new_refresh_token, secret_key)
 
-        return self._json_success("Token refreshed", data={
+        return self.success_response("Token refreshed", data={
             "access_token": new_access_token,
             "refresh_token": new_refresh_token,
         })
@@ -382,7 +385,7 @@ class CandidateDocumentApi(http.Controller):
             "candidateId": candidate.id,
             "candidateName": candidate.display_name,
             "personalInformation": {
-                "photoUrl": "%s/candidate/employee-form/photo" % BASE_URL if candidate.image_1920 else "",
+                "photoUrl": (request.httprequest.url_root.rstrip('/') + BASE_URL + "/candidate/employee-form/photo") if candidate.image_1920 else "",
                 "position": candidate.position_name or "",
                 "khmerName": candidate.khmer_name or "",
                 "englishName": candidate.english_name or candidate.partner_name or "",
@@ -460,7 +463,7 @@ class CandidateDocumentApi(http.Controller):
             "reviewed_by": document.reviewed_by.name if document.reviewed_by else "",
             "reviewed_on": document.reviewed_on.isoformat() if document.reviewed_on else None,
             "has_attachment": bool(attachment),
-            "view_url": "/angkort/api/v1/candidate/documents/%s/content" % document.id if attachment else "",
+            "view_url": (request.httprequest.url_root.rstrip('/') + "/angkort/api/v1/candidate/documents/%s/content" % document.id) if attachment else "",
         }
 
     @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
@@ -478,13 +481,13 @@ class CandidateDocumentApi(http.Controller):
     def candidate_employee_form(self, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate:
-            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
-        return self._json_success(
+        return self.success_response(
             "Candidate employee form fetched successfully",
             data=self._serialize_employee_form(candidate.sudo()),
         )
@@ -493,17 +496,17 @@ class CandidateDocumentApi(http.Controller):
     def upsert_candidate_employee_form(self, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate:
-            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
         payload = self._parse_request_payload()
         try:
             vals = self._extract_employee_form_vals(payload)
         except (TypeError, ValueError) as error:
-            return self._json_error("Invalid form payload", error=str(error), status=400)
+            return self.error_response("Invalid form payload", errors=[str(error)], status=400)
 
         photo_file = request.httprequest.files.get("photo")
         photo_base64 = payload.get("photoBase64") if isinstance(payload, dict) else None
@@ -513,14 +516,14 @@ class CandidateDocumentApi(http.Controller):
             vals["image_1920"] = photo_base64
 
         if not vals:
-            return self._json_error("No form values were provided", error="Provide JSON fields or multipart form data", status=400)
+            return self.error_response("No form values were provided", errors=["Provide JSON fields or multipart form data"], status=400)
 
         try:
             candidate.sudo().write(vals)
         except Exception as error:
-            return self._json_error("Unable to save employee form", error=str(error), status=400)
+            return self.error_response("Unable to save employee form", errors=[str(error)], status=400)
 
-        return self._json_success(
+        return self.success_response(
             "Candidate employee form saved successfully",
             data=self._serialize_employee_form(candidate.sudo()),
         )
@@ -529,11 +532,11 @@ class CandidateDocumentApi(http.Controller):
     def candidate_employee_form_photo(self, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate or not candidate.image_1920:
-            return self._json_error("Photo not found", error="No profile photo is available", status=404)
+            return self.error_response("Photo not found", errors=["No profile photo is available"], status=404)
 
         raw_content = base64.b64decode(candidate.image_1920)
         headers = [
@@ -547,11 +550,11 @@ class CandidateDocumentApi(http.Controller):
     def candidate_documents(self, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate:
-            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
         candidate._ensure_required_document_lines()
         documents = candidate.document_ids.sorted(key=lambda doc: (doc.document_type_sequence, doc.id))
@@ -563,7 +566,7 @@ class CandidateDocumentApi(http.Controller):
             "accepted_document_count": candidate.accepted_document_count,
             "documents": [self._serialize_document(document) for document in documents],
         }
-        return self._json_success("Candidate documents fetched successfully", data=data)
+        return self.success_response("Candidate documents fetched successfully", data=data)
 
     @http.route(
         f"{BASE_URL}/candidate/documents/<int:document_id>/upload",
@@ -576,26 +579,26 @@ class CandidateDocumentApi(http.Controller):
     def upload_candidate_document(self, document_id, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate:
-            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
         document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
         if not document or document.candidate_id.id != candidate.id:
-            return self._json_error("Document not found", error="The requested document does not belong to the current candidate", status=404)
+            return self.error_response("Document not found", errors=["The requested document does not belong to the current candidate"], status=404)
 
         upload_file = request.httprequest.files.get("file")
         if not upload_file or not upload_file.filename:
-            return self._json_error("Missing required file", error="Field 'file' is required", status=400)
+            return self.error_response("Missing required file", errors=["Field 'file' is required"], status=400)
 
         try:
             document.portal_upload_file(upload_file, user)
         except Exception as error:
-            return self._json_error("Upload failed", error=str(error), status=400)
+            return self.error_response("Upload failed", errors=[str(error)], status=400)
 
-        return self._json_success(
+        return self.success_response(
             "Document uploaded successfully",
             data=self._serialize_document(document.sudo()),
             status=201,
@@ -612,15 +615,15 @@ class CandidateDocumentApi(http.Controller):
     def candidate_document_content(self, document_id, download=False, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
-            return self._json_error("Authentication failed", error="Login is required", status=401)
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         candidate = self._get_candidate_for_user(user)
         if not candidate:
-            return self._json_error("Candidate not found", error="No candidate is linked to this user", status=404)
+            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
         document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
         if not document or document.candidate_id.id != candidate.id or not document.attachment_id:
-            return self._json_error("Document not found", error="No uploaded attachment was found", status=404)
+            return self.error_response("Document not found", errors=["No uploaded attachment was found"], status=404)
 
         attachment = document.attachment_id.sudo()
         raw_content = attachment.raw or b""
