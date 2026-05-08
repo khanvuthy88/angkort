@@ -528,9 +528,14 @@ class CandidateDocumentApi(http.Controller):
         }
 
     def _serialize_candidate_basic(self, candidate):
+        base_url = request.httprequest.url_root.rstrip("/")
         return {
             "id": candidate.id,
             "name": candidate.display_name,
+            "photoUrl": (
+                f"{base_url}{BASE_URL}/candidates/{candidate.id}/photo"
+                if candidate.image_1920 else ""
+            ),
             "khmerName": candidate.khmer_name or "",
             "englishName": candidate.english_name or candidate.partner_name or "",
             "position": candidate.position_name or "",
@@ -695,6 +700,24 @@ class CandidateDocumentApi(http.Controller):
             "Candidate fetched successfully",
             data=self._serialize_candidate_basic(candidate),
         )
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate_photo(self, candidate_id, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        candidate = self._get_candidate_basic_for_user(user, candidate_id)
+        if not candidate or not candidate.image_1920:
+            return self.error_response("Photo not found", errors=["No candidate photo is available"], status=404)
+
+        raw_content = base64.b64decode(candidate.image_1920)
+        headers = [
+            ("Content-Type", "image/png"),
+            ("Content-Length", str(len(raw_content))),
+            ("Content-Disposition", content_disposition("candidate-photo.png", disposition_type="inline")),
+        ]
+        return request.make_response(raw_content, headers)
 
     @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_employee_form_photo(self, **kwargs):

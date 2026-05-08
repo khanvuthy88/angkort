@@ -317,6 +317,7 @@ class TestCandidateApi(HttpCase):
         self.assertIn("document_groups", payload["data"])
 
     def test_candidate_can_list_own_basic_candidate_information(self):
+        self.candidate.sudo().write({"image_1920": base64.b64encode(PNG_1X1)})
         self._authenticate_candidate()
 
         response = self.url_open("/angkort/api/v1/candidates")
@@ -328,8 +329,17 @@ class TestCandidateApi(HttpCase):
         candidate = payload["data"]["candidates"][0]
         self.assertEqual(candidate["id"], self.candidate.id)
         self.assertEqual(candidate["englishName"], "Primary Candidate")
+        self.assertEqual(
+            candidate["photoUrl"],
+            self.base_url() + f"/angkort/api/v1/candidates/{self.candidate.id}/photo",
+        )
         self.assertIn("documentSummary", candidate)
         self.assertNotIn("document_groups", candidate)
+
+        photo_response = self.url_open(candidate["photoUrl"])
+        self.assertEqual(photo_response.status_code, 200, photo_response.text)
+        self.assertEqual(photo_response.headers.get("Content-Type"), "image/png")
+        self.assertTrue(photo_response.content)
 
     def test_officer_can_list_assigned_basic_candidate_information(self):
         self._authenticate_officer()

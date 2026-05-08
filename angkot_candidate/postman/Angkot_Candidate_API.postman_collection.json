@@ -324,7 +324,7 @@
                 "candidates"
               ]
             },
-            "description": "List candidates visible to the logged-in user with basic candidate information only.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: returns only the candidate linked to the logged-in portal user.\n- Encharge Officer role: returns candidates assigned to the logged-in officer by `officer_user_id`.\n- HR Document Reviewer role: returns all candidates.\n\nResponse body:\n- `data.candidates`: Array of basic candidate records.\n- `meta.count`: Number of returned candidates.\n\nEach `data.candidates[]` item contains:\n- `id`, `name`, `khmerName`, `englishName`, `position`.\n- `gender`, `maritalStatus`, `dateOfBirth`.\n- `contactNumber`, `email`, `nationalIdOrPassport`.\n- `officer`: Assigned Encharge Officer summary.\n- `portalUser`: Linked candidate user summary.\n- `documentSummary`: Required/submitted/accepted document counts.\n\nThis route does not include full employee-form sections or document groups."
+            "description": "List candidates visible to the logged-in user with basic candidate information only.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: returns only the candidate linked to the logged-in portal user.\n- Encharge Officer role: returns candidates assigned to the logged-in officer by `officer_user_id`.\n- HR Document Reviewer role: returns all candidates.\n\nResponse body:\n- `data.candidates`: Array of basic candidate records.\n- `meta.count`: Number of returned candidates.\n\nEach `data.candidates[]` item contains:\n- `id`, `name`, `photoUrl`, `khmerName`, `englishName`, `position`.\n- `photoUrl` is a full URL to `GET /candidates/{id}/photo`, or an empty string when no photo exists.\n- `gender`, `maritalStatus`, `dateOfBirth`.\n- `contactNumber`, `email`, `nationalIdOrPassport`.\n- `officer`: Assigned Encharge Officer summary.\n- `portalUser`: Linked candidate user summary.\n- `documentSummary`: Required/submitted/accepted document counts.\n\nThis route does not include full employee-form sections or document groups."
           }
         },
         {
@@ -364,7 +364,39 @@
                 "{{candidate_id}}"
               ]
             },
-            "description": "Fetch one candidate's basic information.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: can fetch only their linked candidate.\n- Encharge Officer role: can fetch assigned candidates only.\n- HR Document Reviewer role: can fetch any candidate.\n\nResponse body uses the same basic candidate shape as `GET /candidates`."
+            "description": "Fetch one candidate's basic information.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: can fetch only their linked candidate.\n- Encharge Officer role: can fetch assigned candidates only.\n- HR Document Reviewer role: can fetch any candidate.\n\nResponse body uses the same basic candidate shape as `GET /candidates`, including `photoUrl` when a photo exists."
+          }
+        },
+        {
+          "name": "Get Candidate Photo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Candidate photo returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/{{candidate_id}}/photo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "{{candidate_id}}",
+                "photo"
+              ]
+            },
+            "description": "Fetch one candidate photo inline.\n\nAccess rules match `GET /candidates/{candidate_id}`. Returns 404 if the candidate has no photo."
           }
         },
         {
