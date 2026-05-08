@@ -88,6 +88,39 @@ class TestCandidateApi(HttpCase):
     def _authenticate_hr_reviewer(self):
         self.authenticate(self.hr_reviewer_user.login, self.HR_REVIEWER_PASSWORD)
 
+    def test_login_returns_candidate_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.candidate_user.login,
+            "password": self.CANDIDATE_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "candidate")
+
+    def test_login_returns_officer_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.officer_user.login,
+            "password": self.OFFICER_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "encharge_officer")
+
+    def test_login_returns_hr_reviewer_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.hr_reviewer_user.login,
+            "password": self.HR_REVIEWER_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "hr_document_reviewer")
+
     def test_get_employee_form_returns_sectioned_payload(self):
         self._authenticate_candidate()
 
@@ -282,6 +315,203 @@ class TestCandidateApi(HttpCase):
         self.assertTrue(payload["status"], payload)
         self.assertEqual(payload["data"]["candidate_id"], self.other_candidate.id)
         self.assertIn("document_groups", payload["data"])
+
+    def test_candidate_can_list_own_basic_candidate_information(self):
+        self._authenticate_candidate()
+
+        response = self.url_open("/angkort/api/v1/candidates")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["meta"]["count"], 1)
+        candidate = payload["data"]["candidates"][0]
+        self.assertEqual(candidate["id"], self.candidate.id)
+        self.assertEqual(candidate["englishName"], "Primary Candidate")
+        self.assertIn("documentSummary", candidate)
+        self.assertNotIn("document_groups", candidate)
+
+    def test_officer_can_list_assigned_basic_candidate_information(self):
+        self._authenticate_officer()
+
+        response = self.url_open("/angkort/api/v1/candidates")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        candidate_ids = [candidate["id"] for candidate in payload["data"]["candidates"]]
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(candidate_ids, [self.candidate.id])
+        self.assertEqual(payload["meta"]["count"], 1)
+
+    def test_hr_reviewer_can_list_all_basic_candidate_information(self):
+        self._authenticate_hr_reviewer()
+
+        response = self.url_open("/angkort/api/v1/candidates")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        candidate_ids = [candidate["id"] for candidate in payload["data"]["candidates"]]
+        self.assertTrue(payload["status"], payload)
+        self.assertIn(self.candidate.id, candidate_ids)
+        self.assertIn(self.other_candidate.id, candidate_ids)
+        self.assertGreaterEqual(payload["meta"]["count"], 2)
+
+    def test_candidate_can_get_own_basic_candidate_information(self):
+        self._authenticate_candidate()
+
+        response = self.url_open(f"/angkort/api/v1/candidates/{self.candidate.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["id"], self.candidate.id)
+        self.assertEqual(payload["data"]["englishName"], "Primary Candidate")
+        self.assertIn("documentSummary", payload["data"])
+
+    def test_candidate_cannot_get_other_basic_candidate_information(self):
+        self._authenticate_candidate()
+
+        response = self.url_open(f"/angkort/api/v1/candidates/{self.other_candidate.id}")
+
+        self.assertEqual(response.status_code, 404, response.text)
+        payload = response.json()
+        self.assertFalse(payload["status"], payload)
+
+    def test_officer_can_get_assigned_basic_candidate_information(self):
+        self._authenticate_officer()
+
+        response = self.url_open(f"/angkort/api/v1/candidates/{self.candidate.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["id"], self.candidate.id)
+
+    def test_hr_reviewer_can_get_any_basic_candidate_information(self):
+        self._authenticate_hr_reviewer()
+
+        response = self.url_open(f"/angkort/api/v1/candidates/{self.other_candidate.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["id"], self.other_candidate.id)
+
+    def test_candidate_can_list_all_visible_candidate_documents(self):
+        self._authenticate_candidate()
+
+        response = self.url_open("/angkort/api/v1/candidates/documents")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["meta"]["count"], 1)
+        self.assertEqual(payload["data"]["candidates"][0]["candidate_id"], self.candidate.id)
+        self.assertIn("document_groups", payload["data"]["candidates"][0])
+
+    def test_officer_can_list_all_assigned_candidate_documents(self):
+        self._authenticate_officer()
+
+        response = self.url_open("/angkort/api/v1/candidates/documents")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        candidate_ids = [candidate["candidate_id"] for candidate in payload["data"]["candidates"]]
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(candidate_ids, [self.candidate.id])
+        self.assertEqual(payload["meta"]["count"], 1)
+
+    def test_hr_reviewer_can_list_all_candidate_documents(self):
+        self._authenticate_hr_reviewer()
+
+        response = self.url_open("/angkort/api/v1/candidates/documents")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        candidate_ids = [candidate["candidate_id"] for candidate in payload["data"]["candidates"]]
+        self.assertTrue(payload["status"], payload)
+        self.assertIn(self.candidate.id, candidate_ids)
+        self.assertIn(self.other_candidate.id, candidate_ids)
+        self.assertGreaterEqual(payload["meta"]["count"], 2)
+
+    def test_hr_reviewer_can_accept_candidate_document(self):
+        document = self.candidate.document_ids[:1]
+        self.assertTrue(document)
+        document.portal_upload_file(
+            type("Upload", (), {
+                "filename": "nid.pdf",
+                "content_type": "application/pdf",
+                "read": staticmethod(lambda: b"%PDF-1.4 test pdf"),
+            })(),
+            self.candidate_user,
+        )
+        self._authenticate_hr_reviewer()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidate/documents/{document.id}/review",
+            {"status": "accepted", "review_note": "Approved"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["status"], "accepted")
+        self.assertEqual(payload["data"]["review_note"], "Approved")
+
+        document.invalidate_recordset(["status", "reviewed_by", "review_note"])
+        self.assertEqual(document.status, "accepted")
+        self.assertEqual(document.reviewed_by, self.hr_reviewer_user)
+        self.assertEqual(document.review_note, "Approved")
+
+    def test_officer_can_reject_assigned_candidate_document(self):
+        document = self.candidate.document_ids[:1]
+        self.assertTrue(document)
+        document.portal_upload_file(
+            type("Upload", (), {
+                "filename": "nid.pdf",
+                "content_type": "application/pdf",
+                "read": staticmethod(lambda: b"%PDF-1.4 test pdf"),
+            })(),
+            self.candidate_user,
+        )
+        self._authenticate_officer()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidate/documents/{document.id}/reject",
+            {"review_note": "Please upload a clearer scan"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["status"], "rejected")
+
+        document.invalidate_recordset(["status", "reviewed_by", "review_note"])
+        self.assertEqual(document.status, "rejected")
+        self.assertEqual(document.reviewed_by, self.officer_user)
+        self.assertEqual(document.review_note, "Please upload a clearer scan")
+
+    def test_candidate_cannot_review_candidate_document(self):
+        document = self.candidate.document_ids[:1]
+        self.assertTrue(document)
+        document.portal_upload_file(
+            type("Upload", (), {
+                "filename": "nid.pdf",
+                "content_type": "application/pdf",
+                "read": staticmethod(lambda: b"%PDF-1.4 test pdf"),
+            })(),
+            self.candidate_user,
+        )
+        self._authenticate_candidate()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidate/documents/{document.id}/accept",
+            {},
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        payload = response.json()
+        self.assertFalse(payload["status"], payload)
 
     def test_candidate_cannot_access_other_candidates_document(self):
         target_document = self.candidate.document_ids[:1]

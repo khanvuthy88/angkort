@@ -64,6 +64,7 @@ class CandidateDocumentApi(http.Controller):
 
     @http.route(f"{BASE_URL}/candidate/documents/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidate/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/candidates/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     def candidate_documents_options(self, subpath=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
@@ -135,6 +136,17 @@ class CandidateDocumentApi(http.Controller):
             })
         except Exception:
             pass
+
+    def _get_user_role_enum(self, user):
+        if not user or not user.exists():
+            return "user"
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return "hr_document_reviewer"
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            return "encharge_officer"
+        if user.has_group("angkot_candidate.group_candidate_portal"):
+            return "candidate"
+        return "user"
 
     def _get_bearer_user(self):
         auth_header = request.httprequest.headers.get("Authorization")
@@ -216,6 +228,7 @@ class CandidateDocumentApi(http.Controller):
             "user_id": uid,
             "name": user.name,
             "email": user.email or username,
+            "role": self._get_user_role_enum(user),
             "access_token": access_token,
             "refresh_token": refresh_token,
         })
@@ -290,6 +303,37 @@ class CandidateDocumentApi(http.Controller):
         domain.append(("portal_user_id", "=", user.id))
         return request.env["hr.candidate"].sudo().search(domain, limit=1)
 
+    def _get_candidate_basic_for_user(self, user, candidate_id):
+        if not user or not user.exists():
+            return request.env["hr.candidate"]
+
+        domain = [("id", "=", candidate_id)]
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            domain.append(("officer_user_id", "=", user.id))
+            return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+        domain.append(("portal_user_id", "=", user.id))
+        return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+    def _get_document_candidates_for_user(self, user):
+        if not user or not user.exists():
+            return request.env["hr.candidate"]
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return request.env["hr.candidate"].sudo().search([], order="id")
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            return request.env["hr.candidate"].sudo().search([
+                ("officer_user_id", "=", user.id),
+            ], order="id")
+        return request.env["hr.candidate"].sudo().search([
+            ("portal_user_id", "=", user.id),
+        ], order="id")
+
+    def _get_candidates_for_user(self, user):
+        return self._get_document_candidates_for_user(user)
+
     def _can_access_candidate_document(self, user, document):
         if not user or not user.exists() or not document:
             return False
@@ -298,6 +342,15 @@ class CandidateDocumentApi(http.Controller):
         if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
             return document.officer_user_id.id == user.id
         return document.portal_user_id.id == user.id
+
+    def _can_review_candidate_document(self, user, document):
+        if not user or not user.exists() or not document:
+            return False
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return True
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            return document.officer_user_id.id == user.id
+        return False
 
     def _parse_request_payload(self):
         if request.httprequest.data:
@@ -474,6 +527,35 @@ class CandidateDocumentApi(http.Controller):
             },
         }
 
+    def _serialize_candidate_basic(self, candidate):
+        return {
+            "id": candidate.id,
+            "name": candidate.display_name,
+            "khmerName": candidate.khmer_name or "",
+            "englishName": candidate.english_name or candidate.partner_name or "",
+            "position": candidate.position_name or "",
+            "gender": candidate.gender or "",
+            "maritalStatus": candidate.marital_status or "",
+            "dateOfBirth": candidate.date_of_birth.isoformat() if candidate.date_of_birth else None,
+            "contactNumber": candidate.partner_phone or "",
+            "email": candidate.email_from or "",
+            "nationalIdOrPassport": candidate.national_id_or_passport or "",
+            "officer": {
+                "id": candidate.officer_user_id.id or False,
+                "name": candidate.officer_user_id.name or "",
+            },
+            "portalUser": {
+                "id": candidate.portal_user_id.id or False,
+                "name": candidate.portal_user_id.name or "",
+                "email": candidate.portal_user_id.email or "",
+            },
+            "documentSummary": {
+                "required": candidate.required_document_count,
+                "submitted": candidate.submitted_document_count,
+                "accepted": candidate.accepted_document_count,
+            },
+        }
+
     def _serialize_document(self, document):
         attachment = document.attachment_id
         return {
@@ -510,6 +592,17 @@ class CandidateDocumentApi(http.Controller):
                 "documents": [self._serialize_document(document) for document in category_documents],
             })
         return groups
+
+    def _serialize_candidate_documents(self, candidate):
+        documents = candidate.document_ids.sorted(key=lambda doc: (doc.document_type_sequence, doc.id))
+        return {
+            "candidate_id": candidate.id,
+            "candidate_name": candidate.display_name,
+            "required_document_count": candidate.required_document_count,
+            "submitted_document_count": candidate.submitted_document_count,
+            "accepted_document_count": candidate.accepted_document_count,
+            "document_groups": self._serialize_document_groups(documents),
+        }
 
     @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
@@ -573,6 +666,36 @@ class CandidateDocumentApi(http.Controller):
             data=self._serialize_employee_form(candidate.sudo()),
         )
 
+    @http.route(f"{BASE_URL}/candidates", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidates(self, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        candidates = self._get_candidates_for_user(user)
+        data = {
+            "candidates": [self._serialize_candidate_basic(candidate) for candidate in candidates],
+        }
+        meta = {
+            "count": len(candidates),
+        }
+        return self.success_response("Candidates fetched successfully", data=data, meta=meta)
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate(self, candidate_id, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        candidate = self._get_candidate_basic_for_user(user, candidate_id)
+        if not candidate:
+            return self.error_response("Candidate not found", errors=["The requested candidate is not available for this user"], status=404)
+
+        return self.success_response(
+            "Candidate fetched successfully",
+            data=self._serialize_candidate_basic(candidate),
+        )
+
     @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_employee_form_photo(self, **kwargs):
         user = self._get_authenticated_user()
@@ -608,16 +731,24 @@ class CandidateDocumentApi(http.Controller):
             return self.error_response("Candidate not found", errors=["No candidate documents are available for this user"], status=404)
 
         candidate._ensure_required_document_lines()
-        documents = candidate.document_ids.sorted(key=lambda doc: (doc.document_type_sequence, doc.id))
-        data = {
-            "candidate_id": candidate.id,
-            "candidate_name": candidate.display_name,
-            "required_document_count": candidate.required_document_count,
-            "submitted_document_count": candidate.submitted_document_count,
-            "accepted_document_count": candidate.accepted_document_count,
-            "document_groups": self._serialize_document_groups(documents),
-        }
+        data = self._serialize_candidate_documents(candidate)
         return self.success_response("Candidate documents fetched successfully", data=data)
+
+    @http.route(f"{BASE_URL}/candidates/documents", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidates_documents(self, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        candidates = self._get_document_candidates_for_user(user)
+        candidates._ensure_required_document_lines()
+        data = {
+            "candidates": [self._serialize_candidate_documents(candidate) for candidate in candidates],
+        }
+        meta = {
+            "count": len(candidates),
+        }
+        return self.success_response("Candidate documents fetched successfully", data=data, meta=meta)
 
     @http.route(
         f"{BASE_URL}/candidate/documents/<int:document_id>/upload",
@@ -650,6 +781,84 @@ class CandidateDocumentApi(http.Controller):
             data=self._serialize_document(document.sudo()),
             status=201,
         )
+
+    def _review_candidate_document(self, document_id, status=None, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
+        if not document or not self._can_review_candidate_document(user, document):
+            return self.error_response("Document not found", errors=["The requested document is not available for review"], status=404)
+
+        payload = self._parse_request_payload()
+        review_status = status or payload.get("status")
+        review_note = payload.get("review_note")
+
+        if review_status not in ("accepted", "rejected"):
+            return self.error_response(
+                "Invalid review status",
+                errors=["'status' must be either 'accepted' or 'rejected'"],
+                status=400,
+            )
+
+        if not document.attachment_id:
+            return self.error_response(
+                "Review failed",
+                errors=["You cannot review a document that has no uploaded file"],
+                status=400,
+            )
+
+        vals = {
+            "status": review_status,
+            "reviewed_by": user.id,
+            "reviewed_on": fields.Datetime.now(),
+        }
+        if review_note is not None:
+            vals["review_note"] = review_note or False
+
+        try:
+            document.sudo().write(vals)
+        except Exception as error:
+            return self.error_response("Review failed", errors=[str(error)], status=400)
+
+        return self.success_response(
+            "Document reviewed successfully",
+            data=self._serialize_document(document.sudo()),
+        )
+
+    @http.route(
+        f"{BASE_URL}/candidate/documents/<int:document_id>/review",
+        auth="public",
+        type="http",
+        methods=["POST"],
+        csrf=False,
+        cors="*",
+    )
+    def review_candidate_document(self, document_id, **kwargs):
+        return self._review_candidate_document(document_id, **kwargs)
+
+    @http.route(
+        f"{BASE_URL}/candidate/documents/<int:document_id>/accept",
+        auth="public",
+        type="http",
+        methods=["POST"],
+        csrf=False,
+        cors="*",
+    )
+    def accept_candidate_document(self, document_id, **kwargs):
+        return self._review_candidate_document(document_id, status="accepted", **kwargs)
+
+    @http.route(
+        f"{BASE_URL}/candidate/documents/<int:document_id>/reject",
+        auth="public",
+        type="http",
+        methods=["POST"],
+        csrf=False,
+        cors="*",
+    )
+    def reject_candidate_document(self, document_id, **kwargs):
+        return self._review_candidate_document(document_id, status="rejected", **kwargs)
 
     @http.route(
         f"{BASE_URL}/candidate/documents/<int:document_id>/content",

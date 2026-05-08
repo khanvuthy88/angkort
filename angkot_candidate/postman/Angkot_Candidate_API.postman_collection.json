@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b8b41e9b-cfa6-4bd2-aed2-4f9972a4d0f3",
     "name": "Angkot Candidate API",
-    "description": "Postman collection for candidate employee-form and document APIs under `/angkort/api/v1`.\n\nWorkflow:\n1. Run `Auth / Login` to populate `access_token`.\n2. Run `Candidate / List Documents` to populate `document_id` from the first document inside `document_groups`.\n3. Use the employee form and document upload requests.\n\nNotes:\n- Auth uses bearer token from `/angkort/api/v1/login`.\n- `List Documents` returns documents grouped by category in `data.document_groups`; there is no flat `data.documents` list.\n- `Upload Candidate Document` expects a real local file selected in Postman.\n- `Save Employee Form (Multipart Photo)` expects a local image file selected in Postman.",
+    "description": "Postman collection for candidate employee-form and document APIs under `/angkort/api/v1`.\n\nWorkflow:\n1. Run `Auth / Login` to populate `access_token`, `refresh_token`, and `user_role`.\n2. Run `Candidate / List Documents` to populate `document_id` from the first document inside `document_groups`.\n3. Use the employee form and document upload requests.\n\nNotes:\n- Auth uses bearer token from `/angkort/api/v1/login`.\n- Login returns `data.role` as one of `candidate`, `encharge_officer`, `hr_document_reviewer`, or `user`.\n- `List Documents` returns documents grouped by category in `data.document_groups`; there is no flat `data.documents` list.\n- `Upload Candidate Document` expects a real local file selected in Postman.\n- `Save Employee Form (Multipart Photo)` expects a local image file selected in Postman.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -41,6 +41,10 @@
       "value": ""
     },
     {
+      "key": "user_role",
+      "value": ""
+    },
+    {
       "key": "document_id",
       "value": ""
     },
@@ -68,12 +72,16 @@
                   "pm.test('Login returns access token', function () {",
                   "  pm.expect(body.status).to.eql(true);",
                   "  pm.expect(body.data.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.data.role).to.be.oneOf(['candidate', 'encharge_officer', 'hr_document_reviewer', 'user']);",
                   "});",
                   "if (body.data && body.data.access_token) {",
                   "  pm.collectionVariables.set('access_token', body.data.access_token);",
                   "}",
                   "if (body.data && body.data.refresh_token) {",
                   "  pm.collectionVariables.set('refresh_token', body.data.refresh_token);",
+                  "}",
+                  "if (body.data && body.data.role) {",
+                  "  pm.collectionVariables.set('user_role', body.data.role);",
                   "}"
                 ]
               }
@@ -109,7 +117,7 @@
                 "login"
               ]
             },
-            "description": "Authenticate and store `access_token` / `refresh_token` into collection variables."
+            "description": "Authenticate and store `access_token`, `refresh_token`, and `user_role` into collection variables.\n\nResponse `data.role` enum values:\n- `candidate`\n- `encharge_officer`\n- `hr_document_reviewer`\n- `user`"
           }
         }
       ]
@@ -282,6 +290,84 @@
           }
         },
         {
+          "name": "List Candidates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Candidates list returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var body = pm.response.json();",
+                  "pm.test('Candidates list succeeds', function () {",
+                  "  pm.expect(body.status).to.eql(true);",
+                  "  pm.expect(body.data.candidates).to.be.an('array');",
+                  "});",
+                  "if (body.data && body.data.candidates && body.data.candidates.length) {",
+                  "  pm.collectionVariables.set('candidate_id', String(body.data.candidates[0].id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates"
+              ]
+            },
+            "description": "List candidates visible to the logged-in user with basic candidate information only.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: returns only the candidate linked to the logged-in portal user.\n- Encharge Officer role: returns candidates assigned to the logged-in officer by `officer_user_id`.\n- HR Document Reviewer role: returns all candidates.\n\nResponse body:\n- `data.candidates`: Array of basic candidate records.\n- `meta.count`: Number of returned candidates.\n\nEach `data.candidates[]` item contains:\n- `id`, `name`, `khmerName`, `englishName`, `position`.\n- `gender`, `maritalStatus`, `dateOfBirth`.\n- `contactNumber`, `email`, `nationalIdOrPassport`.\n- `officer`: Assigned Encharge Officer summary.\n- `portalUser`: Linked candidate user summary.\n- `documentSummary`: Required/submitted/accepted document counts.\n\nThis route does not include full employee-form sections or document groups."
+          }
+        },
+        {
+          "name": "Get Candidate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Candidate detail returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var body = pm.response.json();",
+                  "pm.test('Candidate detail succeeds', function () {",
+                  "  pm.expect(body.status).to.eql(true);",
+                  "  pm.expect(body.data.id).to.be.a('number');",
+                  "  pm.expect(body.data).to.have.property('documentSummary');",
+                  "});",
+                  "if (body.data && body.data.id) {",
+                  "  pm.collectionVariables.set('candidate_id', String(body.data.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/{{candidate_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "{{candidate_id}}"
+              ]
+            },
+            "description": "Fetch one candidate's basic information.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: can fetch only their linked candidate.\n- Encharge Officer role: can fetch assigned candidates only.\n- HR Document Reviewer role: can fetch any candidate.\n\nResponse body uses the same basic candidate shape as `GET /candidates`."
+          }
+        },
+        {
           "name": "List Documents",
           "event": [
             {
@@ -343,6 +429,58 @@
           }
         },
         {
+          "name": "List All Candidate Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('All candidate documents returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var body = pm.response.json();",
+                  "pm.test('All candidate documents succeeds', function () {",
+                  "  pm.expect(body.status).to.eql(true);",
+                  "  pm.expect(body.data.candidates).to.be.an('array');",
+                  "});",
+                  "var firstDocument = null;",
+                  "if (body.data && body.data.candidates && body.data.candidates.length) {",
+                  "  pm.collectionVariables.set('candidate_id', String(body.data.candidates[0].candidate_id));",
+                  "  body.data.candidates.some(function (candidate) {",
+                  "    return (candidate.document_groups || []).some(function (group) {",
+                  "      if (group.documents && group.documents.length) {",
+                  "        firstDocument = group.documents[0];",
+                  "        return true;",
+                  "      }",
+                  "      return false;",
+                  "    });",
+                  "  });",
+                  "}",
+                  "if (firstDocument) {",
+                  "  pm.collectionVariables.set('document_id', String(firstDocument.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "documents"
+              ]
+            },
+            "description": "List candidates visible to the logged-in user, each with grouped document checklist data.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: returns only the candidate linked to the logged-in portal user.\n- Encharge Officer role: returns candidates assigned to the logged-in officer by `officer_user_id`.\n- HR Document Reviewer role: returns all candidates.\n\nResponse body:\n- `data.candidates`: Array of candidate document summaries.\n- `meta.count`: Number of returned candidates.\n\nEach `data.candidates[]` item contains:\n- `candidate_id`, `candidate_name`.\n- `required_document_count`, `submitted_document_count`, `accepted_document_count`.\n- `document_groups`: Grouped checklist documents using the same shape as `GET /candidate/documents`."
+          }
+        },
+        {
           "name": "Upload Candidate Document",
           "event": [
             {
@@ -388,6 +526,129 @@
               ]
             },
             "description": "Select a local PDF or image file in Postman for the `file` field before sending."
+          }
+        },
+        {
+          "name": "Review Candidate Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document review returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var body = pm.response.json();",
+                  "pm.test('Document review succeeds', function () {",
+                  "  pm.expect(body.status).to.eql(true);",
+                  "  pm.expect(['accepted', 'rejected']).to.include(body.data.status);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\",\n  \"review_note\": \"Approved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/documents/{{document_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "documents",
+                "{{document_id}}",
+                "review"
+              ]
+            },
+            "description": "Review a submitted document.\n\nAccess:\n- Encharge Officer: can review documents for assigned candidates.\n- HR Document Reviewer: can review any candidate document.\n- Candidate users cannot review documents.\n\nBody:\n- `status`: required. Use `accepted` or `rejected`.\n- `review_note`: optional reviewer note.\n\nThe document must already have an uploaded attachment."
+          }
+        },
+        {
+          "name": "Accept Candidate Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_note\": \"Approved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/documents/{{document_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "documents",
+                "{{document_id}}",
+                "accept"
+              ]
+            },
+            "description": "Convenience route for accepting a submitted document. Same access rules as the review route."
+          }
+        },
+        {
+          "name": "Reject Candidate Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_note\": \"Please upload a clearer scan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/documents/{{document_id}}/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "documents",
+                "{{document_id}}",
+                "reject"
+              ]
+            },
+            "description": "Convenience route for rejecting a submitted document. Same access rules as the review route."
           }
         },
         {
