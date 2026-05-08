@@ -272,6 +272,33 @@ class CandidateDocumentApi(http.Controller):
             ("portal_user_id", "=", user.id),
         ], limit=1)
 
+    def _get_document_candidate_for_user(self, user, candidate_id=None):
+        if not user or not user.exists():
+            return request.env["hr.candidate"]
+
+        domain = []
+        if candidate_id:
+            domain.append(("id", "=", candidate_id))
+
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            domain.append(("officer_user_id", "=", user.id))
+            return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+        domain.append(("portal_user_id", "=", user.id))
+        return request.env["hr.candidate"].sudo().search(domain, limit=1)
+
+    def _can_access_candidate_document(self, user, document):
+        if not user or not user.exists() or not document:
+            return False
+        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+            return True
+        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+            return document.officer_user_id.id == user.id
+        return document.portal_user_id.id == user.id
+
     def _parse_request_payload(self):
         if request.httprequest.data:
             try:
@@ -570,9 +597,15 @@ class CandidateDocumentApi(http.Controller):
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
+        candidate_id = kwargs.get("candidate_id")
+        try:
+            candidate_id = int(candidate_id) if candidate_id else None
+        except (TypeError, ValueError):
+            return self.error_response("Invalid candidate", errors=["'candidate_id' must be an integer"], status=400)
+
+        candidate = self._get_document_candidate_for_user(user, candidate_id=candidate_id)
         if not candidate:
-            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
+            return self.error_response("Candidate not found", errors=["No candidate documents are available for this user"], status=404)
 
         candidate._ensure_required_document_lines()
         documents = candidate.document_ids.sorted(key=lambda doc: (doc.document_type_sequence, doc.id))
@@ -599,12 +632,8 @@ class CandidateDocumentApi(http.Controller):
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
-        if not candidate:
-            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
-
         document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
-        if not document or document.candidate_id.id != candidate.id:
+        if not document or document.portal_user_id.id != user.id:
             return self.error_response("Document not found", errors=["The requested document does not belong to the current candidate"], status=404)
 
         upload_file = request.httprequest.files.get("file")
@@ -635,12 +664,8 @@ class CandidateDocumentApi(http.Controller):
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
-        if not candidate:
-            return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
-
         document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
-        if not document or document.candidate_id.id != candidate.id or not document.attachment_id:
+        if not document or not self._can_access_candidate_document(user, document) or not document.attachment_id:
             return self.error_response("Document not found", errors=["No uploaded attachment was found"], status=404)
 
         attachment = document.attachment_id.sudo()

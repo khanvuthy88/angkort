@@ -16,6 +16,8 @@ class TestCandidateApi(HttpCase):
     readonly_enabled = False
     CANDIDATE_PASSWORD = "Pl1bhD@2!candidate"
     OTHER_PASSWORD = "Pl1bhD@2!othercandidate"
+    OFFICER_PASSWORD = "Pl1bhD@2!officer"
+    HR_REVIEWER_PASSWORD = "Pl1bhD@2!hr"
 
     @classmethod
     def setUpClass(cls):
@@ -36,10 +38,25 @@ class TestCandidateApi(HttpCase):
             groups="base.group_portal,angkot_candidate.group_candidate_portal",
             name="Other Portal",
         )
+        cls.officer_user = new_test_user(
+            cls.env,
+            login="officer@example.com",
+            password=cls.OFFICER_PASSWORD,
+            groups="base.group_user,angkot_candidate.group_candidate_encharge_officer",
+            name="Encharge Officer",
+        )
+        cls.hr_reviewer_user = new_test_user(
+            cls.env,
+            login="hr.reviewer@example.com",
+            password=cls.HR_REVIEWER_PASSWORD,
+            groups="base.group_user,angkot_candidate.group_candidate_hr_reviewer",
+            name="HR Document Reviewer",
+        )
 
         cls.candidate = cls.env["hr.candidate"].sudo().create({
             "partner_name": "Primary Candidate",
             "portal_user_id": cls.candidate_user.id,
+            "officer_user_id": cls.officer_user.id,
             "email_from": "candidate.portal@example.com",
             "partner_phone": "010101010",
         })
@@ -64,6 +81,12 @@ class TestCandidateApi(HttpCase):
 
     def _authenticate_other_candidate(self):
         self.authenticate(self.other_user.login, self.OTHER_PASSWORD)
+
+    def _authenticate_officer(self):
+        self.authenticate(self.officer_user.login, self.OFFICER_PASSWORD)
+
+    def _authenticate_hr_reviewer(self):
+        self.authenticate(self.hr_reviewer_user.login, self.HR_REVIEWER_PASSWORD)
 
     def test_get_employee_form_returns_sectioned_payload(self):
         self._authenticate_candidate()
@@ -228,6 +251,37 @@ class TestCandidateApi(HttpCase):
             if group["category"] == "identity"
         )
         self.assertEqual(updated_identity_group["completed"], 1)
+
+    def test_officer_can_list_assigned_candidate_documents(self):
+        self._authenticate_officer()
+
+        response = self.url_open(f"/angkort/api/v1/candidate/documents?candidate_id={self.candidate.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["candidate_id"], self.candidate.id)
+        self.assertIn("document_groups", payload["data"])
+
+    def test_officer_cannot_list_unassigned_candidate_documents(self):
+        self._authenticate_officer()
+
+        response = self.url_open(f"/angkort/api/v1/candidate/documents?candidate_id={self.other_candidate.id}")
+
+        self.assertEqual(response.status_code, 404, response.text)
+        payload = response.json()
+        self.assertFalse(payload["status"], payload)
+
+    def test_hr_reviewer_can_list_any_candidate_documents(self):
+        self._authenticate_hr_reviewer()
+
+        response = self.url_open(f"/angkort/api/v1/candidate/documents?candidate_id={self.other_candidate.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["candidate_id"], self.other_candidate.id)
+        self.assertIn("document_groups", payload["data"])
 
     def test_candidate_cannot_access_other_candidates_document(self):
         target_document = self.candidate.document_ids[:1]

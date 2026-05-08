@@ -43,6 +43,10 @@
     {
       "key": "document_id",
       "value": ""
+    },
+    {
+      "key": "candidate_id",
+      "value": ""
     }
   ],
   "item": [
@@ -306,6 +310,9 @@
                   "}",
                   "if (firstDocument) {",
                   "  pm.collectionVariables.set('document_id', String(firstDocument.id));",
+                  "}",
+                  "if (body.data && body.data.candidate_id) {",
+                  "  pm.collectionVariables.set('candidate_id', String(body.data.candidate_id));",
                   "}"
                 ]
               }
@@ -322,9 +329,17 @@
                 "{{api_prefix}}",
                 "candidate",
                 "documents"
+              ],
+              "query": [
+                {
+                  "key": "candidate_id",
+                  "value": "{{candidate_id}}",
+                  "disabled": true,
+                  "description": "Optional. Use this when logged in as Encharge Officer or HR Document Reviewer to load a specific candidate's checklist."
+                }
               ]
             },
-            "description": "Fetch the current candidate document checklist grouped by category.\n\nAuthentication: Bearer token required.\n\nResponse body:\n- `data.candidate_id`: Current candidate ID.\n- `data.candidate_name`: Current candidate display name.\n- `data.required_document_count`: Total required checklist items.\n- `data.submitted_document_count`: Number of submitted documents awaiting review.\n- `data.accepted_document_count`: Number of HR-accepted documents.\n- `data.document_groups`: Array of category groups. The API does not return a flat `data.documents` list.\n\nEach `document_groups[]` item contains:\n- `category`: Machine key such as `identity`, `education`, `banking`, or `compliance`.\n- `label`: Human-readable category label.\n- `completed`: Required documents in this category with status `submitted` or `accepted`.\n- `total`: Required documents in this category.\n- `documents`: Checklist documents in this category.\n\nEach `documents[]` item contains:\n- `id`: Document checklist line ID. Use this value for upload/content routes.\n- `name`, `code`, `category`, `required`, `status`.\n- `filename`, `mimetype`, `upload_date`.\n- `review_note`, `reviewed_by`, `reviewed_on`.\n- `has_attachment` and `view_url`.\n\nExample upload route after this request stores `document_id`:\n`POST {{base_url}}{{api_prefix}}/candidate/documents/{{document_id}}/upload`"
+            "description": "Fetch the current candidate document checklist grouped by category.\n\nAuthentication: Bearer token required.\n\nAccess:\n- Candidate role: can list their own candidate checklist.\n- Encharge Officer role: can list candidates assigned to them by `officer_user_id`; pass `candidate_id` when needed.\n- HR Document Reviewer role: can list any candidate checklist; pass `candidate_id` when needed.\n\nQuery parameters:\n- `candidate_id` optional integer. Recommended for Encharge Officer and HR Document Reviewer users when opening a specific candidate.\n\nResponse body:\n- `data.candidate_id`: Current candidate ID.\n- `data.candidate_name`: Current candidate display name.\n- `data.required_document_count`: Total required checklist items.\n- `data.submitted_document_count`: Number of submitted documents awaiting review.\n- `data.accepted_document_count`: Number of HR-accepted documents.\n- `data.document_groups`: Array of category groups. The API does not return a flat `data.documents` list.\n\nEach `document_groups[]` item contains:\n- `category`: Machine key such as `identity`, `education`, `banking`, or `compliance`.\n- `label`: Human-readable category label.\n- `completed`: Required documents in this category with status `submitted` or `accepted`.\n- `total`: Required documents in this category.\n- `documents`: Checklist documents in this category.\n\nEach `documents[]` item contains:\n- `id`: Document checklist line ID. Use this value for upload/content routes.\n- `name`, `code`, `category`, `required`, `status`.\n- `filename`, `mimetype`, `upload_date`.\n- `review_note`, `reviewed_by`, `reviewed_on`.\n- `has_attachment` and `view_url`.\n\nExample upload route after this request stores `document_id`:\n`POST {{base_url}}{{api_prefix}}/candidate/documents/{{document_id}}/upload`"
           }
         },
         {
