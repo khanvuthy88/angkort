@@ -196,7 +196,16 @@ class TestCandidateApi(HttpCase):
         self.assertEqual(list_response.status_code, 200, list_response.text)
         list_payload = list_response.json()
         self.assertTrue(list_payload["status"], list_payload)
-        self.assertGreaterEqual(len(list_payload["data"]["documents"]), 1)
+        self.assertIn("document_groups", list_payload["data"])
+        self.assertNotIn("documents", list_payload["data"])
+        identity_group = next(
+            group for group in list_payload["data"]["document_groups"]
+            if group["category"] == "identity"
+        )
+        self.assertEqual(identity_group["label"], "Identity")
+        self.assertEqual(identity_group["total"], 8)
+        self.assertEqual(identity_group["completed"], 0)
+        self.assertGreaterEqual(len(identity_group["documents"]), 1)
 
         upload_response = self.url_open(
             f"/angkort/api/v1/candidate/documents/{document.id}/upload",
@@ -210,6 +219,15 @@ class TestCandidateApi(HttpCase):
         self.assertEqual(document.status, "submitted")
         self.assertTrue(document.attachment_id)
         self.assertEqual(document.filename, "passport.pdf")
+
+        updated_list_response = self.url_open("/angkort/api/v1/candidate/documents")
+        self.assertEqual(updated_list_response.status_code, 200, updated_list_response.text)
+        updated_payload = updated_list_response.json()
+        updated_identity_group = next(
+            group for group in updated_payload["data"]["document_groups"]
+            if group["category"] == "identity"
+        )
+        self.assertEqual(updated_identity_group["completed"], 1)
 
     def test_candidate_cannot_access_other_candidates_document(self):
         target_document = self.candidate.document_ids[:1]

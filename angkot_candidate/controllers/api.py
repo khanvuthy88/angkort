@@ -466,6 +466,24 @@ class CandidateDocumentApi(http.Controller):
             "view_url": (request.httprequest.url_root.rstrip('/') + "/angkort/api/v1/candidate/documents/%s/content" % document.id) if attachment else "",
         }
 
+    def _serialize_document_groups(self, documents):
+        selection = dict(request.env["angkot.candidate.document.type"]._fields["category"].selection)
+        groups = []
+        for category, label in selection.items():
+            category_documents = documents.filtered(lambda document: document.category == category)
+            if not category_documents:
+                continue
+            required_documents = category_documents.filtered(lambda document: document.required)
+            completed_documents = required_documents.filtered(lambda document: document.status in ("submitted", "accepted"))
+            groups.append({
+                "category": category,
+                "label": label,
+                "completed": len(completed_documents),
+                "total": len(required_documents),
+                "documents": [self._serialize_document(document) for document in category_documents],
+            })
+        return groups
+
     @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     def candidate_employee_form_options(self, subpath=None, **kwargs):
@@ -564,7 +582,7 @@ class CandidateDocumentApi(http.Controller):
             "required_document_count": candidate.required_document_count,
             "submitted_document_count": candidate.submitted_document_count,
             "accepted_document_count": candidate.accepted_document_count,
-            "documents": [self._serialize_document(document) for document in documents],
+            "document_groups": self._serialize_document_groups(documents),
         }
         return self.success_response("Candidate documents fetched successfully", data=data)
 
