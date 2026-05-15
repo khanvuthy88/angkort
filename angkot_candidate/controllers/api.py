@@ -549,11 +549,6 @@ class CandidateDocumentApi(http.Controller):
                 "id": candidate.officer_user_id.id or False,
                 "name": candidate.officer_user_id.name or "",
             },
-            "portalUser": {
-                "id": candidate.portal_user_id.id or False,
-                "name": candidate.portal_user_id.name or "",
-                "email": candidate.portal_user_id.email or "",
-            },
             "documentSummary": {
                 "required": candidate.required_document_count,
                 "submitted": candidate.submitted_document_count,
