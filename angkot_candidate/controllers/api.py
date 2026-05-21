@@ -15,6 +15,14 @@ BASE_URL = "/angkort/api/v1"
 
 class CandidateDocumentApi(http.Controller):
 
+    GROUP_CANDIDATE_PORTAL = "angkot_candidate.group_candidate_portal"
+    GROUP_CANDIDATE_GENERAL_STAFF = "angkot_candidate.group_candidate_general_staff"
+    GROUP_CANDIDATE_FINANCE_STAFF = "angkot_candidate.group_candidate_finance_staff"
+    GROUP_CANDIDATE_ENCHARGE_OFFICER = "angkot_candidate.group_candidate_encharge_officer"
+    GROUP_CANDIDATE_RECRUITER = "angkot_candidate.group_candidate_recruiter"
+    GROUP_CANDIDATE_HR_REVIEWER = "angkot_candidate.group_candidate_hr_reviewer"
+    GROUP_CANDIDATE_HR = "angkot_candidate.group_candidate_hr"
+
     EMPLOYEE_FORM_FIELD_MAP = {
         "position": ("position_name", "char"),
         "khmerName": ("khmer_name", "char"),
@@ -25,6 +33,7 @@ class CandidateDocumentApi(http.Controller):
         "currentAddress": ("current_address", "text"),
         "permanentAddress": ("permanent_address", "text"),
         "nationalIdOrPassport": ("national_id_or_passport", "char"),
+        "nationalId": ("national_id_or_passport", "char"),
         "contactNumber": ("partner_phone", "char"),
         "dateOfBirth": ("date_of_birth", "date"),
         "fatherJob": ("father_job", "char"),
@@ -61,6 +70,26 @@ class CandidateDocumentApi(http.Controller):
         "date": ("declaration_date", "date"),
         "signature": ("declaration_signature", "text"),
     }
+    PERSONAL_FORM_FIELD_NAMES = {
+        "position_name",
+        "khmer_name",
+        "english_name",
+        "gender",
+        "marital_status",
+        "place_of_birth",
+        "current_address",
+        "permanent_address",
+        "national_id_or_passport",
+        "partner_phone",
+        "date_of_birth",
+    }
+    GENERAL_FORM_FIELD_NAMES = PERSONAL_FORM_FIELD_NAMES | {
+        "conflict_interest",
+    }
+    FINANCE_FORM_FIELD_NAMES = PERSONAL_FORM_FIELD_NAMES | {
+        "guarantee_letter",
+        "conflict_interest",
+    }
 
     @http.route(f"{BASE_URL}/candidate/documents/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidate/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
@@ -68,7 +97,7 @@ class CandidateDocumentApi(http.Controller):
     def candidate_documents_options(self, subpath=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization",
             "Access-Control-Max-Age": "86400",
         }
@@ -140,13 +169,36 @@ class CandidateDocumentApi(http.Controller):
     def _get_user_role_enum(self, user):
         if not user or not user.exists():
             return "user"
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if user.has_group(self.GROUP_CANDIDATE_HR):
+            return "hr"
+        if user.has_group(self.GROUP_CANDIDATE_HR_REVIEWER):
             return "hr_document_reviewer"
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if user.has_group(self.GROUP_CANDIDATE_RECRUITER):
+            return "recruiter"
+        if user.has_group(self.GROUP_CANDIDATE_ENCHARGE_OFFICER):
             return "encharge_officer"
-        if user.has_group("angkot_candidate.group_candidate_portal"):
+        if user.has_group(self.GROUP_CANDIDATE_FINANCE_STAFF):
+            return "candidate_finance_staff"
+        if user.has_group(self.GROUP_CANDIDATE_GENERAL_STAFF):
+            return "candidate_general_staff"
+        if user.has_group(self.GROUP_CANDIDATE_PORTAL):
             return "candidate"
         return "user"
+
+    def _is_candidate_hr_user(self, user):
+        return user.has_group(self.GROUP_CANDIDATE_HR) or user.has_group(self.GROUP_CANDIDATE_HR_REVIEWER)
+
+    def _is_candidate_recruiter_user(self, user):
+        return user.has_group(self.GROUP_CANDIDATE_RECRUITER) or user.has_group(self.GROUP_CANDIDATE_ENCHARGE_OFFICER)
+
+    def _is_candidate_finance_user(self, user):
+        return user.has_group(self.GROUP_CANDIDATE_FINANCE_STAFF)
+
+    def _is_candidate_general_user(self, user):
+        return user.has_group(self.GROUP_CANDIDATE_GENERAL_STAFF)
+
+    def _is_candidate_staff_user(self, user):
+        return self._is_candidate_finance_user(user) or self._is_candidate_general_user(user)
 
     def _get_bearer_user(self):
         auth_header = request.httprequest.headers.get("Authorization")
@@ -285,6 +337,11 @@ class CandidateDocumentApi(http.Controller):
             ("portal_user_id", "=", user.id),
         ], limit=1)
 
+    def _get_employee_form_candidate_for_user(self, user, candidate_id=None):
+        if candidate_id:
+            return self._get_candidate_basic_for_user(user, candidate_id)
+        return self._get_candidate_for_user(user)
+
     def _get_document_candidate_for_user(self, user, candidate_id=None):
         if not user or not user.exists():
             return request.env["hr.candidate"]
@@ -293,10 +350,10 @@ class CandidateDocumentApi(http.Controller):
         if candidate_id:
             domain.append(("id", "=", candidate_id))
 
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if self._is_candidate_hr_user(user):
             return request.env["hr.candidate"].sudo().search(domain, limit=1)
 
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if self._is_candidate_recruiter_user(user):
             domain.append(("officer_user_id", "=", user.id))
             return request.env["hr.candidate"].sudo().search(domain, limit=1)
 
@@ -308,10 +365,10 @@ class CandidateDocumentApi(http.Controller):
             return request.env["hr.candidate"]
 
         domain = [("id", "=", candidate_id)]
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if self._is_candidate_hr_user(user):
             return request.env["hr.candidate"].sudo().search(domain, limit=1)
 
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if self._is_candidate_recruiter_user(user):
             domain.append(("officer_user_id", "=", user.id))
             return request.env["hr.candidate"].sudo().search(domain, limit=1)
 
@@ -321,9 +378,9 @@ class CandidateDocumentApi(http.Controller):
     def _get_document_candidates_for_user(self, user):
         if not user or not user.exists():
             return request.env["hr.candidate"]
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if self._is_candidate_hr_user(user):
             return request.env["hr.candidate"].sudo().search([], order="id")
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if self._is_candidate_recruiter_user(user):
             return request.env["hr.candidate"].sudo().search([
                 ("officer_user_id", "=", user.id),
             ], order="id")
@@ -337,20 +394,38 @@ class CandidateDocumentApi(http.Controller):
     def _can_access_candidate_document(self, user, document):
         if not user or not user.exists() or not document:
             return False
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if self._is_candidate_hr_user(user):
             return True
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if self._is_candidate_recruiter_user(user):
             return document.officer_user_id.id == user.id
         return document.portal_user_id.id == user.id
 
     def _can_review_candidate_document(self, user, document):
         if not user or not user.exists() or not document:
             return False
-        if user.has_group("angkot_candidate.group_candidate_hr_reviewer"):
+        if self._is_candidate_hr_user(user):
             return True
-        if user.has_group("angkot_candidate.group_candidate_encharge_officer"):
+        if self._is_candidate_recruiter_user(user):
             return document.officer_user_id.id == user.id
         return False
+
+    def _can_manage_candidate_document(self, user, document):
+        if not user or not user.exists() or not document:
+            return False
+        if self._is_candidate_hr_user(user):
+            return True
+        if self._is_candidate_recruiter_user(user):
+            return document.officer_user_id.id == user.id
+        return document.portal_user_id.id == user.id
+
+    def _can_delete_candidate_document_upload(self, user, document):
+        if not user or not user.exists() or not document:
+            return False
+        if self._is_candidate_hr_user(user):
+            return True
+        if self._is_candidate_recruiter_user(user):
+            return document.officer_user_id.id == user.id
+        return self._is_candidate_staff_user(user) and document.portal_user_id.id == user.id
 
     def _parse_request_payload(self):
         if request.httprequest.data:
@@ -392,6 +467,8 @@ class CandidateDocumentApi(http.Controller):
         employment = payload.get("employmentHistory") or {}
         other = payload.get("otherInformation") or {}
         declaration = payload.get("declaration") or {}
+        guarantee_letter = payload.get("guaranteeLetter") or {}
+        conflict_interest = payload.get("conflictInterest") or {}
 
         for source in (personal, payload):
             if not isinstance(source, dict):
@@ -404,8 +481,10 @@ class CandidateDocumentApi(http.Controller):
             (family, {
                 "fatherName": ("father_name", "char"),
                 "fatherJob": ("father_job", "char"),
+                "fatherOccupation": ("father_job", "char"),
                 "motherName": ("mother_name", "char"),
                 "motherJob": ("mother_job", "char"),
+                "motherOccupation": ("mother_job", "char"),
                 "numberOfSiblings": ("number_of_siblings", "int"),
                 "contactNumber": ("family_contact_number", "char"),
                 "currentAddress": ("family_current_address", "text"),
@@ -413,7 +492,9 @@ class CandidateDocumentApi(http.Controller):
             }),
             (spouse, {
                 "name": ("spouse_name", "char"),
+                "spouseName": ("spouse_name", "char"),
                 "job": ("spouse_job", "char"),
+                "occupation": ("spouse_job", "char"),
                 "numberOfChildren": ("number_of_children", "int"),
                 "contactNumber": ("spouse_contact_number", "char"),
                 "currentAddress": ("spouse_current_address", "text"),
@@ -427,7 +508,9 @@ class CandidateDocumentApi(http.Controller):
             }),
             (short_course, {
                 "shortCourseCertificates": ("short_course_certificates", "char"),
+                "certificates": ("short_course_certificates", "char"),
                 "shortCourseDuration": ("short_course_duration", "char"),
+                "duration": ("short_course_duration", "char"),
                 "major": ("short_course_major", "char"),
                 "other": ("short_course_notes", "text"),
             }),
@@ -435,18 +518,34 @@ class CandidateDocumentApi(http.Controller):
                 "name": ("latest_institution_name", "char"),
                 "position": ("employment_history_position", "char"),
                 "durationOfWork": ("duration_of_work", "char"),
+                "duration": ("duration_of_work", "char"),
                 "jobResponsibility": ("job_responsibility", "text"),
+                "responsible": ("job_responsibility", "text"),
                 "other": ("employment_history_notes", "text"),
             }),
             (other, {
                 "hadInjury": ("had_injury", "bool"),
+                "illness": ("had_injury", "bool"),
                 "hadInjuryDescription": ("had_injury_description", "text"),
+                "illnessOther": ("had_injury_description", "text"),
                 "arrested": ("arrested", "bool"),
+                "crime": ("arrested", "bool"),
                 "arrestedDescription": ("arrested_description", "text"),
+                "crimeOther": ("arrested_description", "text"),
             }),
             (declaration, {
                 "date": ("declaration_date", "date"),
                 "signature": ("declaration_signature", "text"),
+            }),
+            (guarantee_letter, {
+                "content": ("guarantee_letter", "text"),
+                "text": ("guarantee_letter", "text"),
+                "note": ("guarantee_letter", "text"),
+            }),
+            (conflict_interest, {
+                "content": ("conflict_interest", "text"),
+                "text": ("conflict_interest", "text"),
+                "note": ("conflict_interest", "text"),
             }),
         )
         for source, mapping in nested_mappings:
@@ -455,17 +554,32 @@ class CandidateDocumentApi(http.Controller):
             for api_key, (field_name, value_type) in mapping.items():
                 if api_key in source:
                     vals[field_name] = self._coerce_form_value(source.get(api_key), value_type)
+        if "guaranteeLetter" in payload and not isinstance(payload.get("guaranteeLetter"), dict):
+            vals["guarantee_letter"] = self._coerce_form_value(payload.get("guaranteeLetter"), "text")
+        if "conflictInterest" in payload and not isinstance(payload.get("conflictInterest"), dict):
+            vals["conflict_interest"] = self._coerce_form_value(payload.get("conflictInterest"), "text")
         return vals
+
+    def _filter_employee_form_vals(self, vals, allowed_field_names):
+        return {
+            field_name: value
+            for field_name, value in vals.items()
+            if field_name in allowed_field_names
+        }
 
     def _stringify_int(self, value):
         return "" if value in (False, None) else str(value)
 
-    def _serialize_employee_form(self, candidate):
-        return {
+    def _serialize_employee_form(self, candidate, user=None):
+        values = {
             "candidateId": candidate.id,
             "candidateName": candidate.display_name,
             "personalInformation": {
-                "photoUrl": (request.httprequest.url_root.rstrip('/') + BASE_URL + "/candidate/employee-form/photo") if candidate.image_1920 else "",
+                "photoUrl": (
+                    request.httprequest.url_root.rstrip()
+                    + BASE_URL
+                    + "/candidates/%s/employee-form/photo" % candidate.id
+                ) if candidate.image_1920 else "",
                 "position": candidate.position_name or "",
                 "khmerName": candidate.khmer_name or "",
                 "englishName": candidate.english_name or candidate.partner_name or "",
@@ -525,7 +639,29 @@ class CandidateDocumentApi(http.Controller):
                 "date": candidate.declaration_date.isoformat() if candidate.declaration_date else None,
                 "signature": candidate.declaration_signature or "",
             },
+            "guaranteeLetter": {
+                "content": candidate.guarantee_letter or "",
+            },
+            "conflictInterest": {
+                "content": candidate.conflict_interest or "",
+            },
         }
+        if user and self._is_candidate_finance_user(user):
+            return {
+                "candidateId": values["candidateId"],
+                "candidateName": values["candidateName"],
+                "personalInformation": values["personalInformation"],
+                "guaranteeLetter": values["guaranteeLetter"],
+                "conflictInterest": values["conflictInterest"],
+            }
+        if user and self._is_candidate_general_user(user):
+            return {
+                "candidateId": values["candidateId"],
+                "candidateName": values["candidateName"],
+                "personalInformation": values["personalInformation"],
+                "conflictInterest": values["conflictInterest"],
+            }
+        return values
 
     def _serialize_candidate_basic(self, candidate):
         base_url = request.httprequest.url_root.rstrip("/")
@@ -604,9 +740,8 @@ class CandidateDocumentApi(http.Controller):
             "document_groups": self._serialize_document_groups(documents),
         }
 
-    @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    def candidate_employee_form_options(self, subpath=None, **kwargs):
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    def candidate_employee_form_options(self, candidate_id=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
@@ -615,28 +750,28 @@ class CandidateDocumentApi(http.Controller):
         }
         return request.make_response("", headers=headers)
 
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
-    def candidate_employee_form(self, **kwargs):
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
+        candidate = self._get_employee_form_candidate_for_user(user, candidate_id=candidate_id)
         if not candidate:
             return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
         return self.success_response(
             "Candidate employee form fetched successfully",
-            data=self._serialize_employee_form(candidate.sudo()),
+            data=self._serialize_employee_form(candidate.sudo(), user=user),
         )
 
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
-    def upsert_candidate_employee_form(self, **kwargs):
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
+    def upsert_candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
+        candidate = self._get_employee_form_candidate_for_user(user, candidate_id=candidate_id)
         if not candidate:
             return self.error_response("Candidate not found", errors=["No candidate is linked to this user"], status=404)
 
@@ -645,6 +780,11 @@ class CandidateDocumentApi(http.Controller):
             vals = self._extract_employee_form_vals(payload)
         except (TypeError, ValueError) as error:
             return self.error_response("Invalid form payload", errors=[str(error)], status=400)
+
+        if self._is_candidate_finance_user(user):
+            vals = self._filter_employee_form_vals(vals, self.FINANCE_FORM_FIELD_NAMES)
+        elif self._is_candidate_general_user(user):
+            vals = self._filter_employee_form_vals(vals, self.GENERAL_FORM_FIELD_NAMES)
 
         photo_file = request.httprequest.files.get("photo")
         photo_base64 = payload.get("photoBase64") if isinstance(payload, dict) else None
@@ -663,7 +803,7 @@ class CandidateDocumentApi(http.Controller):
 
         return self.success_response(
             "Candidate employee form saved successfully",
-            data=self._serialize_employee_form(candidate.sudo()),
+            data=self._serialize_employee_form(candidate.sudo(), user=user),
         )
 
     @http.route(f"{BASE_URL}/candidates", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
@@ -714,13 +854,13 @@ class CandidateDocumentApi(http.Controller):
         ]
         return request.make_response(raw_content, headers)
 
-    @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
-    def candidate_employee_form_photo(self, **kwargs):
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    def candidate_employee_form_photo(self, candidate_id, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
-        candidate = self._get_candidate_for_user(user)
+        candidate = self._get_employee_form_candidate_for_user(user, candidate_id=candidate_id)
         if not candidate or not candidate.image_1920:
             return self.error_response("Photo not found", errors=["No profile photo is available"], status=404)
 
@@ -782,8 +922,8 @@ class CandidateDocumentApi(http.Controller):
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
 
         document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
-        if not document or document.portal_user_id.id != user.id:
-            return self.error_response("Document not found", errors=["The requested document does not belong to the current candidate"], status=404)
+        if not document or not self._can_manage_candidate_document(user, document):
+            return self.error_response("Document not found", errors=["The requested document cannot be managed by this user"], status=404)
 
         upload_file = request.httprequest.files.get("file")
         if not upload_file or not upload_file.filename:
@@ -798,6 +938,33 @@ class CandidateDocumentApi(http.Controller):
             "Document uploaded successfully",
             data=self._serialize_document(document.sudo()),
             status=201,
+        )
+
+    @http.route(
+        f"{BASE_URL}/candidate/documents/<int:document_id>",
+        auth="public",
+        type="http",
+        methods=["DELETE"],
+        csrf=False,
+        cors="*",
+    )
+    def delete_candidate_document_upload(self, document_id, **kwargs):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        document = request.env["angkot.candidate.document"].sudo().browse(document_id).exists()
+        if not document or not self._can_delete_candidate_document_upload(user, document):
+            return self.error_response("Document not found", errors=["The requested document cannot be deleted by this user"], status=404)
+
+        try:
+            document.sudo().action_reset_to_missing()
+        except Exception as error:
+            return self.error_response("Delete failed", errors=[str(error)], status=400)
+
+        return self.success_response(
+            "Document deleted successfully",
+            data=self._serialize_document(document.sudo()),
         )
 
     def _review_candidate_document(self, document_id, status=None, **kwargs):

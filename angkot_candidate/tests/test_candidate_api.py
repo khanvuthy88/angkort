@@ -18,6 +18,10 @@ class TestCandidateApi(HttpCase):
     OTHER_PASSWORD = "Pl1bhD@2!othercandidate"
     OFFICER_PASSWORD = "Pl1bhD@2!officer"
     HR_REVIEWER_PASSWORD = "Pl1bhD@2!hr"
+    GENERAL_STAFF_PASSWORD = "Pl1bhD@2!general"
+    FINANCE_STAFF_PASSWORD = "Pl1bhD@2!finance"
+    RECRUITER_PASSWORD = "Pl1bhD@2!recruiter"
+    HR_PASSWORD = "Pl1bhD@2!hruser"
 
     @classmethod
     def setUpClass(cls):
@@ -52,6 +56,34 @@ class TestCandidateApi(HttpCase):
             groups="base.group_user,angkot_candidate.group_candidate_hr_reviewer",
             name="HR Document Reviewer",
         )
+        cls.general_staff_user = new_test_user(
+            cls.env,
+            login="general.staff@example.com",
+            password=cls.GENERAL_STAFF_PASSWORD,
+            groups="base.group_portal,angkot_candidate.group_candidate_general_staff",
+            name="Candidate General Staff",
+        )
+        cls.finance_staff_user = new_test_user(
+            cls.env,
+            login="finance.staff@example.com",
+            password=cls.FINANCE_STAFF_PASSWORD,
+            groups="base.group_portal,angkot_candidate.group_candidate_finance_staff",
+            name="Candidate Finance Staff",
+        )
+        cls.recruiter_user = new_test_user(
+            cls.env,
+            login="recruiter@example.com",
+            password=cls.RECRUITER_PASSWORD,
+            groups="base.group_user,angkot_candidate.group_candidate_recruiter",
+            name="Recruiter",
+        )
+        cls.hr_user = new_test_user(
+            cls.env,
+            login="hr@example.com",
+            password=cls.HR_PASSWORD,
+            groups="base.group_user,angkot_candidate.group_candidate_hr",
+            name="HR",
+        )
 
         cls.candidate = cls.env["hr.candidate"].sudo().create({
             "partner_name": "Primary Candidate",
@@ -65,6 +97,25 @@ class TestCandidateApi(HttpCase):
             "portal_user_id": cls.other_user.id,
             "email_from": "other.portal@example.com",
             "partner_phone": "020202020",
+        })
+        cls.finance_candidate = cls.env["hr.candidate"].sudo().create({
+            "partner_name": "Finance Candidate",
+            "portal_user_id": cls.finance_staff_user.id,
+            "email_from": "finance.staff@example.com",
+            "partner_phone": "030303030",
+        })
+        cls.general_staff_candidate = cls.env["hr.candidate"].sudo().create({
+            "partner_name": "General Staff Candidate",
+            "portal_user_id": cls.general_staff_user.id,
+            "email_from": "general.staff@example.com",
+            "partner_phone": "040404040",
+        })
+        cls.recruiter_candidate = cls.env["hr.candidate"].sudo().create({
+            "partner_name": "Recruiter Candidate",
+            "portal_user_id": cls.other_user.id,
+            "officer_user_id": cls.recruiter_user.id,
+            "email_from": "recruiter.candidate@example.com",
+            "partner_phone": "050505050",
         })
 
     def _json_headers(self):
@@ -87,6 +138,18 @@ class TestCandidateApi(HttpCase):
 
     def _authenticate_hr_reviewer(self):
         self.authenticate(self.hr_reviewer_user.login, self.HR_REVIEWER_PASSWORD)
+
+    def _authenticate_general_staff(self):
+        self.authenticate(self.general_staff_user.login, self.GENERAL_STAFF_PASSWORD)
+
+    def _authenticate_finance_staff(self):
+        self.authenticate(self.finance_staff_user.login, self.FINANCE_STAFF_PASSWORD)
+
+    def _authenticate_recruiter(self):
+        self.authenticate(self.recruiter_user.login, self.RECRUITER_PASSWORD)
+
+    def _authenticate_hr(self):
+        self.authenticate(self.hr_user.login, self.HR_PASSWORD)
 
     def test_login_returns_candidate_role_enum(self):
         response = self._post_json("/angkort/api/v1/login", {
@@ -121,10 +184,54 @@ class TestCandidateApi(HttpCase):
         self.assertTrue(payload["status"], payload)
         self.assertEqual(payload["data"]["role"], "hr_document_reviewer")
 
+    def test_login_returns_general_staff_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.general_staff_user.login,
+            "password": self.GENERAL_STAFF_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "candidate_general_staff")
+
+    def test_login_returns_finance_staff_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.finance_staff_user.login,
+            "password": self.FINANCE_STAFF_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "candidate_finance_staff")
+
+    def test_login_returns_recruiter_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.recruiter_user.login,
+            "password": self.RECRUITER_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "recruiter")
+
+    def test_login_returns_hr_role_enum(self):
+        response = self._post_json("/angkort/api/v1/login", {
+            "username": self.hr_user.login,
+            "password": self.HR_PASSWORD,
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["role"], "hr")
+
     def test_get_employee_form_returns_sectioned_payload(self):
         self._authenticate_candidate()
 
-        response = self.url_open("/angkort/api/v1/candidate/employee-form")
+        response = self.url_open(f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form")
 
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
@@ -137,7 +244,7 @@ class TestCandidateApi(HttpCase):
     def test_post_employee_form_updates_nested_sections(self):
         self._authenticate_candidate()
 
-        response = self._post_json("/angkort/api/v1/candidate/employee-form", {
+        response = self._post_json(f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form", {
             "personalInformation": {
                 "englishName": "John Doe",
                 "khmerName": "ជន ដូ",
@@ -224,11 +331,251 @@ class TestCandidateApi(HttpCase):
         self.assertTrue(self.candidate.had_injury)
         self.assertEqual(self.candidate.declaration_signature, "<svg>signature</svg>")
 
+    def test_post_employee_form_accepts_live_nuxt_field_aliases(self):
+        self._authenticate_candidate()
+
+        response = self._post_json(f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form", {
+            "personalInformation": {
+                "nationalId": "NID-LIVE-001",
+            },
+            "familyInformation": {
+                "fatherOccupation": "Live Father Job",
+                "motherOccupation": "Live Mother Job",
+            },
+            "spouseInformation": {
+                "spouseName": "Live Spouse",
+                "occupation": "Live Spouse Job",
+            },
+            "shortCourseInformation": {
+                "duration": "3 weeks",
+                "certificates": "Safety Certificate",
+            },
+            "employmentHistory": {
+                "duration": "5 years",
+                "responsible": "Live responsibility text",
+            },
+            "otherInformation": {
+                "illness": "true",
+                "illnessOther": "Live illness note",
+                "crime": "false",
+                "crimeOther": "",
+            },
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+
+        self.candidate.invalidate_recordset([
+            "national_id_or_passport",
+            "father_job",
+            "mother_job",
+            "spouse_name",
+            "spouse_job",
+            "short_course_duration",
+            "short_course_certificates",
+            "duration_of_work",
+            "job_responsibility",
+            "had_injury",
+            "had_injury_description",
+            "arrested",
+        ])
+        self.assertEqual(self.candidate.national_id_or_passport, "NID-LIVE-001")
+        self.assertEqual(self.candidate.father_job, "Live Father Job")
+        self.assertEqual(self.candidate.mother_job, "Live Mother Job")
+        self.assertEqual(self.candidate.spouse_name, "Live Spouse")
+        self.assertEqual(self.candidate.spouse_job, "Live Spouse Job")
+        self.assertEqual(self.candidate.short_course_duration, "3 weeks")
+        self.assertEqual(self.candidate.short_course_certificates, "Safety Certificate")
+        self.assertEqual(self.candidate.duration_of_work, "5 years")
+        self.assertEqual(self.candidate.job_responsibility, "Live responsibility text")
+        self.assertTrue(self.candidate.had_injury)
+        self.assertEqual(self.candidate.had_injury_description, "Live illness note")
+        self.assertFalse(self.candidate.arrested)
+
+    def test_finance_staff_can_update_personal_guarantee_and_conflict_sections_only(self):
+        self._authenticate_finance_staff()
+
+        response = self._post_json(f"/angkort/api/v1/candidates/{self.finance_candidate.id}/employee-form", {
+            "personalInformation": {
+                "englishName": "Finance Staff Candidate",
+                "position": "Finance Officer",
+                "contactNumber": "099000111",
+            },
+            "familyInformation": {
+                "fatherName": "Should Not Change",
+            },
+            "guaranteeLetter": {
+                "content": "Finance guarantee letter content",
+            },
+            "conflictInterest": {
+                "content": "No declared conflict interest",
+            },
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["personalInformation"]["englishName"], "Finance Staff Candidate")
+        self.assertEqual(payload["data"]["guaranteeLetter"]["content"], "Finance guarantee letter content")
+        self.assertEqual(payload["data"]["conflictInterest"]["content"], "No declared conflict interest")
+        self.assertNotIn("familyInformation", payload["data"])
+
+        self.finance_candidate.invalidate_recordset([
+            "english_name",
+            "position_name",
+            "partner_phone",
+            "father_name",
+            "guarantee_letter",
+            "conflict_interest",
+        ])
+        self.assertEqual(self.finance_candidate.english_name, "Finance Staff Candidate")
+        self.assertEqual(self.finance_candidate.position_name, "Finance Officer")
+        self.assertEqual(self.finance_candidate.partner_phone, "099000111")
+        self.assertFalse(self.finance_candidate.father_name)
+        self.assertEqual(self.finance_candidate.guarantee_letter, "Finance guarantee letter content")
+        self.assertEqual(self.finance_candidate.conflict_interest, "No declared conflict interest")
+
+    def test_general_staff_can_update_personal_and_conflict_sections_only(self):
+        self._authenticate_general_staff()
+
+        response = self._post_json(f"/angkort/api/v1/candidates/{self.general_staff_candidate.id}/employee-form", {
+            "personalInformation": {
+                "englishName": "General Staff Candidate Updated",
+                "position": "General Officer",
+                "contactNumber": "088000222",
+            },
+            "familyInformation": {
+                "fatherName": "Should Not Change",
+            },
+            "guaranteeLetter": {
+                "content": "Should not be saved",
+            },
+            "conflictInterest": {
+                "content": "General staff conflict declaration",
+            },
+        })
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["personalInformation"]["englishName"], "General Staff Candidate Updated")
+        self.assertEqual(payload["data"]["conflictInterest"]["content"], "General staff conflict declaration")
+        self.assertNotIn("familyInformation", payload["data"])
+        self.assertNotIn("guaranteeLetter", payload["data"])
+
+        self.general_staff_candidate.invalidate_recordset([
+            "english_name",
+            "position_name",
+            "partner_phone",
+            "father_name",
+            "guarantee_letter",
+            "conflict_interest",
+        ])
+        self.assertEqual(self.general_staff_candidate.english_name, "General Staff Candidate Updated")
+        self.assertEqual(self.general_staff_candidate.position_name, "General Officer")
+        self.assertEqual(self.general_staff_candidate.partner_phone, "088000222")
+        self.assertFalse(self.general_staff_candidate.father_name)
+        self.assertFalse(self.general_staff_candidate.guarantee_letter)
+        self.assertEqual(self.general_staff_candidate.conflict_interest, "General staff conflict declaration")
+
+    def test_hr_can_manage_any_candidate_employee_form(self):
+        self._authenticate_hr()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.other_candidate.id}/employee-form",
+            {
+                "personalInformation": {
+                    "englishName": "HR Managed Candidate",
+                },
+                "familyInformation": {
+                    "fatherName": "HR Managed Father",
+                },
+                "guaranteeLetter": {
+                    "content": "HR managed guarantee",
+                },
+                "conflictInterest": {
+                    "content": "HR managed conflict",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertIn("familyInformation", payload["data"])
+        self.assertEqual(payload["data"]["personalInformation"]["englishName"], "HR Managed Candidate")
+
+        self.other_candidate.invalidate_recordset([
+            "english_name",
+            "father_name",
+            "guarantee_letter",
+            "conflict_interest",
+        ])
+        self.assertEqual(self.other_candidate.english_name, "HR Managed Candidate")
+        self.assertEqual(self.other_candidate.father_name, "HR Managed Father")
+        self.assertEqual(self.other_candidate.guarantee_letter, "HR managed guarantee")
+        self.assertEqual(self.other_candidate.conflict_interest, "HR managed conflict")
+
+    def test_old_employee_form_route_is_not_available(self):
+        self._authenticate_hr()
+
+        response = self.url_open("/angkort/api/v1/candidate/employee-form")
+
+        self.assertEqual(response.status_code, 404, response.text)
+
+    def test_recruiter_can_manage_assigned_candidate_employee_form(self):
+        self._authenticate_recruiter()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.recruiter_candidate.id}/employee-form",
+            {
+                "personalInformation": {
+                    "englishName": "Recruiter Managed Candidate",
+                },
+                "employmentHistory": {
+                    "position": "Recruiter Managed Role",
+                    "responsible": "Recruiter managed responsibility",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["personalInformation"]["englishName"], "Recruiter Managed Candidate")
+        self.assertIn("employmentHistory", payload["data"])
+
+        self.recruiter_candidate.invalidate_recordset([
+            "english_name",
+            "employment_history_position",
+            "job_responsibility",
+        ])
+        self.assertEqual(self.recruiter_candidate.english_name, "Recruiter Managed Candidate")
+        self.assertEqual(self.recruiter_candidate.employment_history_position, "Recruiter Managed Role")
+        self.assertEqual(self.recruiter_candidate.job_responsibility, "Recruiter managed responsibility")
+
+    def test_recruiter_cannot_manage_unassigned_candidate_employee_form(self):
+        self._authenticate_recruiter()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.other_candidate.id}/employee-form",
+            {
+                "personalInformation": {
+                    "englishName": "Should Not Change",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        payload = response.json()
+        self.assertFalse(payload["status"], payload)
+
     def test_post_employee_form_accepts_photo_upload_and_photo_endpoint(self):
         self._authenticate_candidate()
 
         response = self.url_open(
-            "/angkort/api/v1/candidate/employee-form",
+            f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form",
             data={"englishName": "Photo Candidate"},
             files={"photo": ("photo.png", PNG_1X1, "image/png")},
         )
@@ -238,7 +585,7 @@ class TestCandidateApi(HttpCase):
         self.assertTrue(self.candidate.image_1920)
         self.assertEqual(self.candidate.english_name, "Photo Candidate")
 
-        photo_response = self.url_open("/angkort/api/v1/candidate/employee-form/photo")
+        photo_response = self.url_open(f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form/photo")
         self.assertEqual(photo_response.status_code, 200, photo_response.text)
         self.assertEqual(photo_response.headers.get("Content-Type"), "image/png")
         self.assertTrue(photo_response.content)
@@ -295,6 +642,58 @@ class TestCandidateApi(HttpCase):
         self.assertTrue(payload["status"], payload)
         self.assertEqual(payload["data"]["candidate_id"], self.candidate.id)
         self.assertIn("document_groups", payload["data"])
+
+    def test_recruiter_can_upload_assigned_candidate_document(self):
+        document = self.recruiter_candidate.document_ids[:1]
+        self.assertTrue(document)
+        self._authenticate_recruiter()
+
+        response = self.url_open(
+            f"/angkort/api/v1/candidate/documents/{document.id}/upload",
+            files={"file": ("recruiter-managed.pdf", b"%PDF-1.4 recruiter pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 201, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+
+        document.invalidate_recordset(["status", "attachment_id", "filename"])
+        self.assertEqual(document.status, "submitted")
+        self.assertTrue(document.attachment_id)
+        self.assertEqual(document.filename, "recruiter-managed.pdf")
+
+    def test_hr_can_upload_any_candidate_document(self):
+        document = self.other_candidate.document_ids[:1]
+        self.assertTrue(document)
+        self._authenticate_hr()
+
+        response = self.url_open(
+            f"/angkort/api/v1/candidate/documents/{document.id}/upload",
+            files={"file": ("hr-managed.pdf", b"%PDF-1.4 hr pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 201, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+
+        document.invalidate_recordset(["status", "attachment_id", "filename"])
+        self.assertEqual(document.status, "submitted")
+        self.assertTrue(document.attachment_id)
+        self.assertEqual(document.filename, "hr-managed.pdf")
+
+    def test_recruiter_cannot_upload_unassigned_candidate_document(self):
+        document = self.other_candidate.document_ids[:1]
+        self.assertTrue(document)
+        self._authenticate_recruiter()
+
+        response = self.url_open(
+            f"/angkort/api/v1/candidate/documents/{document.id}/upload",
+            files={"file": ("unassigned.pdf", b"%PDF-1.4 unassigned pdf", "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        payload = response.json()
+        self.assertFalse(payload["status"], payload)
 
     def test_officer_cannot_list_unassigned_candidate_documents(self):
         self._authenticate_officer()

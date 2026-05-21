@@ -73,6 +73,9 @@ class HrCandidate(models.Model):
     declaration_date = fields.Date("Declaration Date")
     declaration_signature = fields.Text("Declaration Signature")
 
+    guarantee_letter = fields.Text("Guarantee Letter", tracking=True)
+    conflict_interest = fields.Text("Conflict Interest", tracking=True)
+
     portal_user_id = fields.Many2one(
         "res.users",
         string="Candidate User",
