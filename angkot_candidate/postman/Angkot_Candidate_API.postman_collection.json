@@ -416,6 +416,159 @@
             },
             "description": "Returns employee-form profile photo as binary image content when available."
           }
+        },
+        {
+          "name": "Submit Employee Form",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/{{candidate_id}}/employee-form/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "{{candidate_id}}",
+                "employee-form",
+                "submit"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Submits the candidate employee form. The linked candidate user can submit their own form."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form submitted', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data.candidateStage).to.eql('submitted');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve Employee Form",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/{{candidate_id}}/employee-form/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "{{candidate_id}}",
+                "employee-form",
+                "approve"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_note\": \"Approved by HR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Approves a submitted candidate employee form. Requires HR role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form approved', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data.candidateStage).to.eql('accepted');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject Employee Form",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidates/{{candidate_id}}/employee-form/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidates",
+                "{{candidate_id}}",
+                "employee-form",
+                "reject"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewNote\": \"Missing declaration signature\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Rejects a submitted candidate employee form. Requires HR role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form rejected', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data.candidateStage).to.eql('rejected');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

@@ -200,6 +200,9 @@ class CandidateDocumentApi(http.Controller):
     def _is_candidate_staff_user(self, user):
         return self._is_candidate_finance_user(user) or self._is_candidate_general_user(user)
 
+    def _is_candidate_owner_user(self, user, candidate):
+        return bool(user and user.exists() and candidate and candidate.portal_user_id.id == user.id)
+
     def _get_bearer_user(self):
         auth_header = request.httprequest.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -574,6 +577,12 @@ class CandidateDocumentApi(http.Controller):
         values = {
             "candidateId": candidate.id,
             "candidateName": candidate.display_name,
+            "candidateStage": candidate.candidate_stage,
+            "review": {
+                "note": candidate.candidate_form_review_note or "",
+                "reviewedBy": candidate.candidate_form_reviewed_by.name if candidate.candidate_form_reviewed_by else "",
+                "reviewedOn": candidate.candidate_form_reviewed_on.isoformat() if candidate.candidate_form_reviewed_on else None,
+            },
             "personalInformation": {
                 "photoUrl": (
                     request.httprequest.url_root.rstrip()
@@ -650,6 +659,8 @@ class CandidateDocumentApi(http.Controller):
             return {
                 "candidateId": values["candidateId"],
                 "candidateName": values["candidateName"],
+                "candidateStage": values["candidateStage"],
+                "review": values["review"],
                 "personalInformation": values["personalInformation"],
                 "guaranteeLetter": values["guaranteeLetter"],
                 "conflictInterest": values["conflictInterest"],
@@ -658,6 +669,8 @@ class CandidateDocumentApi(http.Controller):
             return {
                 "candidateId": values["candidateId"],
                 "candidateName": values["candidateName"],
+                "candidateStage": values["candidateStage"],
+                "review": values["review"],
                 "personalInformation": values["personalInformation"],
                 "conflictInterest": values["conflictInterest"],
             }
@@ -668,6 +681,7 @@ class CandidateDocumentApi(http.Controller):
         return {
             "id": candidate.id,
             "name": candidate.display_name,
+            "candidateStage": candidate.candidate_stage,
             "photoUrl": (
                 f"{base_url}{BASE_URL}/candidates/{candidate.id}/photo"
                 if candidate.image_1920 else ""
@@ -740,8 +754,9 @@ class CandidateDocumentApi(http.Controller):
             "document_groups": self._serialize_document_groups(documents),
         }
 
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    def candidate_employee_form_options(self, candidate_id=None, **kwargs):
+    def candidate_employee_form_options(self, candidate_id=None, subpath=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
@@ -805,6 +820,69 @@ class CandidateDocumentApi(http.Controller):
             "Candidate employee form saved successfully",
             data=self._serialize_employee_form(candidate.sudo(), user=user),
         )
+
+    def _candidate_form_action_response(self, candidate, user, action, message):
+        payload = self._parse_request_payload()
+        review_note = payload.get("review_note") or payload.get("reviewNote") or payload.get("note")
+        vals = {}
+
+        if action == "submit":
+            if not self._is_candidate_owner_user(user, candidate):
+                return self.error_response("Access denied", errors=["Only the linked candidate user can submit this form"], status=403)
+            if candidate.candidate_stage == "accepted":
+                return self.error_response("Submit failed", errors=["An accepted candidate form cannot be submitted again"], status=400)
+            vals = {
+                "candidate_stage": "submitted",
+                "candidate_form_review_note": False,
+                "candidate_form_reviewed_by": False,
+                "candidate_form_reviewed_on": False,
+            }
+        elif action in ("approve", "reject"):
+            if not self._is_candidate_hr_user(user):
+                return self.error_response("Access denied", errors=["Only HR can approve or reject candidate forms"], status=403)
+            if candidate.candidate_stage != "submitted":
+                return self.error_response("Review failed", errors=["Only submitted candidate forms can be approved or rejected"], status=400)
+            vals = {
+                "candidate_stage": "accepted" if action == "approve" else "rejected",
+                "candidate_form_review_note": review_note or False,
+                "candidate_form_reviewed_by": user.id,
+                "candidate_form_reviewed_on": fields.Datetime.now(),
+            }
+        else:
+            return self.error_response("Invalid action", errors=["Unsupported candidate form action"], status=400)
+
+        try:
+            candidate.sudo().write(vals)
+        except Exception as error:
+            return self.error_response("Candidate form action failed", errors=[str(error)], status=400)
+
+        return self.success_response(
+            message,
+            data=self._serialize_employee_form(candidate.sudo(), user=user),
+        )
+
+    def _candidate_form_action(self, candidate_id, action, message):
+        user = self._get_authenticated_user()
+        if not user or not user.exists():
+            return self.error_response("Authentication failed", errors=["Login is required"], status=401)
+
+        candidate = self._get_employee_form_candidate_for_user(user, candidate_id=candidate_id)
+        if not candidate:
+            return self.error_response("Candidate not found", errors=["No candidate form is available for this user"], status=404)
+
+        return self._candidate_form_action_response(candidate.sudo(), user, action, message)
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/submit", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
+    def submit_candidate_employee_form(self, candidate_id, **kwargs):
+        return self._candidate_form_action(candidate_id, "submit", "Candidate employee form submitted successfully")
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/approve", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
+    def approve_candidate_employee_form(self, candidate_id, **kwargs):
+        return self._candidate_form_action(candidate_id, "approve", "Candidate employee form approved successfully")
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/reject", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
+    def reject_candidate_employee_form(self, candidate_id, **kwargs):
+        return self._candidate_form_action(candidate_id, "reject", "Candidate employee form rejected successfully")
 
     @http.route(f"{BASE_URL}/candidates", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidates(self, **kwargs):

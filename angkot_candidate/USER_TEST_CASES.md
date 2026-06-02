@@ -20,6 +20,9 @@ Employee form route:
 
 ```text
 /angkort/api/v1/candidates/<candidate_id>/employee-form
+/angkort/api/v1/candidates/<candidate_id>/employee-form/submit
+/angkort/api/v1/candidates/<candidate_id>/employee-form/approve
+/angkort/api/v1/candidates/<candidate_id>/employee-form/reject
 ```
 
 Document routes:
@@ -290,7 +293,101 @@ Expected result:
 - Response status is `404`.
 - Candidate data is not changed.
 
-## TC-14 Candidate Lists Own Documents
+## TC-14 Candidate Submits Employee Form
+
+Role: Candidate
+
+Steps:
+
+1. Login as candidate.
+2. Send `POST` to `/candidates/<own_candidate_id>/employee-form/submit`.
+3. Fetch the employee form again.
+
+Expected result:
+
+- Submit succeeds.
+- `candidateStage` becomes `submitted`.
+- Previous form review note and reviewer metadata are cleared.
+
+## TC-15 HR Approves Submitted Candidate Form
+
+Role: HR
+
+Steps:
+
+1. Login as HR.
+2. Use a candidate form where `candidateStage` is `submitted`.
+3. Send `POST` to `/candidates/<candidate_id>/employee-form/approve`.
+4. Optionally include a review note:
+
+```json
+{
+  "review_note": "Approved by HR"
+}
+```
+
+Expected result:
+
+- Approval succeeds.
+- `candidateStage` becomes `accepted`.
+- Review note, reviewer, and review date are stored.
+
+## TC-16 HR Rejects Submitted Candidate Form
+
+Role: HR
+
+Steps:
+
+1. Login as HR.
+2. Use a candidate form where `candidateStage` is `submitted`.
+3. Send `POST` to `/candidates/<candidate_id>/employee-form/reject`.
+4. Include a rejection note:
+
+```json
+{
+  "reviewNote": "Missing declaration signature"
+}
+```
+
+Expected result:
+
+- Rejection succeeds.
+- `candidateStage` becomes `rejected`.
+- Review note, reviewer, and review date are stored.
+
+## TC-17 Candidate Cannot Approve Or Reject Form
+
+Role: Candidate
+
+Steps:
+
+1. Login as candidate.
+2. Send `POST` to `/candidates/<own_candidate_id>/employee-form/approve`.
+3. Send `POST` to `/candidates/<own_candidate_id>/employee-form/reject`.
+
+Expected result:
+
+- Both requests are denied.
+- Response status is `403`.
+- Candidate form status is not changed by these requests.
+
+## TC-18 HR Cannot Approve Draft Candidate Form
+
+Role: HR
+
+Steps:
+
+1. Login as HR.
+2. Use a candidate form where `candidateStage` is `draft`.
+3. Send `POST` to `/candidates/<candidate_id>/employee-form/approve`.
+
+Expected result:
+
+- Request fails.
+- Response status is `400`.
+- Error says only submitted candidate forms can be approved or rejected.
+
+## TC-19 Candidate Lists Own Documents
 
 Role: Candidate
 
@@ -305,7 +402,7 @@ Expected result:
 - Response includes grouped documents.
 - Response includes required, submitted, and accepted counts.
 
-## TC-15 Candidate Uploads Own Document
+## TC-20 Candidate Uploads Own Document
 
 Role: Candidate
 
@@ -323,7 +420,7 @@ Expected result:
 - Document has attachment metadata.
 - Submitted count increases.
 
-## TC-16 Candidate Cannot Access Other Candidate Document
+## TC-21 Candidate Cannot Access Other Candidate Document
 
 Role: Candidate
 
@@ -338,7 +435,7 @@ Expected result:
 - Access is denied.
 - Response status is `404`.
 
-## TC-17 General Staff Has Own Document CRUD
+## TC-22 General Staff Has Own Document CRUD
 
 Role: Candidate (General staff)
 
@@ -358,7 +455,7 @@ Expected result:
 - Document status returns to `missing`.
 - Attachment is removed.
 
-## TC-18 Finance Staff Has Own Document CRUD
+## TC-23 Finance Staff Has Own Document CRUD
 
 Role: Candidate (Finance staff)
 
@@ -378,7 +475,7 @@ Expected result:
 - Document status returns to `missing`.
 - Attachment is removed.
 
-## TC-19 Recruiter Lists Assigned Candidate Documents
+## TC-24 Recruiter Lists Assigned Candidate Documents
 
 Role: Recruiter
 
@@ -393,7 +490,7 @@ Expected result:
 - Recruiter sees assigned candidate documents.
 - Recruiter does not see unassigned candidate documents.
 
-## TC-20 Recruiter Uploads Assigned Candidate Document
+## TC-25 Recruiter Uploads Assigned Candidate Document
 
 Role: Recruiter
 
@@ -410,7 +507,7 @@ Expected result:
 - Document status becomes `submitted`.
 - Attachment metadata is present.
 
-## TC-21 Recruiter Cannot Upload Unassigned Candidate Document
+## TC-26 Recruiter Cannot Upload Unassigned Candidate Document
 
 Role: Recruiter
 
@@ -426,7 +523,7 @@ Expected result:
 - Response status is `404`.
 - Document is not changed.
 
-## TC-22 Recruiter Reviews Assigned Candidate Document
+## TC-27 Recruiter Reviews Assigned Candidate Document
 
 Role: Recruiter
 
@@ -443,7 +540,7 @@ Expected result:
 - Reject succeeds for assigned candidate document.
 - `reviewed_by`, `reviewed_on`, and `review_note` are updated.
 
-## TC-23 HR Lists All Candidate Documents
+## TC-28 HR Lists All Candidate Documents
 
 Role: HR
 
@@ -457,7 +554,7 @@ Expected result:
 - HR sees all candidate document groups.
 - Response count includes all visible candidates.
 
-## TC-24 HR Uploads Any Candidate Document
+## TC-29 HR Uploads Any Candidate Document
 
 Role: HR
 
@@ -473,7 +570,7 @@ Expected result:
 - Document status becomes `submitted`.
 - Attachment metadata is present.
 
-## TC-25 HR Reviews Any Candidate Document
+## TC-30 HR Reviews Any Candidate Document
 
 Role: HR
 
@@ -496,7 +593,7 @@ Expected result:
 - Document status becomes `accepted`.
 - Review metadata is stored.
 
-## TC-26 Review Requires Uploaded File
+## TC-31 Review Requires Uploaded File
 
 Role: HR or Recruiter
 
@@ -512,7 +609,7 @@ Expected result:
 - Response status is `400`.
 - Error explains that a document without uploaded file cannot be reviewed.
 
-## TC-27 Invalid Review Status Is Rejected
+## TC-32 Invalid Review Status Is Rejected
 
 Role: HR or Recruiter
 
@@ -533,4 +630,3 @@ Expected result:
 - Request fails.
 - Response status is `400`.
 - Error says status must be `accepted` or `rejected`.
-

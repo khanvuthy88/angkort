@@ -21,6 +21,9 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Employee Form" groups="angkot_candidate.group_candidate_encharge_officer,angkot_candidate.group_candidate_hr_reviewer">
                     <group>
+                        <field name="candidate_stage" widget="statusbar" statusbar_visible="draft,submitted,accepted,rejected"/>
+                    </group>
+                    <group>
                         <group>
                             <field name="image_1920" widget="image" class="oe_avatar"
                                    options="{'preview_image': 'image_1920'}"/>
@@ -121,6 +124,11 @@
                         <group>
                             <field name="declaration_signature" widget="text" placeholder="SVG signature or declaration payload"/>
                         </group>
+                    </group>
+                    <group string="Form Review">
+                        <field name="candidate_form_review_note"/>
+                        <field name="candidate_form_reviewed_by" readonly="1"/>
+                        <field name="candidate_form_reviewed_on" readonly="1"/>
                     </group>
                 </page>
                 <page string="Document Checklist" groups="angkot_candidate.group_candidate_encharge_officer,angkot_candidate.group_candidate_hr_reviewer">

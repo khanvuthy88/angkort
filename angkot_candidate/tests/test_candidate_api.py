@@ -524,6 +524,96 @@ class TestCandidateApi(HttpCase):
 
         self.assertEqual(response.status_code, 404, response.text)
 
+    def test_candidate_can_submit_employee_form(self):
+        self.candidate.sudo().write({"candidate_stage": "draft"})
+        self._authenticate_candidate()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form/submit",
+            {},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["candidateStage"], "submitted")
+
+        self.candidate.invalidate_recordset([
+            "candidate_stage",
+            "candidate_form_review_note",
+            "candidate_form_reviewed_by",
+            "candidate_form_reviewed_on",
+        ])
+        self.assertEqual(self.candidate.candidate_stage, "submitted")
+        self.assertFalse(self.candidate.candidate_form_review_note)
+        self.assertFalse(self.candidate.candidate_form_reviewed_by)
+        self.assertFalse(self.candidate.candidate_form_reviewed_on)
+
+    def test_hr_can_approve_submitted_employee_form(self):
+        self.other_candidate.sudo().write({"candidate_stage": "submitted"})
+        self._authenticate_hr()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.other_candidate.id}/employee-form/approve",
+            {"review_note": "Approved by HR"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["candidateStage"], "accepted")
+        self.assertEqual(payload["data"]["review"]["note"], "Approved by HR")
+
+        self.other_candidate.invalidate_recordset([
+            "candidate_stage",
+            "candidate_form_review_note",
+            "candidate_form_reviewed_by",
+            "candidate_form_reviewed_on",
+        ])
+        self.assertEqual(self.other_candidate.candidate_stage, "accepted")
+        self.assertEqual(self.other_candidate.candidate_form_review_note, "Approved by HR")
+        self.assertEqual(self.other_candidate.candidate_form_reviewed_by, self.hr_user)
+        self.assertTrue(self.other_candidate.candidate_form_reviewed_on)
+
+    def test_hr_can_reject_submitted_employee_form(self):
+        self.other_candidate.sudo().write({"candidate_stage": "submitted"})
+        self._authenticate_hr()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.other_candidate.id}/employee-form/reject",
+            {"reviewNote": "Missing declaration signature"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["status"], payload)
+        self.assertEqual(payload["data"]["candidateStage"], "rejected")
+        self.assertEqual(payload["data"]["review"]["note"], "Missing declaration signature")
+
+        self.other_candidate.invalidate_recordset([
+            "candidate_stage",
+            "candidate_form_review_note",
+            "candidate_form_reviewed_by",
+            "candidate_form_reviewed_on",
+        ])
+        self.assertEqual(self.other_candidate.candidate_stage, "rejected")
+        self.assertEqual(self.other_candidate.candidate_form_review_note, "Missing declaration signature")
+        self.assertEqual(self.other_candidate.candidate_form_reviewed_by, self.hr_user)
+        self.assertTrue(self.other_candidate.candidate_form_reviewed_on)
+
+    def test_candidate_cannot_approve_employee_form(self):
+        self.candidate.sudo().write({"candidate_stage": "submitted"})
+        self._authenticate_candidate()
+
+        response = self._post_json(
+            f"/angkort/api/v1/candidates/{self.candidate.id}/employee-form/approve",
+            {},
+        )
+
+        self.assertEqual(response.status_code, 403, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error", payload)
+
     def test_recruiter_can_manage_assigned_candidate_employee_form(self):
         self._authenticate_recruiter()
 

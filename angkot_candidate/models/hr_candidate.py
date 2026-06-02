@@ -6,6 +6,18 @@ from odoo import api, fields, models, _
 class HrCandidate(models.Model):
     _inherit = "hr.candidate"
 
+    candidate_stage = fields.Selection(
+        selection=[
+            ("draft", "Draft"),
+            ("submitted", "Submitted"),
+            ("accepted", "Accepted"),
+            ("rejected", "Rejected"),
+        ],
+        default="draft",
+        tracking=True,
+        required=True,
+    )
+
     image_1920 = fields.Image("Photo", attachment=True, max_width=1920, max_height=1920)
     khmer_name = fields.Char("Khmer Name", tracking=True)
     english_name = fields.Char("English Name", tracking=True)
@@ -75,6 +87,9 @@ class HrCandidate(models.Model):
 
     guarantee_letter = fields.Text("Guarantee Letter", tracking=True)
     conflict_interest = fields.Text("Conflict Interest", tracking=True)
+    candidate_form_review_note = fields.Text("Candidate Form Review Note", tracking=True)
+    candidate_form_reviewed_by = fields.Many2one("res.users", string="Candidate Form Reviewed By", readonly=True, tracking=True)
+    candidate_form_reviewed_on = fields.Datetime("Candidate Form Reviewed On", readonly=True, tracking=True)
 
     portal_user_id = fields.Many2one(
         "res.users",
