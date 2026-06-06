@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "1b05086b-e119-4038-8f92-53bf5137a26b",
     "name": "Angkot Candidate API",
-    "description": "Postman collection for `angkot_candidate` API routes under `/angkort/api/v1`.\n\nSuggested flow:\n1. Run `Auth / Login` to store bearer tokens.\n2. Run `Candidates / List Candidates` to store `candidate_id`.\n3. Run `Documents / List Current Candidate Documents` to store `document_id`.\n4. Use form, upload, review, content, and delete requests.\n\nRoutes are generated from `controllers/api.py`. The response envelope uses `status: \"success\"` or `status: \"error\"`.",
+    "description": "Postman collection for `angkot_candidate` API routes under `/angkort/api/v1`.\n\nSuggested flow:\n1. Run `Auth / Login` to store bearer tokens.\n2. For candidate self-service, use `Current Candidate / Get My Employee Form` and `Current Candidate / Update My Employee Form (JSON)`.\n3. For staff/HR workflows, run `Candidates / List Candidates` to store `candidate_id`.\n4. Run `Documents / List Current Candidate Documents` to store `document_id`.\n5. Use upload, review, content, and delete requests.\n\nRoutes are generated from `controllers/api.py`. The response envelope uses `status: \"success\"` or `status: \"error\"`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -177,6 +177,225 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Current Candidate",
+      "description": "Routes for the authenticated candidate user. These do not require `candidate_id`.",
+      "item": [
+        {
+          "name": "Get My Employee Form",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/employee-form",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "employee-form"
+              ]
+            },
+            "description": "Fetches the employee form for the candidate linked to the authenticated user."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form response envelope', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data).to.have.property('candidateId');",
+                  "  pm.expect(body.data).to.have.property('personalInformation');",
+                  "});",
+                  "if (body.data && body.data.candidateId) {",
+                  "  pm.collectionVariables.set('candidate_id', body.data.candidateId);",
+                  "  pm.environment.set('candidate_id', body.data.candidateId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update My Employee Form (JSON)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/employee-form",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "employee-form"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personalInformation\": {\n    \"englishName\": \"John Doe\",\n    \"khmerName\": \"ជន ដូ\",\n    \"position\": \"Operator\",\n    \"gender\": \"male\",\n    \"maritalStatus\": \"single\",\n    \"contactNumber\": \"012345678\",\n    \"nationalIdOrPassport\": \"A1234567\",\n    \"placeOfBirth\": \"Kampong Cham\",\n    \"currentAddress\": \"Current Address\",\n    \"permanentAddress\": \"Permanent Address\",\n    \"dateOfBirth\": \"1999-12-31\"\n  },\n  \"familyInformation\": {\n    \"fatherName\": \"Father Test\",\n    \"fatherJob\": \"Farmer\",\n    \"motherName\": \"Mother Test\",\n    \"motherJob\": \"Vendor\",\n    \"numberOfSiblings\": \"4\",\n    \"contactNumber\": \"099999999\",\n    \"currentAddress\": \"Family Current\",\n    \"permanentAddress\": \"Family Permanent\"\n  },\n  \"spouseInformation\": {\n    \"name\": \"Spouse Test\",\n    \"job\": \"Teacher\",\n    \"numberOfChildren\": \"2\",\n    \"contactNumber\": \"088888888\",\n    \"currentAddress\": \"Spouse Current\",\n    \"permanentAddress\": \"Spouse Permanent\"\n  },\n  \"educationInformation\": {\n    \"degreeTypes\": \"Bachelor\",\n    \"major\": \"Accounting\",\n    \"other\": \"Honors\",\n    \"yearsOfStudy\": \"2018-2022\"\n  },\n  \"shortCourseInformation\": {\n    \"shortCourseCertificates\": \"Computer Skills\",\n    \"shortCourseDuration\": \"6 months\",\n    \"major\": \"Excel\",\n    \"other\": \"Advanced\"\n  },\n  \"employmentHistory\": {\n    \"name\": \"Latest Co\",\n    \"position\": \"Clerk\",\n    \"durationOfWork\": \"2 years\",\n    \"jobResponsibility\": \"Handle records\",\n    \"other\": \"Night shift\"\n  },\n  \"otherInformation\": {\n    \"hadInjury\": true,\n    \"hadInjuryDescription\": \"Recovered leg injury\",\n    \"arrested\": false,\n    \"arrestedDescription\": \"\"\n  },\n  \"declaration\": {\n    \"date\": \"2026-04-05\",\n    \"signature\": \"<svg>signature</svg>\"\n  },\n  \"guaranteeLetter\": {\n    \"content\": \"Guarantee letter content\"\n  },\n  \"conflictInterest\": {\n    \"content\": \"No declared conflict interest\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Updates the employee form for the candidate linked to the authenticated user. No `candidate_id` required."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form response envelope', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data).to.have.property('candidateId');",
+                  "  pm.expect(body.data).to.have.property('personalInformation');",
+                  "});",
+                  "if (body.data && body.data.candidateId) {",
+                  "  pm.collectionVariables.set('candidate_id', body.data.candidateId);",
+                  "  pm.environment.set('candidate_id', body.data.candidateId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update My Employee Form (Multipart Photo)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/employee-form",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "employee-form"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "englishName",
+                  "value": "Photo Candidate",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": "{{photo_file_path}}"
+                }
+              ]
+            },
+            "description": "Updates current candidate info and uploads a profile photo. Select a local image file in Postman or set `photo_file_path`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('employee form response envelope', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data).to.have.property('candidateId');",
+                  "  pm.expect(body.data).to.have.property('personalInformation');",
+                  "});",
+                  "if (body.data && body.data.candidateId) {",
+                  "  pm.collectionVariables.set('candidate_id', body.data.candidateId);",
+                  "  pm.environment.set('candidate_id', body.data.candidateId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit My Employee Form",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/employee-form/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "employee-form",
+                "submit"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Submits the current candidate employee form for HR review."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('form submitted', function () { pm.expect(body.status).to.eql('success'); pm.expect(body.data.candidateStage).to.eql('submitted'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Employee Form Photo",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/employee-form/photo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "employee-form",
+                "photo"
+              ]
+            },
+            "description": "Returns current candidate employee-form photo as binary image content when available."
+          }
         }
       ]
     },
@@ -570,7 +789,8 @@
             }
           ]
         }
-      ]
+      ],
+      "description": "Candidate list/detail and candidate-id employee form routes for staff, HR, recruiter, and explicit candidate management workflows."
     },
     {
       "name": "Documents",

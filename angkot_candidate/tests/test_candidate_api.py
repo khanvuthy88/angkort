@@ -517,12 +517,59 @@ class TestCandidateApi(HttpCase):
         self.assertEqual(self.other_candidate.guarantee_letter, "HR managed guarantee")
         self.assertEqual(self.other_candidate.conflict_interest, "HR managed conflict")
 
-    def test_old_employee_form_route_is_not_available(self):
-        self._authenticate_hr()
+    def test_current_candidate_employee_form_route_updates_linked_candidate(self):
+        self._authenticate_candidate()
+
+        response = self._post_json(
+            "/angkort/api/v1/candidate/employee-form",
+            {
+                "personalInformation": {
+                    "englishName": "Current Candidate Route",
+                    "contactNumber": "077777777",
+                },
+                "familyInformation": {
+                    "fatherName": "Current Route Father",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success", payload)
+        self.assertEqual(payload["data"]["candidateId"], self.candidate.id)
+        self.assertEqual(payload["data"]["personalInformation"]["englishName"], "Current Candidate Route")
+
+        self.candidate.invalidate_recordset(["english_name", "partner_phone", "father_name"])
+        self.assertEqual(self.candidate.english_name, "Current Candidate Route")
+        self.assertEqual(self.candidate.partner_phone, "077777777")
+        self.assertEqual(self.candidate.father_name, "Current Route Father")
+
+    def test_current_candidate_employee_form_route_does_not_update_other_candidates(self):
+        self._authenticate_candidate()
+
+        response = self._post_json(
+            "/angkort/api/v1/candidate/employee-form",
+            {
+                "personalInformation": {
+                    "englishName": "Only Current Candidate",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+
+        self.other_candidate.invalidate_recordset(["english_name"])
+        self.assertEqual(self.other_candidate.english_name, "Other Candidate")
+
+    def test_current_candidate_can_get_employee_form_without_candidate_id(self):
+        self._authenticate_candidate()
 
         response = self.url_open("/angkort/api/v1/candidate/employee-form")
 
-        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success", payload)
+        self.assertEqual(payload["data"]["candidateId"], self.candidate.id)
 
     def test_candidate_can_submit_employee_form(self):
         self.candidate.sudo().write({"candidate_stage": "draft"})
@@ -548,6 +595,17 @@ class TestCandidateApi(HttpCase):
         self.assertFalse(self.candidate.candidate_form_review_note)
         self.assertFalse(self.candidate.candidate_form_reviewed_by)
         self.assertFalse(self.candidate.candidate_form_reviewed_on)
+
+    def test_current_candidate_can_submit_employee_form_without_candidate_id(self):
+        self.candidate.sudo().write({"candidate_stage": "draft"})
+        self._authenticate_candidate()
+
+        response = self._post_json("/angkort/api/v1/candidate/employee-form/submit", {})
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success", payload)
+        self.assertEqual(payload["data"]["candidateStage"], "submitted")
 
     def test_hr_can_approve_submitted_employee_form(self):
         self.other_candidate.sudo().write({"candidate_stage": "submitted"})

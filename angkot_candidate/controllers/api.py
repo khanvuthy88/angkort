@@ -754,6 +754,8 @@ class CandidateDocumentApi(http.Controller):
             "document_groups": self._serialize_document_groups(documents),
         }
 
+    @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
     def candidate_employee_form_options(self, candidate_id=None, subpath=None, **kwargs):
@@ -765,6 +767,7 @@ class CandidateDocumentApi(http.Controller):
         }
         return request.make_response("", headers=headers)
 
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
@@ -780,6 +783,7 @@ class CandidateDocumentApi(http.Controller):
             data=self._serialize_employee_form(candidate.sudo(), user=user),
         )
 
+    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
     def upsert_candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
@@ -872,6 +876,10 @@ class CandidateDocumentApi(http.Controller):
 
         return self._candidate_form_action_response(candidate.sudo(), user, action, message)
 
+    @http.route(f"{BASE_URL}/candidate/employee-form/submit", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
+    def submit_current_candidate_employee_form(self, **kwargs):
+        return self._candidate_form_action(None, "submit", "Candidate employee form submitted successfully")
+
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/submit", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
     def submit_candidate_employee_form(self, candidate_id, **kwargs):
         return self._candidate_form_action(candidate_id, "submit", "Candidate employee form submitted successfully")
@@ -932,8 +940,9 @@ class CandidateDocumentApi(http.Controller):
         ]
         return request.make_response(raw_content, headers)
 
+    @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
-    def candidate_employee_form_photo(self, candidate_id, **kwargs):
+    def candidate_employee_form_photo(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
             return self.error_response("Authentication failed", errors=["Login is required"], status=401)
