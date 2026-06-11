@@ -24,6 +24,7 @@ Candidate document collection workflow for recruitment:
         'data/candidate_document_type_data.xml',
         'views/candidate_document_views.xml',
         'views/hr_candidate_views.xml',
+        'views/res_users_views.xml',
         'views/templates.xml',
     ],
     'demo': [

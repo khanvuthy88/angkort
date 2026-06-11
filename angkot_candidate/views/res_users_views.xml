@@ -1,0 +1,22 @@
+<odoo>
+    <record id="view_res_users_form_inherit_candidate" model="ir.ui.view">
+        <field name="name">res.users.form.angkot.candidate</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <!--
+                Show a "Candidate Access" tab only for portal users (share=True).
+                The built-in "Access Rights" tab is invisible for portal users, so
+                the candidate portal groups (which imply base.group_portal) would
+                never be assignable without this override.
+            -->
+            <xpath expr="//page[@name='access_rights']" position="after">
+                <page string="Candidate Access" name="candidate_access" invisible="not share">
+                    <group string="Candidate Role">
+                        <field name="candidate_role" string="Role"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
