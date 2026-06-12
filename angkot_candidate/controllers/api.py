@@ -91,9 +91,11 @@ class CandidateDocumentApi(http.Controller):
         "conflict_interest",
     }
 
-    @http.route(f"{BASE_URL}/candidate/documents/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidate/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/documents", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route([
+        f"{BASE_URL}/candidate/documents/<path:subpath>",
+        f"{BASE_URL}/candidate/documents",
+        f"{BASE_URL}/candidates/documents",
+    ], auth="none", type="http", methods=["OPTIONS"], csrf=False)
     def candidate_documents_options(self, subpath=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
@@ -242,7 +244,7 @@ class CandidateDocumentApi(http.Controller):
         user = request.env["res.users"].sudo().browse(user_id)
         return user if user.exists() else request.env["res.users"]
 
-    @http.route(f"{BASE_URL}/login", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route(f"{BASE_URL}/login", auth="none", type="http", methods=["OPTIONS"], csrf=False)
     def candidate_login_options(self, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
@@ -585,7 +587,7 @@ class CandidateDocumentApi(http.Controller):
             },
             "personalInformation": {
                 "photoUrl": (
-                    request.httprequest.url_root.rstrip()
+                    request.httprequest.url_root.rstrip("/")
                     + BASE_URL
                     + "/candidates/%s/employee-form/photo" % candidate.id
                 ) if candidate.image_1920 else "",
@@ -754,10 +756,12 @@ class CandidateDocumentApi(http.Controller):
             "document_groups": self._serialize_document_groups(documents),
         }
 
-    @http.route(f"{BASE_URL}/candidate/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/<path:subpath>", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="none", type="http", methods=["OPTIONS"], csrf=False, cors="*")
+    @http.route([
+        f"{BASE_URL}/candidate/employee-form/<path:subpath>",
+        f"{BASE_URL}/candidate/employee-form",
+        f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/<path:subpath>",
+        f"{BASE_URL}/candidates/<int:candidate_id>/employee-form",
+    ], auth="none", type="http", methods=["OPTIONS"], csrf=False)
     def candidate_employee_form_options(self, candidate_id=None, subpath=None, **kwargs):
         headers = {
             "Access-Control-Allow-Origin": "*",
@@ -767,8 +771,10 @@ class CandidateDocumentApi(http.Controller):
         }
         return request.make_response("", headers=headers)
 
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    @http.route([
+        f"{BASE_URL}/candidate/employee-form",
+        f"{BASE_URL}/candidates/<int:candidate_id>/employee-form",
+    ], auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
@@ -783,8 +789,10 @@ class CandidateDocumentApi(http.Controller):
             data=self._serialize_employee_form(candidate.sudo(), user=user),
         )
 
-    @http.route(f"{BASE_URL}/candidate/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form", auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
+    @http.route([
+        f"{BASE_URL}/candidate/employee-form",
+        f"{BASE_URL}/candidates/<int:candidate_id>/employee-form",
+    ], auth="public", type="http", methods=["POST", "PUT"], csrf=False, cors="*")
     def upsert_candidate_employee_form(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():
@@ -852,6 +860,27 @@ class CandidateDocumentApi(http.Controller):
                 "candidate_form_reviewed_by": user.id,
                 "candidate_form_reviewed_on": fields.Datetime.now(),
             }
+        elif action == "withdraw":
+            if not self._is_candidate_hr_user(user):
+                return self.error_response("Access denied", errors=["Only HR can withdraw a candidate form review"], status=403)
+            if candidate.candidate_stage == "submitted":
+                # Send back to draft so the candidate can correct and resubmit.
+                vals = {
+                    "candidate_stage": "draft",
+                    "candidate_form_review_note": review_note or False,
+                    "candidate_form_reviewed_by": False,
+                    "candidate_form_reviewed_on": False,
+                }
+            elif candidate.candidate_stage in ("accepted", "rejected"):
+                # Undo the review decision, resetting to submitted for re-review.
+                vals = {
+                    "candidate_stage": "submitted",
+                    "candidate_form_review_note": False,
+                    "candidate_form_reviewed_by": False,
+                    "candidate_form_reviewed_on": False,
+                }
+            else:
+                return self.error_response("Withdraw failed", errors=["This form cannot be withdrawn in its current stage"], status=400)
         else:
             return self.error_response("Invalid action", errors=["Unsupported candidate form action"], status=400)
 
@@ -891,6 +920,10 @@ class CandidateDocumentApi(http.Controller):
     @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/reject", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
     def reject_candidate_employee_form(self, candidate_id, **kwargs):
         return self._candidate_form_action(candidate_id, "reject", "Candidate employee form rejected successfully")
+
+    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/withdraw", auth="public", type="http", methods=["POST"], csrf=False, cors="*")
+    def withdraw_candidate_employee_form(self, candidate_id, **kwargs):
+        return self._candidate_form_action(candidate_id, "withdraw", "Candidate employee form review withdrawn successfully")
 
     @http.route(f"{BASE_URL}/candidates", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidates(self, **kwargs):
@@ -940,8 +973,10 @@ class CandidateDocumentApi(http.Controller):
         ]
         return request.make_response(raw_content, headers)
 
-    @http.route(f"{BASE_URL}/candidate/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
-    @http.route(f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/photo", auth="public", type="http", methods=["GET"], csrf=False, cors="*")
+    @http.route([
+        f"{BASE_URL}/candidate/employee-form/photo",
+        f"{BASE_URL}/candidates/<int:candidate_id>/employee-form/photo",
+    ], auth="public", type="http", methods=["GET"], csrf=False, cors="*")
     def candidate_employee_form_photo(self, candidate_id=None, **kwargs):
         user = self._get_authenticated_user()
         if not user or not user.exists():

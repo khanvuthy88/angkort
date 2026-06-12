@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "1b05086b-e119-4038-8f92-53bf5137a26b",
     "name": "Angkot Candidate API",
-    "description": "Postman collection for `angkot_candidate` API routes under `/angkort/api/v1`.\n\nSuggested flow:\n1. Run `Auth / Login` to store bearer tokens.\n2. For candidate self-service, use `Current Candidate / Get My Employee Form` and `Current Candidate / Update My Employee Form (JSON)`.\n3. For staff/HR workflows, run `Candidates / List Candidates` to store `candidate_id`.\n4. Run `Documents / List Current Candidate Documents` to store `document_id`.\n5. Use upload, review, content, and delete requests.\n\nRoutes are generated from `controllers/api.py`. The response envelope uses `status: \"success\"` or `status: \"error\"`.",
+    "description": "Postman collection for `angkot_candidate` API routes under `/angkort/api/v1`.\n\nSuggested flow:\n1. Run `Auth / Login` to store bearer tokens.\n2. For candidate self-service, use `Current Candidate / Get My Employee Form`, `Current Candidate / Get My Documents`, and `Current Candidate / Update My Employee Form (JSON)`.\n3. For staff/HR workflows, run `Candidates / List Candidates` to store `candidate_id`.\n4. Run `Documents / List Current Candidate Documents` to store `document_id`.\n5. Use upload, review, content, and delete requests.\n\nRoutes are generated from `controllers/api.py`. The response envelope uses `status: \"success\"` or `status: \"error\"`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -217,6 +217,53 @@
                   "if (body.data && body.data.candidateId) {",
                   "  pm.collectionVariables.set('candidate_id', body.data.candidateId);",
                   "  pm.environment.set('candidate_id', body.data.candidateId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/candidate/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "candidate",
+                "documents"
+              ]
+            },
+            "description": "Fetches grouped document checklist items for the candidate linked to the authenticated user. No `candidate_id` required."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('response is successful', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('my documents response envelope', function () {",
+                  "  pm.expect(body.status).to.eql('success');",
+                  "  pm.expect(body.data).to.have.property('candidate_id');",
+                  "  pm.expect(body.data.document_groups).to.be.an('array');",
+                  "});",
+                  "if (body.data && body.data.candidate_id) {",
+                  "  pm.collectionVariables.set('candidate_id', body.data.candidate_id);",
+                  "  pm.environment.set('candidate_id', body.data.candidate_id);",
+                  "}",
+                  "let firstDocument = null;",
+                  "for (const group of body.data.document_groups || []) {",
+                  "  if (group.documents && group.documents.length) { firstDocument = group.documents[0]; break; }",
+                  "}",
+                  "if (firstDocument) {",
+                  "  pm.collectionVariables.set('document_id', firstDocument.id);",
+                  "  pm.environment.set('document_id', firstDocument.id);",
                   "}"
                 ]
               }
