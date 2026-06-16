@@ -181,7 +181,7 @@ class HrCandidate(models.Model):
             candidate._send_portal_invitation_email(new_user)
 
     def _send_portal_invitation_email(self, user):
-        wizard = self.env["portal.wizard"].sudo().create({"portal_wizard_user_ids": []})
+        wizard = self.env["portal.wizard"].sudo().create({"user_ids": []})
         wizard_user = self.env["portal.wizard.user"].sudo().create({
             "wizard_id": wizard.id,
             "partner_id": user.partner_id.id,
