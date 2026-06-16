@@ -7,6 +7,10 @@ from odoo.exceptions import UserError
 class HrCandidate(models.Model):
     _inherit = "hr.candidate"
 
+    _sql_constraints = [
+        ("email_from_unique", "UNIQUE(email_from)", "A candidate with this email already exists."),
+    ]
+
     candidate_stage = fields.Selection(
         selection=[
             ("draft", "Draft"),
