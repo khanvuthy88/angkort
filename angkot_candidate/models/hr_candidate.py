@@ -142,7 +142,52 @@ class HrCandidate(models.Model):
             self._normalize_candidate_identity_vals(vals)
         candidates = super().create(vals_list)
         candidates._ensure_required_document_lines()
+        candidates._create_portal_user_if_missing()
         return candidates
+
+    def _create_portal_user_if_missing(self):
+        portal_group = self.env.ref("base.group_portal")
+        for candidate in self:
+            if candidate.portal_user_id:
+                continue
+            email = candidate.email_from
+            if not email:
+                continue
+            existing_user = self.env["res.users"].sudo().search(
+                [("login", "=", email)], limit=1
+            )
+            if existing_user:
+                candidate.portal_user_id = existing_user
+                continue
+            partner = candidate.partner_id
+            if not partner:
+                partner = self.env["res.partner"].sudo().create({
+                    "name": candidate.partner_name or email,
+                    "email": email,
+                    "company_type": "person",
+                })
+            new_user = self.env["res.users"].sudo().with_context(
+                no_reset_password=True
+            ).create({
+                "name": candidate.partner_name or email,
+                "login": email,
+                "email": email,
+                "partner_id": partner.id,
+                "groups_id": [(6, 0, [portal_group.id])],
+                "company_id": candidate.company_id.id or self.env.company.id,
+                "company_ids": [(4, candidate.company_id.id or self.env.company.id)],
+            })
+            candidate.portal_user_id = new_user
+            candidate._send_portal_invitation_email(new_user)
+
+    def _send_portal_invitation_email(self, user):
+        wizard = self.env["portal.wizard"].sudo().create({"portal_wizard_user_ids": []})
+        wizard_user = self.env["portal.wizard.user"].sudo().create({
+            "wizard_id": wizard.id,
+            "partner_id": user.partner_id.id,
+            "email": user.email,
+        })
+        wizard_user._send_email()
 
     def write(self, vals):
         self._normalize_candidate_identity_vals(vals)
