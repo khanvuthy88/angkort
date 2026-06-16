@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import api, fields, models, _
+from odoo.exceptions import UserError
 
 
 class HrCandidate(models.Model):
@@ -153,10 +154,27 @@ class HrCandidate(models.Model):
             email = candidate.email_from
             if not email:
                 continue
-            existing_user = self.env["res.users"].sudo().search(
-                [("login", "=", email)], limit=1
-            )
+            existing_user = self.env["res.users"].sudo().with_context(
+                active_test=False
+            ).search([("login", "=", email)], limit=1)
             if existing_user:
+                if existing_user._is_internal():
+                    raise UserError(_(
+                        "Cannot create a portal user for candidate '%s': "
+                        "the email '%s' is already used by an internal user (%s).",
+                        candidate.partner_name or email,
+                        email,
+                        existing_user.name,
+                    ))
+                if not existing_user.active:
+                    raise UserError(_(
+                        "Cannot create a portal user for candidate '%s': "
+                        "the email '%s' belongs to an archived user (%s). "
+                        "Please reactivate or change the email.",
+                        candidate.partner_name or email,
+                        email,
+                        existing_user.name,
+                    ))
                 candidate.portal_user_id = existing_user
                 continue
             partner = candidate.partner_id
