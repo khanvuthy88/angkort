@@ -62,3 +62,25 @@ class IrAttachment(models.Model):
             _logger.debug('S3 delete: %s', fname)
         except Exception:
             _logger.warning('S3 delete failed (key=%s)', fname, exc_info=True)
+
+    def _to_http_stream(self):
+        # Odoo 18's default _to_http_stream() builds a local filesystem path
+        # from store_fname and calls os.stat() on it — bypassing _file_read().
+        # For S3-stored files we intercept here and serve the bytes directly.
+        self.ensure_one()
+        if not self.store_fname or not self.store_fname.startswith(_S3_PREFIX):
+            return super()._to_http_stream()
+
+        from odoo.http import Stream
+        try:
+            data = _s3_client().get_object(Bucket=_S3_BUCKET, Key=self.store_fname)['Body'].read()
+        except Exception:
+            _logger.exception('S3 stream failed (key=%s)', self.store_fname)
+            raise
+
+        return Stream(
+            type='data',
+            data=data,
+            mimetype=self.mimetype or 'application/octet-stream',
+            download_name=self.name,
+        )
