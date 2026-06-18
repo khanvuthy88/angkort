@@ -1,7 +1,5 @@
 import os
 import logging
-import boto3
-from botocore.exceptions import ClientError
 from odoo import models
 
 _logger = logging.getLogger(__name__)
@@ -17,6 +15,7 @@ _S3_PREFIX = 's3/'
 
 
 def _s3_client():
+    import boto3  # lazy import — boto3 may not be installed at module load time
     return boto3.client(
         's3',
         endpoint_url=_S3_ENDPOINT,
@@ -50,7 +49,7 @@ class IrAttachment(models.Model):
         try:
             obj = _s3_client().get_object(Bucket=_S3_BUCKET, Key=fname)
             return obj['Body'].read()
-        except ClientError:
+        except Exception:
             _logger.exception('S3 read failed (key=%s)', fname)
             raise
 
